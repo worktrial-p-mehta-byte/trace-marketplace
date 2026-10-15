@@ -2,12 +2,13 @@ import Link from "next/link";
 import {
   browseCatalog,
   criteriaOf,
+  ensureSearchIndex,
   recordBuyerInterest,
   type BrowseQuery,
   type FacetValue,
 } from "@tm/core";
 import { FAILURE_NAMES, money, OUTCOME_NAMES, SOURCE_NAMES, TIER_NAMES } from "@/lib/labels";
-import { getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
+import { getBlobs, getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +110,10 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const q = toQuery(p);
   // A buyer asking for something specific is demand: it nudges matching prices up.
   recordBuyerInterest(getDb(), { config, bus: getBus() }, user, "search", criteriaOf(q));
-  const r = await browseCatalog(getDb(), { config, search: getSearch() }, q);
+  const search = getSearch();
+  // Heals an index that is missing listings, e.g. after upgrading an older database.
+  await ensureSearchIndex(getDb(), getBlobs(), search);
+  const r = await browseCatalog(getDb(), { config, search }, q);
   const active = FILTER_KEYS.filter((k) => p[k]);
   const page = Number(p.page ?? 1);
   const pages = Math.max(1, Math.ceil(r.total / PAGE));

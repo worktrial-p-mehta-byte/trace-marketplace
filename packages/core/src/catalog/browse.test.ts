@@ -12,6 +12,7 @@ import {
   createSqliteSearchIndex,
   createUser,
   criteriaOf,
+  ensureSearchIndex,
   getListingDetail,
   rebuildSearchIndex,
   recordBuyerInterest,
@@ -195,6 +196,16 @@ describe("search index", () => {
     expect((await search.search({ text: "internal details" })).ids).toEqual([]);
     // Metadata (labels, language) is indexed for every listing.
     expect((await search.search({ text: "retry loop" })).ids).toEqual([rustLoop]);
+  });
+});
+
+describe("ensureSearchIndex", () => {
+  it("rebuilds an index that is missing listings (e.g. after an upgrade), then leaves it alone", async () => {
+    db.$client.prepare("DELETE FROM listing_search").run(); // like a fresh migration on an old database
+    expect((await search.search({ text: "semaphore" })).ids).toEqual([]);
+    expect(await ensureSearchIndex(db, blobs, search)).toBe(true);
+    expect((await search.search({ text: "semaphore" })).ids).toEqual([rustLoop]);
+    expect(await ensureSearchIndex(db, blobs, search)).toBe(false);
   });
 });
 

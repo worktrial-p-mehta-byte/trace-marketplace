@@ -30,13 +30,19 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const user = await getCurrentUser();
   const config = getConfig();
-  const d = await getListingDetail(getDb(), { config, blobs: getBlobs() }, id, user);
+  const load = () => getListingDetail(getDb(), { config, blobs: getBlobs() }, id, user);
+  let d = await load();
   if (!d) notFound();
-  if (!d.isOwner) {
+  // Record the view first, then price: a buyer's view can move the price, and
+  // the page should show the price as it stands after that, not one view behind.
+  if (
+    !d.isOwner &&
     recordBuyerInterest(getDb(), { config, bus: getBus() }, user, "view", {
       language: d.language ?? undefined,
       failure: d.traits.failureCategory,
-    });
+    })
+  ) {
+    d = (await load()) ?? d;
   }
 
   const t = d.traits;
@@ -146,7 +152,12 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
             )}
             {d.trace && (
               <div className="mt-3 rounded-lg border border-rule bg-surface p-4">
-                <Timeline trace={d.trace} highlight={evidence} initial={200} />
+                {/* Render at least through the last evidence event, so every evidence link has a target. */}
+                <Timeline
+                  trace={d.trace}
+                  highlight={evidence}
+                  initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
+                />
               </div>
             )}
           </section>

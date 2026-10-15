@@ -143,3 +143,26 @@ export async function rebuildSearchIndex(db: Db, blobs: BlobStore, index: Search
   }
   return ids.length;
 }
+
+/**
+ * Self-healing check: if the index and the active listings disagree (for
+ * example right after upgrading a database that predates the index), rebuild
+ * it. Two COUNT queries, so cheap enough to run before each catalog search.
+ */
+export async function ensureSearchIndex(
+  db: Db,
+  blobs: BlobStore,
+  index: SearchIndex,
+): Promise<boolean> {
+  const indexed = (
+    db.$client.prepare("SELECT count(*) AS n FROM listing_search").get() as { n: number }
+  ).n;
+  const active = (
+    db.$client.prepare("SELECT count(*) AS n FROM listings WHERE status = 'active'").get() as {
+      n: number;
+    }
+  ).n;
+  if (indexed === active) return false;
+  await rebuildSearchIndex(db, blobs, index);
+  return true;
+}
