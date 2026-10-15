@@ -110,6 +110,7 @@ function userEvents(content: string | CCContentBlock[] | undefined, ts?: string)
         callId: b.tool_use_id,
         output: truncate(output),
         isError: Boolean(b.is_error) || rejected,
+        ...(rejected ? { rejected: true } : {}),
         ts,
       });
     } else if (b.type === "image") {

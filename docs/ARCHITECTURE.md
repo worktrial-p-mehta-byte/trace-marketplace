@@ -41,8 +41,8 @@ This file summarises what the code implements.
 | #   | Milestone                                                  | Status  |
 | --- | ---------------------------------------------------------- | ------- |
 | M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
-| M1  | Canonical schema + Claude Code adapter                     | This PR |
-| M2  | Scrubber + labeler + trait extractor                       |         |
+| M1  | Canonical schema + Claude Code adapter                     | Done    |
+| M2  | Scrubber + labeler + trait extractor                       | This PR |
 | M3  | Pricing engine                                             |         |
 | M4  | Onboarding + sharing                                       |         |
 | M5  | Catalog + trace viewer                                     |         |
@@ -76,3 +76,46 @@ The Claude Code adapter reads `~/.claude/projects/<project>/<session>.jsonl`:
 The format is not a stable public contract, so the parser reads fields
 defensively. `pnpm inspect:sessions <folder>` parses real files locally and
 prints structure only (counts, tools, errors), never message content.
+
+## Scrubbing (`packages/scrub`)
+
+`scrubTrace(trace, { customTerms })` returns a scrubbed copy plus a list of
+redactions (kind, event, length; never the removed text). It walks every text
+field, including nested tool-call input and the title. Stages run in order:
+
+| Stage               | Catches                                                                                                                                                              | Replacement                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| secrets (always on) | Private keys; Anthropic, OpenAI, Stripe, GitHub, Slack, Google and AWS keys; JWTs; bearer tokens; credentials in URLs; `KEY=value` where the name says it's a secret | `[REDACTED:<kind>]`, keeping the variable name |
+| pii                 | Emails (not `example.com` / GitHub noreply), Luhn-valid card numbers, phone numbers, public IP addresses                                                             | `[REDACTED:<kind>]`                            |
+| paths               | Account names in `/Users/…`, `/home/…`, `C:\Users\…`                                                                                                                 | `<user>`, keeping the path shape               |
+| hosts               | `*.internal`, `*.corp`, `*.local`, `*.lan`, `*.intranet`, `*.private`                                                                                                | `[REDACTED:internal_host]`                     |
+| custom              | Terms the seller adds (their name, company, codename), whole words                                                                                                   | `[REDACTED:custom_term]`                       |
+
+Scrubbing is idempotent and never re-redacts a placeholder. `stats.density`
+(share of characters redacted) feeds the pricing quality factor. The rules
+favour precision on code (`process.env.X`, type annotations and template
+placeholders are left alone); the seller's review screen (M4) is the final check.
+
+## Labels and traits (`packages/enrich`)
+
+`enrichTrace(scrubbedTrace, { redactionDensity })` returns heuristic labels,
+pricing traits and the rarity combo key, in one pass, browser-safe.
+
+| Label                                                   | Kind    | Rule                                                                                   |
+| ------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `test_tampering`                                        | failure | Edit to a test file that removes assertions                                            |
+| `retry_loop`                                            | failure | Same tool fails 3+ times in a row                                                      |
+| `user_correction`                                       | failure | User message after agent activity that starts with "no", "don't", "that's wrong", …    |
+| `tool_rejected`                                         | failure | User rejected a proposed tool call                                                     |
+| `user_interrupt`                                        | failure | User interrupted the agent                                                             |
+| `tool_error`                                            | failure | Any other tool error                                                                   |
+| `harness_error`                                         | failure | API error notices from the harness (not counted as an agent failure)                   |
+| `tests_passed_at_end` / `tests_failed_at_end`           | outcome | Result of the last test command                                                        |
+| `recovered` / `unresolved`                              | outcome | After a failure: tests pass at the end, or the agent finishes with a successful action |
+| `context_compaction`, `long_session`, `no_model_output` | signal  | As named                                                                               |
+
+The primary failure category (first of the failure codes above, in that
+order) goes into the combo key `language|framework|failure|model` used for
+rarity. Language comes from edited file extensions, then build commands;
+framework needs two mentions. A preference pair is a correction or
+rejection that the agent then acts on.
