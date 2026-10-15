@@ -91,13 +91,39 @@ export function buildStages(opts: ScrubOptions = {}): ScrubStage[] {
   return stages;
 }
 
-/** Walk any JSON value and scrub every string (keys are left as-is). */
-function scrubValue(value: unknown, fn: (s: string) => string): unknown {
-  if (typeof value === "string") return fn(value);
-  if (Array.isArray(value)) return value.map((v) => scrubValue(v, fn));
+/**
+ * Keys whose value is a credential however it looks, e.g. `password`,
+ * `api_key`, `apiKey`, `accessToken`, `Authorization`. Matched on the whole
+ * key (after splitting camelCase), so `max_tokens` or `tokenizer` don't count.
+ */
+const SENSITIVE_KEY =
+  /^(?:.*[_-])?(?:api[_-]?key|secret|secret[_-]?key|token|access[_-]?token|refresh[_-]?token|id[_-]?token|passw(?:or)?d|passphrase|pwd|pin|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?key|auth|authorization|cookie|set[_-]?cookie|credentials?|session[_-]?id)$/;
+
+export function isSensitiveKey(key: string): boolean {
+  const k = key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+  return SENSITIVE_KEY.test(k);
+}
+
+/**
+ * Walk any JSON value and scrub every string. Under a sensitive key the
+ * whole value is a secret: every string or number beneath it is replaced,
+ * whatever it looks like, before any pattern runs.
+ */
+function scrubValue(
+  value: unknown,
+  fn: (s: string) => string,
+  redactWhole: (s: string) => string,
+  sensitive = false,
+): unknown {
+  if (typeof value === "string") return sensitive ? redactWhole(value) : fn(value);
+  if (typeof value === "number" && sensitive) return redactWhole(String(value));
+  if (Array.isArray(value)) return value.map((v) => scrubValue(v, fn, redactWhole, sensitive));
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, scrubValue(v, fn)]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        scrubValue(v, fn, redactWhole, sensitive || isSensitiveKey(k)),
+      ]),
     );
   }
   return value;
@@ -140,14 +166,23 @@ export function scrubTrace(trace: Trace, opts: ScrubOptions = {}): ScrubResult {
     return out;
   };
 
+  const redactWhole = (s: string, eventSeq: number): string => {
+    totalChars += s.length;
+    if (s === "" || /^\[REDACTED:[a-z_]+\]$/.test(s)) return s;
+    redactions.push({ stage: "secrets", kind: "secret", eventSeq, length: s.length });
+    redactedChars += s.length;
+    return tag("secret");
+  };
+
   const events: TraceEvent[] = trace.events.map((e) => {
     const fn = (s: string) => scrubString(s, e.seq);
+    const whole = (s: string) => redactWhole(s, e.seq);
     switch (e.type) {
       case "user_message":
       case "assistant_message":
         return { ...e, text: fn(e.text) };
       case "tool_call":
-        return { ...e, input: scrubValue(e.input, fn) };
+        return { ...e, input: scrubValue(e.input, fn, whole) };
       case "tool_result":
         return { ...e, output: fn(e.output) };
       case "system":

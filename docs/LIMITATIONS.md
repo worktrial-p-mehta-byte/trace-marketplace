@@ -16,12 +16,14 @@ where the limit lives and what would lift it.
 
 ## Scrubbing — M2
 
-| Limitation                                              | Impact                                                                                                                      | Lifted by                                                       |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Rules are pattern-based                                 | New secret formats, people's names, company names and proprietary code are not detected unless the seller adds custom terms | ML/LLM scrubber stage; the seller review screen is the backstop |
-| Phone numbers: North American formats only              | Other formats pass through                                                                                                  | More locale rules                                               |
-| Internal hosts only by suffix (`.corp`, `.internal`, …) | Internal names on public-looking domains pass through                                                                       | Seller custom terms; org-level denylists                        |
-| Generic `KEY=value` secrets need a digit in the value   | An all-letter password in a config line is missed                                                                           | Entropy scoring                                                 |
+| Limitation                                                                                                     | Impact                                                                                                                      | Lifted by                                                       |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Rules are pattern-based                                                                                        | New secret formats, people's names, company names and proprietary code are not detected unless the seller adds custom terms | ML/LLM scrubber stage; the seller review screen is the backstop |
+| Phone numbers: North American formats only                                                                     | Other formats pass through                                                                                                  | More locale rules                                               |
+| Internal hosts only by suffix (`.corp`, `.internal`, …)                                                        | Internal names on public-looking domains pass through                                                                       | Seller custom terms; org-level denylists                        |
+| Generic `KEY=value` secrets need a digit in the value                                                          | An all-letter password in a config line is missed                                                                           | Entropy scoring                                                 |
+| Credential-named keys in structured tool input are redacted whole; the same value under an ordinary key is not | `{"note": "p4ss…"}` with no recognisable pattern passes through                                                             | Entropy scoring; LLM scrubber stage                             |
+| Traces shared before a scrubber fix are not re-scrubbed                                                        | Older listings may carry what a newer rule would remove                                                                     | Re-scrub job over stored traces when rules change               |
 
 ## Labels and traits — M2
 
