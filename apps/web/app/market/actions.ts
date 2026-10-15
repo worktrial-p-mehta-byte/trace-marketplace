@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { ensureAccount, floodSupply, postBounty, resetSimulation, type PriceMove } from "@tm/core";
-import type { Pattern } from "@tm/synth";
+import { PATTERNS, type Pattern } from "@tm/synth";
 import { getBlobs, getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
 const deps = () => ({ config: getConfig(), bus: getBus(), blobs: getBlobs(), search: getSearch() });
@@ -58,6 +58,8 @@ export async function floodAction(form: FormData) {
   const { language, framework } = stackOf(form);
   const pattern = (String(form.get("failure") ?? "") || "clean") as Pattern;
   if (!language) back(form, { error: "Choose a language to add supply for." });
+  if (!PATTERNS.some((p) => p.pattern === pattern))
+    back(form, { error: "The simulator can't generate that failure type." });
   const count = Math.min(100, Math.max(1, Math.round(Number(form.get("count") ?? 20))));
   const r = await floodSupply(getDb(), deps(), { language: language!, framework, pattern, count });
   back(form, { did: "flood", r: summary(r.moves), added: String(r.added) });

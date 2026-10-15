@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { enrichTrace } from "@tm/enrich";
 import { Trace } from "@tm/schema";
-import { createRng, generateCatalog, generateFlood, generateTrace, randomSpec, STACKS, type Pattern } from "./index";
+import {
+  createRng,
+  generateCatalog,
+  generateFlood,
+  generateTrace,
+  randomSpec,
+  STACKS,
+  type Pattern,
+} from "./index";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
 
@@ -26,7 +34,11 @@ describe("synthetic generator", () => {
     const rng = createRng(1);
     for (const stack of STACKS) {
       for (const recovered of [true, false]) {
-        const t = generateTrace(rng, { ...randomSpec(rng), stack, pattern, recovered }, { now: NOW, index: 1 });
+        const t = generateTrace(
+          rng,
+          { ...randomSpec(rng), stack, pattern, recovered },
+          { now: NOW, index: 1 },
+        );
         const { traits } = enrichTrace(t);
         expect(traits.failureCategory).toBe(failure);
         expect(traits.language).toBe(stack.language);
@@ -38,7 +50,11 @@ describe("synthetic generator", () => {
   it("detects each stack's framework", () => {
     const rng = createRng(3);
     for (const stack of STACKS.filter((s) => s.framework)) {
-      const t = generateTrace(rng, { ...randomSpec(rng), stack, pattern: "clean" }, { now: NOW, index: 2 });
+      const t = generateTrace(
+        rng,
+        { ...randomSpec(rng), stack, pattern: "clean" },
+        { now: NOW, index: 2 },
+      );
       expect(enrichTrace(t).traits.framework).toBe(stack.framework);
     }
   });
@@ -51,12 +67,43 @@ describe("synthetic generator", () => {
   });
 
   it("floods one stack and pattern with recent, distinct sessions", () => {
-    const f = generateFlood(9, 10, NOW, { language: "Rust", framework: "Tokio", pattern: "retry_loop" });
+    const f = generateFlood(9, 10, NOW, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+    });
     expect(new Set(f.map((t) => JSON.stringify(t.events))).size).toBe(10);
     for (const t of f) {
       const { traits } = enrichTrace(t);
-      expect([traits.language, traits.framework, traits.failureCategory]).toEqual(["Rust", "Tokio", "retry_loop"]);
+      expect([traits.language, traits.framework, traits.failureCategory]).toEqual([
+        "Rust",
+        "Tokio",
+        "retry_loop",
+      ]);
       expect(NOW.getTime() - Date.parse(t.endedAt)).toBeLessThan(8 * 86_400_000);
+    }
+  });
+
+  it("never puts timestamps after the session end or after now", () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    for (const t of generateCatalog(42, 200, now)) {
+      const last = t.events.at(-1)!.ts!;
+      expect(t.endedAt).toBe(last);
+      expect(t.provenance.capturedAt).toBe(last);
+      expect(Date.parse(last)).toBeLessThanOrEqual(now.getTime());
+      for (let i = 1; i < t.events.length; i++) {
+        expect(t.events[i]!.ts! >= t.events[i - 1]!.ts!).toBe(true);
+      }
+    }
+  });
+
+  it("keeps long sessions that end today in the past", () => {
+    const now = new Date("2026-10-15T12:00:00Z");
+    for (let seed = 1; seed <= 200; seed++) {
+      const rng = createRng(seed);
+      const spec = { ...randomSpec(rng), ageDays: 0, turns: 118, pattern: "retry_loop" as Pattern };
+      const t = generateTrace(rng, spec, { now, index: seed });
+      expect(Date.parse(t.endedAt), `seed ${seed}`).toBeLessThanOrEqual(now.getTime());
     }
   });
 });

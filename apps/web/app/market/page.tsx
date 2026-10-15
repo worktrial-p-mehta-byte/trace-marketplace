@@ -2,22 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { browseCatalog, ensureSearchIndex, openBounties, watchList } from "@tm/core";
 import { PriceChart } from "@/components/PriceChart";
+import { PATTERNS, STACKS } from "@tm/synth";
 import { FAILURE_NAMES, money, reasonText } from "@/lib/labels";
-import { getBlobs, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
+import { getBlobs, getConfig, getCurrentUser, getDb, getSearch, refreshPrices } from "@/lib/server";
 import { floodAction, postBountyAction, resetAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type Params = Record<string, string | undefined>;
 
-const FAILURES = [
-  "retry_loop",
-  "test_tampering",
-  "user_correction",
-  "tool_rejected",
-  "user_interrupt",
-  "tool_error",
-];
+// The failure types the simulator can generate supply for.
+const FAILURES = PATTERNS.map((p) => p.pattern).filter((p) => p !== "clean");
 
 function Outcome({ p }: { p: Params }) {
   if (p.error) {
@@ -53,10 +48,15 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
   const config = getConfig();
   const search = getSearch();
   await ensureSearchIndex(getDb(), getBlobs(), search);
+  refreshPrices();
 
   // Stack options come from the live catalog, most common first.
   const all = await browseCatalog(getDb(), { config, search }, { limit: 1 });
-  const stacks = all.facets.language.map((l) => l.value);
+  // Languages already in the catalog first, then every language the
+  // simulator can generate, so an empty catalog can still be given supply.
+  const stacks = [
+    ...new Set([...all.facets.language.map((l) => l.value), ...STACKS.map((s) => s.language)]),
+  ];
   const [language, framework] = (p.language ?? "").split("/");
   const failure = p.failure || undefined;
   const criteria = { language: language || undefined, framework: framework || undefined, failure };
