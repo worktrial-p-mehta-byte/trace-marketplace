@@ -26,10 +26,10 @@ describe("Claude Code adapter: synthetic session fixture", () => {
   });
 
   it("captures title, timing, harness version and model", () => {
-    expect(trace.title).toBe("Fix failing date parsing test in todo API");
+    expect(trace.title).toBe("Fix UTC date parsing in todo API"); // ai-title beats summary
     expect(trace.startedAt).toBe("2026-10-10T09:00:05.000Z");
     expect(trace.endedAt).toBe("2026-10-10T09:03:20.000Z");
-    expect(trace.provenance.harness).toEqual({ name: "claude-code", version: "2.0.14" });
+    expect(trace.provenance.harness).toEqual({ name: "claude-code", version: "2.1.300" });
     expect(trace.provenance.model.id).toBe("claude-sonnet-4-5");
     expect(trace.provenance.source).toBe("real");
   });
@@ -37,10 +37,12 @@ describe("Claude Code adapter: synthetic session fixture", () => {
   it("maps lines to events in order, with sequential seq numbers", () => {
     expect(trace.events.map((e) => e.type)).toEqual([
       "system", // /clear command
+      "system", // local_command output
       "user_message",
       "assistant_message",
       "tool_call",
       "tool_result",
+      "system", // <synthetic> API error notice from Claude Code itself
       "assistant_message",
       "tool_call",
       "tool_result", // rejected edit
@@ -59,7 +61,7 @@ describe("Claude Code adapter: synthetic session fixture", () => {
   it("flags tool errors, rejected tool calls and interrupts", () => {
     const results = trace.events.filter((e) => e.type === "tool_result");
     expect(results.map((r) => r.isError)).toEqual([true, true, false, false]);
-    const interrupt = trace.events[8];
+    const interrupt = trace.events[10];
     expect(interrupt).toMatchObject({ type: "user_message", interrupted: true });
   });
 
@@ -70,19 +72,40 @@ describe("Claude Code adapter: synthetic session fixture", () => {
   });
 
   it("flattens array tool output and records compaction", () => {
-    expect(trace.events[11]).toMatchObject({ output: "The file src/dates.ts has been updated." });
-    expect(trace.events[12]).toMatchObject({ type: "system", kind: "compaction" });
+    expect(trace.events[13]).toMatchObject({ output: "The file src/dates.ts has been updated." });
+    expect(trace.events[14]).toMatchObject({ type: "system", kind: "compaction" });
+  });
+
+  it("marks Claude Code's own messages as harness messages, not model output", () => {
+    expect(trace.events[6]).toMatchObject({ type: "system", kind: "harness_message" });
+    expect(trace.events[1]).toMatchObject({ type: "system", kind: "command" });
+  });
+
+  it("totals token usage once per model response, excluding synthetic messages", () => {
+    expect(trace.metrics).toEqual({
+      inputTokens: 2000,
+      outputTokens: 450,
+      cacheReadTokens: 5000,
+      cacheWriteTokens: 0,
+      modelResponses: 2,
+    });
   });
 
   it("skips meta, sidechain, malformed and unknown lines and reports them", () => {
     expect(report.stats).toEqual({
-      lines: 19,
+      lines: 27,
       malformed: 1,
       sidechain: 1,
       meta: 1,
-      ignoredTypes: { "file-history-snapshot": 1 },
+      ignoredTypes: {
+        mode: 1,
+        attachment: 1,
+        "file-history-snapshot": 1,
+        "system:turn_duration": 1,
+        "system:away_summary": 1,
+      },
     });
-    expect(report.warnings).toEqual([{ line: 12, message: "Not valid JSON; skipped" }]);
+    expect(report.warnings).toEqual([{ line: 17, message: "Not valid JSON; skipped" }]);
   });
 });
 

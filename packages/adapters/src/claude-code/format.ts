@@ -4,6 +4,9 @@
  * reads. Fields are optional on purpose: the format is not a stable public
  * contract, so the adapter tolerates missing or extra fields and unknown
  * line types rather than failing the whole session.
+ *
+ * Checked against real logs from Claude Code 2.1.x, which add many line
+ * types (attachment, api-request*, cost-state, mode, ai-title, ...).
  */
 
 export interface CCTextBlock {
@@ -36,8 +39,15 @@ export type CCContentBlock =
   | CCImageBlock
   | { type: string };
 
+export interface CCUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
 export interface CCLine {
-  type?: string; // "user" | "assistant" | "system" | "summary" | other
+  type?: string; // "user" | "assistant" | "system" | "summary" | "ai-title" | other
   sessionId?: string;
   uuid?: string;
   parentUuid?: string | null;
@@ -49,12 +59,15 @@ export interface CCLine {
   subtype?: string;
   content?: string;
   summary?: string;
+  aiTitle?: string;
   cwd?: string;
   gitBranch?: string;
   message?: {
+    id?: string;
     role?: string;
     model?: string;
     content?: string | CCContentBlock[];
+    usage?: CCUsage;
   };
 }
 
@@ -66,3 +79,9 @@ export const REJECTION_MARKERS = [
   "The user doesn't want to proceed with this tool use",
   "The user doesn't want to take this action",
 ];
+
+/** Model name Claude Code uses for messages it writes itself (errors, notices). */
+export const SYNTHETIC_MODEL = "<synthetic>";
+
+/** System line subtypes that are bookkeeping, not part of the conversation. */
+export const IGNORED_SYSTEM_SUBTYPES = new Set(["turn_duration", "away_summary"]);

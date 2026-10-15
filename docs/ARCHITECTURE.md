@@ -60,9 +60,17 @@ The Claude Code adapter reads `~/.claude/projects/<project>/<session>.jsonl`:
 - User text, assistant text, tool calls and tool results become events, in
   order. Tool results carry `isError`, which is also set when the user rejects
   a tool call. Interrupts are flagged on the user message.
-- Slash commands and compaction become `system` events. Meta lines, sub-agent
-  (sidechain) turns, thinking blocks and unknown line types are skipped and
-  counted; malformed lines become warnings. Parsing never throws.
+- Slash commands, local command output and compaction become `system` events.
+  Messages Claude Code writes itself (model `<synthetic>`, e.g. API error
+  notices) become `system` events of kind `harness_message`, not model output.
+- Title: the latest `ai-title` line, else the first `summary` line.
+- Token usage is totalled once per model response (Claude Code repeats it on
+  every line of a multi-part response) into `trace.metrics`.
+- Meta lines, sub-agent (sidechain) turns, thinking blocks, bookkeeping system
+  lines (`turn_duration`, `away_summary`) and other line types (`attachment`,
+  `api-request*`, `cost-state`, `mode`, ...) are skipped and counted; malformed
+  lines become warnings. Parsing never throws.
+- Checked against real Claude Code 2.1.300 logs.
 - Tool output over 20,000 characters is truncated.
 
 The format is not a stable public contract, so the parser reads fields

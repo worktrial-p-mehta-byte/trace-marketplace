@@ -85,6 +85,17 @@ export const TraceEvent = z.discriminatedUnion("type", [
 ]);
 export type TraceEvent = z.infer<typeof TraceEvent>;
 
+/** Token usage across the session, when the harness records it. */
+export const TraceMetrics = z.object({
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  cacheReadTokens: z.number().int().nonnegative().optional(),
+  cacheWriteTokens: z.number().int().nonnegative().optional(),
+  /** Number of distinct model responses. */
+  modelResponses: z.number().int().nonnegative().optional(),
+});
+export type TraceMetrics = z.infer<typeof TraceMetrics>;
+
 export const Trace = z.object({
   schemaVersion: z.literal(TRACE_SCHEMA_VERSION),
   /** Stable id derived from the harness session id (hashed, never the raw id). */
@@ -93,6 +104,7 @@ export const Trace = z.object({
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
   provenance: Provenance,
+  metrics: TraceMetrics.optional(),
   events: z.array(TraceEvent).min(1),
 });
 export type Trace = z.infer<typeof Trace>;

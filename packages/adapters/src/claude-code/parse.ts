@@ -1,8 +1,10 @@
-import { Trace, TRACE_SCHEMA_VERSION, type TraceEvent } from "@tm/schema";
+import { Trace, TRACE_SCHEMA_VERSION, type TraceEvent, type TraceMetrics } from "@tm/schema";
 import { cyrb53 } from "../hash";
 import {
+  IGNORED_SYSTEM_SUBTYPES,
   INTERRUPT_PREFIX,
   REJECTION_MARKERS,
+  SYNTHETIC_MODEL,
   type CCContentBlock,
   type CCLine,
   type CCToolResultBlock,
@@ -39,7 +41,8 @@ interface SessionAcc {
   timestamps: string[];
   models: string[];
   version?: string;
-  title?: string;
+  /** Usage per model response; Claude Code repeats it on every line of a response. */
+  usageByResponse: Map<string, NonNullable<NonNullable<CCLine["message"]>["usage"]>>;
 }
 
 const MAX_TOOL_OUTPUT = 20_000;
@@ -76,16 +79,19 @@ function isCommandText(text: string): boolean {
     t.startsWith("<command-name>") ||
     t.startsWith("<command-message>") ||
     t.startsWith("<local-command-stdout>") ||
-    t.startsWith("<local-command-stderr>")
+    t.startsWith("<local-command-stderr>") ||
+    t.startsWith("<local-command-caveat>")
   );
 }
 
-function userEvents(content: string | CCContentBlock[] | undefined, ts?: string): Pending[] {
+function blocksOf(content: string | CCContentBlock[] | undefined): CCContentBlock[] {
   if (content === undefined) return [];
-  const blocks: CCContentBlock[] =
-    typeof content === "string" ? [{ type: "text", text: content }] : content;
+  return typeof content === "string" ? [{ type: "text", text: content }] : content;
+}
+
+function userEvents(content: string | CCContentBlock[] | undefined, ts?: string): Pending[] {
   const out: Pending[] = [];
-  for (const b of blocks) {
+  for (const b of blocksOf(content)) {
     if (b.type === "text" && "text" in b) {
       const text = b.text;
       if (!text.trim()) continue;
@@ -113,14 +119,21 @@ function userEvents(content: string | CCContentBlock[] | undefined, ts?: string)
   return out;
 }
 
-function assistantEvents(content: string | CCContentBlock[] | undefined, ts?: string): Pending[] {
-  if (content === undefined) return [];
-  const blocks: CCContentBlock[] =
-    typeof content === "string" ? [{ type: "text", text: content }] : content;
+function assistantEvents(
+  content: string | CCContentBlock[] | undefined,
+  synthetic: boolean,
+  ts?: string,
+): Pending[] {
   const out: Pending[] = [];
-  for (const b of blocks) {
+  for (const b of blocksOf(content)) {
     if (b.type === "text" && "text" in b) {
-      if (b.text.trim()) out.push({ type: "assistant_message", text: b.text, ts });
+      if (!b.text.trim()) continue;
+      // Messages Claude Code writes itself (API errors, notices) are not model output.
+      out.push(
+        synthetic
+          ? { type: "system", kind: "harness_message", text: b.text, ts }
+          : { type: "assistant_message", text: b.text, ts },
+      );
     } else if (b.type === "tool_use" && "id" in b && "name" in b) {
       out.push({ type: "tool_call", callId: b.id, tool: b.name, input: b.input ?? {}, ts });
     }
@@ -137,6 +150,28 @@ function mostCommon(values: string[]): string | undefined {
   let n = 0;
   for (const [v, c] of counts) if (c > n) [best, n] = [v, c];
   return best;
+}
+
+function metricsOf(acc: SessionAcc): TraceMetrics | undefined {
+  if (acc.usageByResponse.size === 0) return undefined;
+  const m = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    modelResponses: acc.usageByResponse.size,
+  };
+  for (const u of acc.usageByResponse.values()) {
+    m.inputTokens += u.input_tokens ?? 0;
+    m.outputTokens += u.output_tokens ?? 0;
+    m.cacheReadTokens += u.cache_read_input_tokens ?? 0;
+    m.cacheWriteTokens += u.cache_creation_input_tokens ?? 0;
+  }
+  return m;
+}
+
+function bump(stats: ParseReport["stats"], key: string): void {
+  stats.ignoredTypes[key] = (stats.ignoredTypes[key] ?? 0) + 1;
 }
 
 /**
@@ -157,8 +192,10 @@ export function parseClaudeCodeSession(
     ignoredTypes: {},
   };
   const sessions = new Map<string, SessionAcc>();
-  let pendingTitle: string | undefined;
   const fallbackId = opts.fileName ?? "unknown";
+  // Titles: the latest ai-title line wins; otherwise the first summary line.
+  const aiTitles = new Map<string, string>();
+  let fileSummary: string | undefined;
 
   const lines = contents.split(/\r?\n/);
   lines.forEach((raw, i) => {
@@ -172,13 +209,17 @@ export function parseClaudeCodeSession(
       warnings.push({ line: i + 1, message: "Not valid JSON; skipped" });
       return;
     }
-    if (typeof line !== "object" || line === null) {
+    if (typeof line !== "object" || line === null || Array.isArray(line)) {
       stats.malformed++;
       return;
     }
 
     if (line.type === "summary") {
-      if (line.summary && !pendingTitle) pendingTitle = line.summary;
+      if (line.summary && !fileSummary) fileSummary = line.summary;
+      return;
+    }
+    if (line.type === "ai-title") {
+      if (line.aiTitle) aiTitles.set(line.sessionId ?? fallbackId, line.aiTitle);
       return;
     }
     if (line.isSidechain) {
@@ -189,43 +230,53 @@ export function parseClaudeCodeSession(
       stats.meta++;
       return;
     }
+    if (line.type === "system" && line.subtype && IGNORED_SYSTEM_SUBTYPES.has(line.subtype)) {
+      bump(stats, `system:${line.subtype}`);
+      return;
+    }
+    if (line.type !== "user" && line.type !== "assistant" && line.type !== "system") {
+      bump(stats, line.type ?? "(none)");
+      return;
+    }
 
     const sid = line.sessionId ?? fallbackId;
     let acc = sessions.get(sid);
     if (!acc) {
-      acc = { sessionId: sid, events: [], timestamps: [], models: [] };
+      acc = { sessionId: sid, events: [], timestamps: [], models: [], usageByResponse: new Map() };
       sessions.set(sid, acc);
     }
     const ts = isIso(line.timestamp) ? normalizeTs(line.timestamp) : undefined;
     if (ts) acc.timestamps.push(ts);
     if (line.version && !acc.version) acc.version = line.version;
 
-    switch (line.type) {
-      case "user":
-        if (line.isCompactSummary) {
-          acc.events.push({ type: "system", kind: "compaction", ts });
-        } else {
-          acc.events.push(...userEvents(line.message?.content, ts));
-        }
-        break;
-      case "assistant": {
-        const model = line.message?.model;
-        if (model && !model.startsWith("<")) acc.models.push(model);
-        acc.events.push(...assistantEvents(line.message?.content, ts));
-        break;
+    if (line.type === "user") {
+      if (line.isCompactSummary) {
+        acc.events.push({ type: "system", kind: "compaction", ts });
+      } else {
+        acc.events.push(...userEvents(line.message?.content, ts));
       }
-      case "system":
-        acc.events.push({
-          type: "system",
-          kind: line.subtype === "compact_boundary" ? "compaction" : (line.subtype ?? "system"),
-          text: typeof line.content === "string" ? line.content : undefined,
-          ts,
-        });
-        break;
-      default: {
-        const t = line.type ?? "(none)";
-        stats.ignoredTypes[t] = (stats.ignoredTypes[t] ?? 0) + 1;
+    } else if (line.type === "assistant") {
+      const model = line.message?.model;
+      const synthetic = model === SYNTHETIC_MODEL;
+      if (model && !synthetic) acc.models.push(model);
+      const usage = line.message?.usage;
+      if (usage && !synthetic) {
+        acc.usageByResponse.set(line.message?.id ?? line.uuid ?? `line${i}`, usage);
       }
+      acc.events.push(...assistantEvents(line.message?.content, synthetic, ts));
+    } else {
+      const kind =
+        line.subtype === "compact_boundary"
+          ? "compaction"
+          : line.subtype === "local_command"
+            ? "command"
+            : (line.subtype ?? "system");
+      acc.events.push({
+        type: "system",
+        kind,
+        text: typeof line.content === "string" ? line.content : undefined,
+        ts,
+      });
     }
   });
 
@@ -242,7 +293,7 @@ export function parseClaudeCodeSession(
     const candidate = {
       schemaVersion: TRACE_SCHEMA_VERSION,
       id: `cc_${cyrb53(acc.sessionId)}`,
-      title: pendingTitle,
+      title: aiTitles.get(acc.sessionId) ?? fileSummary,
       startedAt,
       endedAt,
       provenance: {
@@ -252,6 +303,7 @@ export function parseClaudeCodeSession(
         repo: { languages: [], frameworks: [] },
         capturedAt: endedAt,
       },
+      metrics: metricsOf(acc),
       events: acc.events.map((e, seq) => ({ ...e, seq })),
     };
     const parsed = Trace.safeParse(candidate);

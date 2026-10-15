@@ -49,6 +49,7 @@ for (const file of files) {
     for (const e of t.events) {
       byType[e.type] = (byType[e.type] ?? 0) + 1;
       if (e.type === "tool_call") tools[e.tool] = (tools[e.tool] ?? 0) + 1;
+      if (e.type === "system") byType[`system:${e.kind}`] = (byType[`system:${e.kind}`] ?? 0) + 1;
       if (e.type === "tool_result" && e.isError) errors++;
       if (e.type === "user_message" && e.interrupted) interrupts++;
     }
@@ -58,6 +59,7 @@ for (const file of files) {
     );
     console.log(`    events ${JSON.stringify(byType)}`);
     console.log(`    tools  ${JSON.stringify(tools)}`);
+    if (t.metrics) console.log(`    tokens ${JSON.stringify(t.metrics)}`);
     console.log(
       `    tool errors ${errors}, interrupts ${interrupts}, has title ${Boolean(t.title)}`,
     );
