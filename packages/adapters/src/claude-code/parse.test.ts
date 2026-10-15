@@ -128,6 +128,49 @@ describe("Claude Code adapter: edge cases", () => {
     expect(new Set(traces.map((t) => t.id)).size).toBe(2);
   });
 
+  it("skips malformed records with a warning and keeps importing the rest of the file", () => {
+    const ts = "2026-01-01T00:00:00Z";
+    const text = [
+      line({ type: "user", timestamp: ts, message: { content: null } }),
+      line({ type: "user", timestamp: ts, message: { content: { not: "an array" } } }),
+      line({
+        type: "assistant",
+        timestamp: ts,
+        message: { content: [null, { type: "text", text: 5 }, { type: "tool_use" }] },
+      }),
+      line({
+        type: "user",
+        timestamp: ts,
+        message: { content: [{ type: "tool_result", tool_use_id: "x", content: [null] }] },
+      }),
+      JSON.stringify({
+        sessionId: { bad: true },
+        type: "user",
+        timestamp: ts,
+        message: { content: "odd id" },
+      }),
+      JSON.stringify({
+        sessionId: "s2",
+        type: "user",
+        timestamp: ts,
+        message: { content: "valid question" },
+      }),
+      JSON.stringify({
+        sessionId: "s2",
+        type: "assistant",
+        timestamp: ts,
+        message: { content: [{ type: "text", text: "valid answer" }, null] },
+      }),
+    ].join("\n");
+    let report!: ReturnType<typeof parseClaudeCodeSession>;
+    expect(() => (report = parseClaudeCodeSession(text, { fileName: "f.jsonl" }))).not.toThrow();
+    const s2 = report.traces.find((t) =>
+      t.events.some((e) => "text" in e && e.text === "valid question"),
+    );
+    expect(s2?.events.map((e) => e.type)).toEqual(["user_message", "assistant_message"]);
+    expect(report.warnings.map((w) => w.line)).toEqual([1, 2, 3, 4, 7]);
+  });
+
   it("drops sessions that contain only bookkeeping", () => {
     const text = line({ type: "user", message: { content: "<command-name>/help</command-name>" } });
     expect(parseClaudeCodeSession(text).traces).toEqual([]);

@@ -84,12 +84,47 @@ function isCommandText(text: string): boolean {
   );
 }
 
-function blocksOf(content: string | CCContentBlock[] | undefined): CCContentBlock[] {
-  if (content === undefined) return [];
-  return typeof content === "string" ? [{ type: "text", text: content }] : content;
+/** Records whose content had the wrong shape, reported as one warning per line. */
+let invalidBlocks = 0;
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** True when a block has the fields the parser reads, with the right types. */
+function validBlock(b: unknown): b is CCContentBlock {
+  if (!isObj(b) || typeof b.type !== "string") return false;
+  switch (b.type) {
+    case "text":
+      return typeof b.text === "string";
+    case "tool_use":
+      return typeof b.id === "string" && typeof b.name === "string";
+    case "tool_result":
+      return (
+        typeof b.tool_use_id === "string" &&
+        (b.content === undefined ||
+          typeof b.content === "string" ||
+          (Array.isArray(b.content) &&
+            b.content.every((p) => isObj(p) && typeof p.type === "string")))
+      );
+    default:
+      return true; // unknown kinds are ignored by the callers
+  }
 }
 
-function userEvents(content: string | CCContentBlock[] | undefined, ts?: string): Pending[] {
+/** Message content as a list of well-formed blocks; anything else is dropped and counted. */
+function blocksOf(content: unknown): CCContentBlock[] {
+  if (content === undefined) return [];
+  if (typeof content === "string") return [{ type: "text", text: content }];
+  if (!Array.isArray(content)) {
+    invalidBlocks++;
+    return [];
+  }
+  const ok = content.filter(validBlock);
+  invalidBlocks += content.length - ok.length;
+  return ok;
+}
+
+function userEvents(content: unknown, ts?: string): Pending[] {
   const out: Pending[] = [];
   for (const b of blocksOf(content)) {
     if (b.type === "text" && "text" in b) {
@@ -120,11 +155,7 @@ function userEvents(content: string | CCContentBlock[] | undefined, ts?: string)
   return out;
 }
 
-function assistantEvents(
-  content: string | CCContentBlock[] | undefined,
-  synthetic: boolean,
-  ts?: string,
-): Pending[] {
+function assistantEvents(content: unknown, synthetic: boolean, ts?: string): Pending[] {
   const out: Pending[] = [];
   for (const b of blocksOf(content)) {
     if (b.type === "text" && "text" in b) {
@@ -212,9 +243,28 @@ export function parseClaudeCodeSession(
     }
     if (typeof line !== "object" || line === null || Array.isArray(line)) {
       stats.malformed++;
+      warnings.push({ line: i + 1, message: "Not a JSON object; skipped" });
       return;
     }
+    // Valid JSON can still have the wrong shape. A bad record is skipped
+    // with a warning; it must never stop the rest of the file importing.
+    invalidBlocks = 0;
+    try {
+      readLine(line, i);
+    } catch {
+      stats.malformed++;
+      warnings.push({ line: i + 1, message: "Unexpected record shape; skipped" });
+      return;
+    }
+    if (invalidBlocks > 0) {
+      warnings.push({
+        line: i + 1,
+        message: `${invalidBlocks} malformed content block${invalidBlocks === 1 ? "" : "s"} skipped`,
+      });
+    }
+  });
 
+  function readLine(line: CCLine, i: number): void {
     if (line.type === "summary") {
       if (line.summary && !fileSummary) fileSummary = line.summary;
       return;
@@ -240,7 +290,7 @@ export function parseClaudeCodeSession(
       return;
     }
 
-    const sid = line.sessionId ?? fallbackId;
+    const sid = typeof line.sessionId === "string" ? line.sessionId : fallbackId;
     let acc = sessions.get(sid);
     if (!acc) {
       acc = { sessionId: sid, events: [], timestamps: [], models: [], usageByResponse: new Map() };
@@ -248,7 +298,7 @@ export function parseClaudeCodeSession(
     }
     const ts = isIso(line.timestamp) ? normalizeTs(line.timestamp) : undefined;
     if (ts) acc.timestamps.push(ts);
-    if (line.version && !acc.version) acc.version = line.version;
+    if (typeof line.version === "string" && !acc.version) acc.version = line.version;
 
     if (line.type === "user") {
       if (line.isCompactSummary) {
@@ -257,7 +307,7 @@ export function parseClaudeCodeSession(
         acc.events.push(...userEvents(line.message?.content, ts));
       }
     } else if (line.type === "assistant") {
-      const model = line.message?.model;
+      const model = typeof line.message?.model === "string" ? line.message.model : undefined;
       const synthetic = model === SYNTHETIC_MODEL;
       if (model && !synthetic) acc.models.push(model);
       const usage = line.message?.usage;
@@ -279,7 +329,7 @@ export function parseClaudeCodeSession(
         ts,
       });
     }
-  });
+  }
 
   const now = (opts.now ?? new Date()).toISOString();
   const traces: Trace[] = [];
