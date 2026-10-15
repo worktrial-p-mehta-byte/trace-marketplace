@@ -16,6 +16,7 @@ export interface ShareOutcome {
   priceCents: number;
   sellerCents: number;
   labels: string[];
+  pricePending?: boolean;
 }
 
 export interface Item {

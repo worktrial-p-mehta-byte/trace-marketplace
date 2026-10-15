@@ -8,12 +8,13 @@ import { openDb, runMigrations, schema, type Db } from "@tm/db";
 import { enrichTrace } from "@tm/enrich";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
+import { generateFlood } from "@tm/synth";
 import {
   acceptTerms,
   authenticate,
   AuthError,
-  createDbEventBus,
   createMemoryBlobStore,
+  createDbEventBus,
   createSession,
   createUser,
   deleteSession,
@@ -21,6 +22,7 @@ import {
   getUserBySession,
   listSellerTraces,
   revokeTrace,
+  runPricingConsumer,
   shareTrace,
   ShareError,
   type CatalogDeps,
@@ -217,6 +219,43 @@ describe("estimate matches the shared price", () => {
   });
 });
 
+describe("shareTrace when downstream work fails", () => {
+  it("keeps a committed upload successful and recoverable if pricing throws", async () => {
+    // A bus whose consumers fail (e.g. a repricing or database error), while
+    // emitting still works.
+    const real = createDbEventBus(db);
+    const broken = {
+      emit: real.emit,
+      poll: () => {
+        throw new Error("repricer down");
+      },
+    };
+    const quiet = console.error;
+    console.error = () => {};
+    const r = await shareTrace(
+      db,
+      { ...deps, bus: broken },
+      { sellerId, trace: scrubTrace(raw).trace, tier: 0 },
+    ).finally(() => (console.error = quiet));
+    expect(r.pricePending).toBe(true);
+    expect(r.listingId).toBeTruthy();
+
+    // A retry is refused as a duplicate: the first upload really is listed.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 }),
+    ).rejects.toThrow(ShareError);
+
+    // The events were committed with the listing, so the next run prices it.
+    runPricingConsumer(db, real, { config: deps.config, now: NOW });
+    const listing = db
+      .select()
+      .from(schema.listings)
+      .where(eq(schema.listings.id, r.listingId))
+      .get()!;
+    expect(listing.currentPriceCents).toBeGreaterThan(0);
+  });
+});
+
 describe("revokeTrace and listSellerTraces", () => {
   it("delists a revoked trace, records the date and allows sharing again", async () => {
     const r = await shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 });
@@ -244,5 +283,29 @@ describe("estimatePrice", () => {
     expect(q.priceCents).toBeGreaterThan(0);
     expect(q.drivers.find((d) => d.factor === "failure")!.reason).toMatch(/tampered/);
     expect(db.select().from(schema.priceSnapshots).all()).toEqual([]);
+  });
+
+  it("matches the listed price for a new combination in a skewed small market", async () => {
+    // Existing combination counts [1, 3]: the old median (2) made an unseen
+    // combination look twice as rare as it is once listed (median 1).
+    // The model is part of the combination, so pin it.
+    const pin = (t: Trace): Trace => ({
+      ...t,
+      provenance: { ...t.provenance, model: { id: "claude-test-model" } },
+    });
+    const seed = [
+      ...generateFlood(1, 1, NOW, { language: "Go", pattern: "tool_error" }),
+      ...generateFlood(2, 3, NOW, { language: "Rust", framework: "Tokio", pattern: "retry_loop" }),
+    ].map(pin);
+    for (const t of seed) {
+      await shareTrace(db, deps, { sellerId, trace: t, tier: 0 }, { allowSynthetic: true });
+    }
+    const scrubbed = scrubTrace(raw);
+    const { traits } = enrichTrace(scrubbed.trace, {
+      redactionDensity: placeholderDensity(scrubbed.trace),
+    });
+    const estimate = estimatePrice(db, deps, traits, 0);
+    const shared = await shareTrace(db, deps, { sellerId, trace: scrubbed.trace, tier: 0 });
+    expect(shared.priceCents).toBe(estimate.priceCents);
   });
 });
