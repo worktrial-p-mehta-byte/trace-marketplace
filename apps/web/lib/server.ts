@@ -7,6 +7,7 @@ import {
   createLocalBlobStore,
   createSqliteSearchIndex,
   getUserBySession,
+  runPricingConsumer,
   type BlobStore,
   type SearchIndex,
   type EventBus,
@@ -39,6 +40,15 @@ export function getBlobs(): BlobStore {
 
 export function getSearch(): SearchIndex {
   return createSqliteSearchIndex(getDb());
+}
+
+/**
+ * Catch pricing up before showing prices: handle any pricing events still in
+ * the outbox (e.g. after a failed run), else reprice if time alone has made
+ * prices stale (freshness, demand window). Cheap when nothing is due.
+ */
+export function refreshPrices(): void {
+  runPricingConsumer(getDb(), getBus(), { config: getConfig() });
 }
 
 export async function getCurrentUser(): Promise<PublicUser | undefined> {

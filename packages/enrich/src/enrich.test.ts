@@ -11,6 +11,7 @@ import {
   enrichTrace,
   isCorrection,
   testRunPassed,
+  testRunResult,
 } from "./index";
 
 const FIXTURE = fileURLToPath(
@@ -152,6 +153,17 @@ describe("text heuristics", () => {
     expect(testRunPassed("3 failed, 39 passed", false)).toBe(false);
     expect(testRunPassed("test result: ok. 0 failed", false)).toBe(true);
     expect(testRunPassed("anything", true)).toBe(false);
+  });
+
+  it("needs positive evidence before calling a run a pass", () => {
+    expect(testRunResult("No tests found", false)).toBe("unknown");
+    expect(testRunResult("collected 0 items\n\nno tests ran in 0.01s", false)).toBe("unknown");
+    expect(testRunResult("Error: test runner could not initialize", false)).toBe("unknown");
+    expect(testRunResult("some unrelated output", false)).toBe("unknown");
+    expect(testRunResult("0 passed", false)).toBe("unknown");
+    expect(testRunResult("Ran 4 tests in 0.2s\n\nOK", false)).toBe("passed");
+    expect(testRunResult("PASS src/a.test.ts", false)).toBe("passed");
+    expect(testRunResult("FAILED (errors=1)", true)).toBe("failed");
   });
 });
 

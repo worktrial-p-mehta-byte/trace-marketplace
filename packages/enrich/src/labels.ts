@@ -39,7 +39,11 @@ const TEST_COMMAND =
   /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|\b(?:pytest|vitest|jest|mocha|rspec|phpunit)\b|\bcargo\s+test\b|\bgo\s+test\b|\bmvn\s+test\b|\bgradle\w*\s+test\b|\bdotnet\s+test\b|\bmix\s+test\b|\bmake\s+test\b/i;
 const TEST_FAIL =
   /\b(?:\d+\s+fail(?:ed|ing|ures?)?|FAIL\b|failures?:\s*[1-9]|tests? failed|error\[|panicked)/i;
-const TEST_PASS = /\b(?:\d+\s+pass(?:ed|ing)?|all tests pass|ok\b|PASS\b|0 fail)/i;
+// Positive evidence only: "0 passed" or an unrecognised message is not a pass.
+const TEST_PASS =
+  /\b(?:[1-9]\d*\s+pass(?:ed|ing)?|all tests pass(?:ed)?|test result: ok|^ok\b|PASS\b|OK(?: \(|$))/im;
+const TEST_NONE =
+  /\b(?:no tests? (?:found|ran|run|to run|were found|collected|executed)|collected 0 items|0 tests?\b|no test files found|no test suite found|could not (?:find|load|initiali[sz]e)|cannot find module|command not found|not recognized as)/i;
 
 const TEST_FILE =
   /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|[._-](?:test|spec)\.[a-z]+$|_test\.(?:go|py)$|^test_.*\.py$/i;
@@ -53,11 +57,23 @@ export function isTestCommand(command: string): boolean {
   return TEST_COMMAND.test(command);
 }
 
-/** Did a test run pass? Errors win; otherwise look for explicit failure text. */
+export type TestRunResult = "passed" | "failed" | "unknown";
+
+/**
+ * What a test run's output says. Failure text or an error wins; a pass needs
+ * positive evidence ("12 passed", "PASS", "test result: ok"). Runs that found
+ * no tests, or whose output isn't recognised, are "unknown", never a pass.
+ */
+export function testRunResult(output: string, isError: boolean): TestRunResult {
+  if (TEST_NONE.test(output)) return "unknown";
+  if (isError) return "failed";
+  if (TEST_FAIL.test(output) && !/\b0 fail(?:ed|ures?)?\b/i.test(output)) return "failed";
+  return TEST_PASS.test(output) ? "passed" : "unknown";
+}
+
+/** Did a test run clearly pass? */
 export function testRunPassed(output: string, isError: boolean): boolean {
-  if (isError) return false;
-  if (TEST_FAIL.test(output) && !/\b0 fail(?:ed|ures?)?\b/i.test(output)) return false;
-  return TEST_PASS.test(output) || output.trim().length > 0;
+  return testRunResult(output, isError) === "passed";
 }
 
 /** An edit to a test file that removes assertions (old text has them, new text doesn't). */
@@ -115,7 +131,7 @@ export function analyzeTrace(trace: Trace): TraceAnalysis {
     retryLoop: [] as number[],
     compaction: [] as number[],
   };
-  let lastTest: { seq: number; passed: boolean } | undefined;
+  let lastTest: { seq: number; result: TestRunResult } | undefined;
   let sawAgentAction = false;
   let errorStreak: { tool: string; seqs: number[] } | undefined;
 
@@ -147,7 +163,7 @@ export function analyzeTrace(trace: Trace): TraceAnalysis {
             ? (call.input as Record<string, unknown>).command
             : undefined;
         if (typeof cmd === "string" && isTestCommand(cmd)) {
-          lastTest = { seq: e.seq, passed: testRunPassed(e.output, e.isError) };
+          lastTest = { seq: e.seq, result: testRunResult(e.output, e.isError) };
         }
         break;
       }
@@ -193,8 +209,10 @@ export function analyzeTrace(trace: Trace): TraceAnalysis {
     ...evidence.correction,
     ...evidence.interrupt,
   );
-  const testsRanAtEnd = lastTest !== undefined && lastTest.seq > lastErrorSeq;
-  const testsPassedAtEnd = testsRanAtEnd && lastTest!.passed;
+  // A run that found no tests or gave no verdict doesn't make the outcome checkable.
+  const testsRanAtEnd =
+    lastTest !== undefined && lastTest.result !== "unknown" && lastTest.seq > lastErrorSeq;
+  const testsPassedAtEnd = testsRanAtEnd && lastTest!.result === "passed";
   const endsWithAgent = ev.at(-1)?.type === "assistant_message";
   const recovered =
     hadFailure &&
@@ -202,11 +220,11 @@ export function analyzeTrace(trace: Trace): TraceAnalysis {
       (endsWithAgent &&
         ev.some((e) => e.type === "tool_result" && !e.isError && e.seq > lastErrorSeq)));
 
-  if (lastTest) {
+  if (lastTest && lastTest.result !== "unknown") {
     labels.push(
       label(
         "outcome",
-        lastTest.passed ? "tests_passed_at_end" : "tests_failed_at_end",
+        lastTest.result === "passed" ? "tests_passed_at_end" : "tests_failed_at_end",
         [lastTest.seq],
         0.8,
       ),

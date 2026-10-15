@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Trace, TRACE_SCHEMA_VERSION } from "@tm/schema";
-import { buildStages, scrubTrace } from "./index";
+import { buildStages, isSensitiveKey, scrubTrace } from "./index";
 
 // Fake secrets are assembled at runtime so this file passes the repo's own secret scan.
 const FAKE = {
@@ -149,7 +149,7 @@ describe("scrubTrace", () => {
     expect(result.trace.events[1]).toMatchObject({
       input: {
         command: "cat /Users/<user>/.env",
-        nested: [{ token: "ghx [REDACTED:github_token]" }],
+        nested: [{ token: "[REDACTED:secret]" }],
       },
     });
   });
@@ -157,7 +157,7 @@ describe("scrubTrace", () => {
   it("reports redactions by kind and event, without the removed text", () => {
     expect(result.stats.byKind).toEqual({
       anthropic_key: 1,
-      github_token: 1,
+      secret: 1,
       openai_key: 1,
       home_path: 1,
       email: 1,
@@ -179,5 +179,71 @@ describe("scrubTrace", () => {
     const again = scrubTrace(result.trace);
     expect(again.stats.redactions).toBe(0);
     expect(again.trace).toEqual(result.trace);
+  });
+});
+
+describe("structured credentials in tool input", () => {
+  const withInput = (input: unknown) =>
+    Trace.parse({
+      schemaVersion: TRACE_SCHEMA_VERSION,
+      id: "t2",
+      startedAt: "2026-10-10T09:00:00Z",
+      endedAt: "2026-10-10T09:05:00Z",
+      provenance: {
+        source: "real",
+        harness: { name: "claude-code" },
+        model: { id: "m" },
+        capturedAt: "2026-10-10T09:05:00Z",
+      },
+      events: [{ seq: 0, type: "tool_call", callId: "c1", tool: "Login", input }],
+    });
+
+  it("redacts bare values under credential keys, whatever they look like", () => {
+    const r = scrubTrace(
+      withInput({ user: "sam", password: "p4ssphrase", api_key: "notarealtoken123" }), // tm-allow-secret
+    );
+    expect(r.trace.events[0]).toMatchObject({
+      input: { user: "sam", password: "[REDACTED:secret]", api_key: "[REDACTED:secret]" },
+    });
+    expect(r.stats.byKind).toEqual({ secret: 2 });
+  });
+
+  it("covers camelCase, headers, numbers and anything nested under a credential key", () => {
+    const r = scrubTrace(
+      withInput({
+        headers: { Authorization: "Basic c2FtOmh1bnRlcjI=", Cookie: "sid=abc" },
+        accessToken: "plainvalue",
+        pin: 4921,
+        credentials: { user: "sam", list: ["one", "two"] },
+      }),
+    );
+    expect(r.trace.events[0]).toMatchObject({
+      input: {
+        headers: { Authorization: "[REDACTED:secret]", Cookie: "[REDACTED:secret]" },
+        accessToken: "[REDACTED:secret]",
+        pin: "[REDACTED:secret]",
+        credentials: {
+          user: "[REDACTED:secret]",
+          list: ["[REDACTED:secret]", "[REDACTED:secret]"],
+        },
+      },
+    });
+    expect(JSON.stringify(r.trace)).not.toMatch(/c2Ft|abc|plainvalue|4921|"sam"/);
+  });
+
+  it("leaves keys that only look sensitive alone", () => {
+    for (const k of ["max_tokens", "tokenizer", "secret_name", "author", "password_hint_shown"]) {
+      expect(isSensitiveKey(k), k).toBe(false);
+    }
+    for (const k of [
+      "password",
+      "api_key",
+      "apiKey",
+      "ACCESS_TOKEN",
+      "client-secret",
+      "db_password",
+    ]) {
+      expect(isSensitiveKey(k), k).toBe(true);
+    }
   });
 });

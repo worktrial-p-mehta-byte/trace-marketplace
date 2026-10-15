@@ -43,6 +43,8 @@ export const PricingConfig = z.object({
     /** Age of the snapshot used as the baseline for maxDailyChange. */
     changeWindowHours: positive,
     /** Weight of each buyer action as a demand signal. */
+    /** Demand weight a bounty adds per dollar of its total budget. */
+    bountyWeightPerDollar: z.number().min(0),
     signalWeights: z.object({
       search: z.number().min(0),
       view: z.number().min(0),
@@ -52,6 +54,7 @@ export const PricingConfig = z.object({
   freshness: z.object({ halfLifeDays: positive, floor: share, deprecatedModelFactor: share }),
   license: z.object({ research: positive, eval: positive, training: positive }),
   quoteLockMinutes: positive,
+  refreshIntervalMinutes: positive,
 });
 
 export const MarketplaceConfig = z

@@ -15,6 +15,7 @@ local pieces in production. Keep it current when adding a service.
 | SQLite via better-sqlite3            | Local database (`data/trace-marketplace.db`)                                      | No                    |
 | Drizzle ORM / drizzle-kit            | Schema, queries, migrations                                                       | No                    |
 | Zod                                  | Schema validation (traces, config)                                                | No                    |
+| Python 3.10+ (optional)              | Only to run the failure-lab Python tasks in `demo/failure-lab`                    | No                    |
 | Vitest, ESLint, Prettier, TypeScript | Tests and code quality                                                            | No                    |
 | GitHub Actions                       | CI: typecheck, lint, tests, secret scan                                           | GitHub repo only      |
 

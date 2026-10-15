@@ -16,12 +16,14 @@ where the limit lives and what would lift it.
 
 ## Scrubbing — M2
 
-| Limitation                                              | Impact                                                                                                                      | Lifted by                                                       |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Rules are pattern-based                                 | New secret formats, people's names, company names and proprietary code are not detected unless the seller adds custom terms | ML/LLM scrubber stage; the seller review screen is the backstop |
-| Phone numbers: North American formats only              | Other formats pass through                                                                                                  | More locale rules                                               |
-| Internal hosts only by suffix (`.corp`, `.internal`, …) | Internal names on public-looking domains pass through                                                                       | Seller custom terms; org-level denylists                        |
-| Generic `KEY=value` secrets need a digit in the value   | An all-letter password in a config line is missed                                                                           | Entropy scoring                                                 |
+| Limitation                                                                                                     | Impact                                                                                                                      | Lifted by                                                       |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Rules are pattern-based                                                                                        | New secret formats, people's names, company names and proprietary code are not detected unless the seller adds custom terms | ML/LLM scrubber stage; the seller review screen is the backstop |
+| Phone numbers: North American formats only                                                                     | Other formats pass through                                                                                                  | More locale rules                                               |
+| Internal hosts only by suffix (`.corp`, `.internal`, …)                                                        | Internal names on public-looking domains pass through                                                                       | Seller custom terms; org-level denylists                        |
+| Generic `KEY=value` secrets need a digit in the value                                                          | An all-letter password in a config line is missed                                                                           | Entropy scoring                                                 |
+| Credential-named keys in structured tool input are redacted whole; the same value under an ordinary key is not | `{"note": "p4ss…"}` with no recognisable pattern passes through                                                             | Entropy scoring; LLM scrubber stage                             |
+| Traces shared before a scrubber fix are not re-scrubbed                                                        | Older listings may carry what a newer rule would remove                                                                     | Re-scrub job over stored traces when rules change               |
 
 ## Labels and traits — M2
 
@@ -70,6 +72,17 @@ where the limit lives and what would lift it.
 | Full-text search indexes titles, labels, stack, tools and, for open-source traces, the first 20,000 characters of messages and commands | Matches deep in long sessions are missed                                                     | Chunked indexing; semantic search                                      |
 | Search indexing runs inside the share and withdraw requests                                                                             | Slower requests as traces grow                                                               | Background worker (S3)                                                 |
 | Seller aliases are stable per seller                                                                                                    | Buyers can tell that two traces share a seller (by design), but not who it is                | —                                                                      |
+
+## Market simulator, seed data and failure lab — M6
+
+| Limitation                                                                                   | Impact                                                         | Lifted by                                                        |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Seeded and simulated traces are synthetic: realistic structure, invented content             | Good for showing pricing and search; not training data         | Real supply, including failure-lab sessions                      |
+| Any signed-in user can post bounties, add supply and reset the simulator                     | Fine for a local demo; anyone can move prices                  | Admin-only simulator; real bounties funded through checkout (S2) |
+| Bounties only add demand; nobody can fulfil one, and they never expire                       | No bounty payouts or matching traces to bounties               | Bounty submissions and payouts (post-v0)                         |
+| Reset removes all bounty demand, including bounties not posted from the simulator            | Mixing real bounties with the simulator would lose real demand | Tag simulator demand separately                                  |
+| Price history keeps every simulator move after a reset                                       | Charts show past experiments as steps                          | Mark or hide simulator moves                                     |
+| Failure-lab tasks raise the odds of a failure but don't guarantee one, and are not run in CI | A run can produce a clean session; a task could rot unnoticed  | Check the tasks' starting failures in CI                         |
 
 ## Platform
 

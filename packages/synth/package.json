@@ -1,0 +1,19 @@
+{
+  "name": "@tm/synth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Seeded generator of synthetic agent sessions for demo data and the market simulator (browser-safe).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tm/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@tm/enrich": "workspace:*"
+  }
+}

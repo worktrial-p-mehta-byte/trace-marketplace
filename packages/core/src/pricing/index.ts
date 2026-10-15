@@ -187,7 +187,39 @@ export function repriceAll(
   if (deps.bus && changed) {
     deps.bus.emit(EventTypes.PriceUpdated, { reason: deps.reason, changed });
   }
+  deps.bus?.emit(EventTypes.PricesRefreshed, {
+    at: market.now.toISOString(),
+    reason: deps.reason,
+    changed,
+  });
   return { repriced: market.active.length, changed };
+}
+
+/** When the whole catalog was last repriced (logical time), if ever. */
+export function lastRefreshAt(db: Db): Date | undefined {
+  const row = db
+    .select({ payload: schema.events.payload })
+    .from(schema.events)
+    .where(eq(schema.events.type, EventTypes.PricesRefreshed))
+    .orderBy(desc(schema.events.seq))
+    .limit(1)
+    .get();
+  const at = (row?.payload as { at?: string } | undefined)?.at;
+  return at ? new Date(at) : undefined;
+}
+
+/**
+ * Prices depend on time as well as events: freshness decays and demand
+ * signals age out of their window. Reprice everything when the last full
+ * reprice is older than `pricing.refreshIntervalMinutes`. Cheap to call on
+ * every page load; a cron job can call it too (`pnpm reprice`).
+ */
+export function refreshStalePrices(db: Db, bus: EventBus, deps: PricingDeps): RepriceResult | null {
+  const now = deps.now ?? new Date();
+  const last = lastRefreshAt(db);
+  const interval = deps.config.pricing.refreshIntervalMinutes * 60_000;
+  if (last && now.getTime() - last.getTime() < interval) return null;
+  return repriceAll(db, { ...deps, now, bus, reason: "scheduled refresh" });
 }
 
 /** Price one active listing under a license without writing anything (quotes, "why this price"). */
@@ -267,6 +299,6 @@ export function runPricingConsumer(db: Db, bus: EventBus, deps: PricingDeps): Re
     },
     10_000,
   );
-  if (!triggers.size) return null;
+  if (!triggers.size) return refreshStalePrices(db, bus, deps);
   return repriceAll(db, { ...deps, bus, reason: [...triggers].sort().join(",") });
 }

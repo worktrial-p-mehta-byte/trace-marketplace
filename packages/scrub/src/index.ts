@@ -3,6 +3,7 @@ export {
   buildStages,
   ruleStage,
   traceTextLength,
+  isSensitiveKey,
   type Redaction,
   type ScrubOptions,
   type ScrubResult,

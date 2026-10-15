@@ -52,6 +52,14 @@ Defaults: multiplier cap 12×, floor $0.10, ceiling $50, seller share 70%.
   - `runPricingConsumer` reprices once per batch of `trace.ingested`,
     `listing.created`, `listing.delisted`, `consent.revoked`,
     `demand.signaled` and `bounty.posted` events.
+  - **Time**: freshness decays and demand ages out of its window with no
+    event at all, so prices are also refreshed when the last full reprice is
+    older than `pricing.refreshIntervalMinutes` (60). The consumer does this
+    when it finds no new events; the catalog, viewer and market pages run the
+    consumer on load; `pnpm reprice` forces it (for cron).
+  - Sharing commits its outbox events with the listing. If pricing fails
+    straight after, the upload still succeeds ("price pending") and the next
+    consumer run prices it.
 
 Known limits are tracked in [LIMITATIONS.md](LIMITATIONS.md).
 All of these are configurable: see [config/README.md](../config/README.md) and

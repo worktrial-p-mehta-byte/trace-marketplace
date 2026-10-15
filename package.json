@@ -23,7 +23,10 @@
     "check:secrets": "tsx scripts/check-secrets.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:secrets",
     "inspect:sessions": "tsx scripts/inspect-sessions.ts",
-    "search:rebuild": "tsx scripts/rebuild-search.ts"
+    "search:rebuild": "tsx scripts/rebuild-search.ts",
+    "reprice": "tsx scripts/reprice.ts",
+    "seed": "tsx scripts/seed.ts",
+    "demo:reset": "pnpm db:reset && pnpm seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -51,6 +54,7 @@
     "@tm/scrub": "workspace:*",
     "@tm/core": "workspace:*",
     "@tm/db": "workspace:*",
-    "@tm/schema": "workspace:*"
+    "@tm/schema": "workspace:*",
+    "@tm/synth": "workspace:*"
   }
 }

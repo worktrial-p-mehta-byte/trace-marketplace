@@ -20,24 +20,31 @@ export function toFtsQuery(text: string): string | null {
 export function createSqliteSearchIndex(db: Db): SearchIndex {
   const del = db.$client.prepare("DELETE FROM listing_search WHERE listing_id = ?");
   const ins = db.$client.prepare(
-    "INSERT INTO listing_search (listing_id, title, body) VALUES (?, ?, ?)",
+    "INSERT INTO listing_search (listing_id, title, meta, content) VALUES (?, ?, ?, ?)",
   );
   const find = db.$client.prepare(
-    "SELECT listing_id FROM listing_search WHERE listing_search MATCH ? ORDER BY bm25(listing_search, 0, 3.0, 1.0) LIMIT ?",
+    "SELECT listing_id FROM listing_search WHERE listing_search MATCH ? ORDER BY bm25(listing_search, 0, 3.0, 1.0, 1.0) LIMIT ?",
   );
   return {
     async index(listingId, doc) {
       db.$client.transaction(() => {
         del.run(listingId);
-        ins.run(listingId, String(doc.title ?? ""), String(doc.body ?? ""));
+        ins.run(
+          listingId,
+          String(doc.title ?? ""),
+          String(doc.meta ?? ""),
+          String(doc.content ?? ""),
+        );
       })();
     },
     async remove(listingId) {
       del.run(listingId);
     },
     async search(q: SearchQuery) {
-      const fts = q.text ? toFtsQuery(q.text) : null;
-      if (!fts) return { ids: [], total: 0 };
+      const terms = q.text ? toFtsQuery(q.text) : null;
+      if (!terms) return { ids: [], total: 0 };
+      // Without content access, every term must match in title or metadata.
+      const fts = q.includeContent ? terms : `{title meta} : (${terms})`;
       const rows = find.all(fts, q.limit ?? 10_000) as { listing_id: string }[];
       return { ids: rows.map((r) => r.listing_id), total: rows.length };
     },
@@ -45,9 +52,9 @@ export function createSqliteSearchIndex(db: Db): SearchIndex {
 }
 
 /**
- * The searchable document for a listing: title, stack, model, labels and
- * tools for every listing; message text too for open-source (tier 0)
- * listings, since that content is shown to signed-in buyers anyway.
+ * The searchable document for a listing: `title`; `meta` (stack, model,
+ * labels and tools, which anyone may see); and `content` (message text and
+ * commands, open-source listings only, matched only for signed-in searches).
  */
 export async function searchDocument(db: Db, blobs: BlobStore, listingId: string) {
   const row = db
@@ -73,6 +80,7 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
     .all()
     .map((l) => l.code.replace(/_/g, " "));
   const parts = [row.language, row.framework, row.model, row.harness, ...labels];
+  let content = "";
   const raw = await blobs.get(row.blobKey);
   if (raw) {
     const trace = JSON.parse(raw) as Trace;
@@ -88,9 +96,10 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
         }
       }
     }
-    parts.push(...tools, text.slice(0, MAX_BODY_CHARS));
+    parts.push(...tools);
+    content = text.slice(0, MAX_BODY_CHARS);
   }
-  return { title: row.title ?? "", body: parts.filter(Boolean).join("\n") };
+  return { title: row.title ?? "", meta: parts.filter(Boolean).join("\n"), content };
 }
 
 /**

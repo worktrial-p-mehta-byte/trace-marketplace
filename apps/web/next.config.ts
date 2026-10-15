@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     "@tm/scrub",
     "@tm/enrich",
     "@tm/pricing",
+    "@tm/synth",
   ],
   // Native module: load from node_modules at runtime instead of bundling.
   serverExternalPackages: ["better-sqlite3"],

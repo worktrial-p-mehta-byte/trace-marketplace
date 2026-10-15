@@ -21,6 +21,9 @@ export async function Header() {
               <Link href="/me/traces" className="hover:text-ink">
                 My traces
               </Link>
+              <Link href="/market" className="hidden hover:text-ink md:inline">
+                Market simulator
+              </Link>
               <span className="hidden text-ink-3 sm:inline">{user.email}</span>
               <SignOutButton />
             </>

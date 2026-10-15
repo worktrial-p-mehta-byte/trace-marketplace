@@ -25,7 +25,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@tm/synth": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

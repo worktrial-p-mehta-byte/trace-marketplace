@@ -333,7 +333,9 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
           {shared.map((i) => (
             <li key={i.key} className="flex items-center justify-between gap-4 py-3">
               <span className="truncate">{titleOf(i)}</span>
-              <span className="shrink-0 font-semibold">{money(i.outcome!.priceCents)}</span>
+              <span className="shrink-0 font-semibold">
+                {i.outcome!.pricePending ? "Price pending" : money(i.outcome!.priceCents)}
+              </span>
             </li>
           ))}
         </ul>

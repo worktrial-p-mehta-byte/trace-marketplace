@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { comboKeyOf, enrichTrace, type TraceTraits } from "@tm/enrich";
-import { splitSale, traitPolicyV1, type PriceQuote } from "@tm/pricing";
+import { median, splitSale, traitPolicyV1, type PriceQuote } from "@tm/pricing";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import { Trace, type Label, type Tier } from "@tm/schema";
 import { TERMS_VERSION } from "../auth";
@@ -81,6 +81,8 @@ export interface ShareResult {
   priceCents: number;
   sellerCents: number;
   labels: string[];
+  /** True when the upload succeeded but pricing hasn't run yet; it will on the next consumer run. */
+  pricePending?: boolean;
 }
 
 /**
@@ -89,17 +91,26 @@ export interface ShareResult {
  * for signals-only, recomputes labels and traits, checks eligibility and
  * duplicates, then stores, lists and prices it.
  */
+/** Options for trusted, server-side callers only (seed script, market simulator). Never exposed over HTTP. */
+export interface InternalShareOptions {
+  /** Accept provenance.source = "synthetic". */
+  allowSynthetic?: boolean;
+  /** Skip repricing and indexing; the caller runs them once after a batch. */
+  deferMarket?: boolean;
+}
+
 export async function shareTrace(
   db: Db,
   deps: CatalogDeps,
   input: ShareInput,
+  internal: InternalShareOptions = {},
 ): Promise<ShareResult> {
   const now = deps.now ?? new Date();
   const parsed = Trace.safeParse(input.trace);
   if (!parsed.success) throw new ShareError("The upload is not a valid trace.");
   if (!isTierSupported(input.tier)) throw new ShareError("Choose open source or signals only.");
   const tier = input.tier as Tier;
-  if (parsed.data.provenance.source === "synthetic") {
+  if (parsed.data.provenance.source === "synthetic" && !internal.allowSynthetic) {
     throw new ShareError("Synthetic traces can only be added by the seed script.");
   }
 
@@ -228,26 +239,43 @@ export async function shareTrace(
           createdAt: now,
         })
         .run();
+      // Outbox events commit with the listing (same SQLite connection), so
+      // pricing and search can always catch up later, even if they fail now.
+      deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
+      deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });
     });
   } catch (err) {
     await deps.blobs.delete(blobKey);
     throw err;
   }
 
-  deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
-  deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });
-  runPricingConsumer(db, deps.bus, { config: deps.config, now });
-  if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
+  // The upload is committed. Pricing and indexing are downstream work: a
+  // failure there must not turn a successful share into an error the seller
+  // can't retry (a retry would hit the duplicate check). The events above
+  // stay in the outbox, so the next consumer run picks them up.
+  if (!internal.deferMarket) {
+    try {
+      runPricingConsumer(db, deps.bus, { config: deps.config, now });
+    } catch (err) {
+      console.error("Pricing after share failed; will retry on the next run", err);
+    }
+    try {
+      if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
+    } catch (err) {
+      console.error("Search indexing after share failed; will retry on the next run", err);
+    }
+  }
 
-  const priceCents =
-    db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get()!
-      .currentPriceCents ?? 0;
+  const listed = db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get()!
+    .currentPriceCents;
+  const priceCents = listed ?? 0;
   return {
     traceId,
     listingId,
     priceCents,
     sellerCents: splitSale(priceCents, deps.config.revenue.sellerShare).seller,
     labels: labels.map((l) => l.code),
+    ...(listed === null && !internal.deferMarket ? { pricePending: true } : {}),
   };
 }
 
@@ -351,9 +379,13 @@ export function estimatePrice(
 ): PriceQuote {
   const market = buildMarket(db, deps);
   const comboKey = comboKeyOf(traits);
-  const counts = [...market.comboCounts.entries()];
-  const comboCount = (market.comboCounts.get(comboKey) ?? 0) + 1;
-  const medianComboCount = market.medianComboCount || (counts.length ? 1 : 0);
+  // Price the market as it will be once this trace is listed: its own
+  // combination gains one, and the median is taken over the new counts, the
+  // same way repricing will see it straight after the upload.
+  const after = new Map(market.comboCounts);
+  const comboCount = (after.get(comboKey) ?? 0) + 1;
+  after.set(comboKey, comboCount);
+  const medianComboCount = median([...after.values()]);
   return traitPolicyV1.price({
     traits,
     tier,
