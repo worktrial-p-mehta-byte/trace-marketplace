@@ -1,0 +1,16 @@
+{
+  "name": "@tm/enrich",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Heuristic labelers and trait extraction (browser-safe).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tm/schema": "workspace:*"
+  }
+}

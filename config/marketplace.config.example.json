@@ -1,0 +1,9 @@
+{
+  "revenue": {
+    "sellerShare": 0.7
+  },
+  "pricing": {
+    "multiplierCap": 12,
+    "license": { "research": 1.0, "eval": 1.5, "training": 2.0 }
+  }
+}

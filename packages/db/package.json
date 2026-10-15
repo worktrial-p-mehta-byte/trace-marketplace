@@ -1,0 +1,26 @@
+{
+  "name": "@tm/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drizzle schema, migrations and database client (SQLite in v0, Postgres later).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@tm/config": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.44.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.20.6"
+  }
+}

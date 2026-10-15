@@ -1,0 +1,16 @@
+{
+  "name": "@tm/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Harness adapters that convert agent session logs to the canonical schema (browser-safe).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tm/schema": "workspace:*"
+  }
+}

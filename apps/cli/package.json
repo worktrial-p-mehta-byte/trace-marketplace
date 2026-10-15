@@ -1,0 +1,20 @@
+{
+  "name": "@tm/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "tracemkt: the seller command-line tool (built in milestone S1).",
+  "type": "module",
+  "bin": {
+    "tracemkt": "./bin/tracemkt.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@tm/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}
