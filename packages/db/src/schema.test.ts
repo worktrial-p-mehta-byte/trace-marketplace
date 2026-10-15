@@ -19,6 +19,7 @@ const EXPECTED_TABLES = [
   "ledger_entries",
   "ledger_transactions",
   "licenses",
+  "listing_search",
   "listings",
   "order_lines",
   "orders",
@@ -35,7 +36,7 @@ describe("database migrations", () => {
     runMigrations(db);
     const rows = db.$client
       .prepare(
-        "select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like '__drizzle%' order by name",
+        "select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not like '__drizzle%' and name not like 'listing\\_search\\_%' escape '\\' order by name",
       )
       .all() as { name: string }[];
     expect(rows.map((r) => r.name)).toEqual(EXPECTED_TABLES);

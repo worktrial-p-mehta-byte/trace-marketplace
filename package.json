@@ -47,6 +47,9 @@
     "@tm/adapters": "workspace:*",
     "@tm/config": "workspace:*",
     "@tm/enrich": "workspace:*",
-    "@tm/scrub": "workspace:*"
+    "@tm/scrub": "workspace:*",
+    "@tm/core": "workspace:*",
+    "@tm/db": "workspace:*",
+    "@tm/schema": "workspace:*"
   }
 }

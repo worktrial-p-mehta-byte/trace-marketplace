@@ -1,6 +1,6 @@
 # Demo script (about 4 minutes)
 
-> Steps 1 to 4 and 8 work as of M4. Steps 5 to 7 arrive in M5 and M6. Filled in fully in M7.
+> Steps 1 to 6 and 8 work as of M5. Step 7 arrives in M6. Filled in fully in M7.
 
 1. **Land and sign up.** Create an account and accept the data terms.
 2. **Connect sessions.** Pick your Claude Code session files. The browser parses

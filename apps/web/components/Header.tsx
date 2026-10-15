@@ -10,6 +10,9 @@ export async function Header() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
         <Wordmark />
         <nav className="flex items-center gap-3 text-sm font-medium whitespace-nowrap text-ink-2 sm:gap-5">
+          <Link href="/traces" className="hover:text-ink">
+            Browse<span className="hidden sm:inline"> traces</span>
+          </Link>
           {user ? (
             <>
               <Link href="/share" className="hover:text-ink">

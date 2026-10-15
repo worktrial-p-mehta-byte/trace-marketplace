@@ -169,6 +169,13 @@ describe("language and framework detection", () => {
       ),
     ).toBe("Python");
     expect(detectLanguage(makeTrace([call({ command: "ls" })] as never))).toBeUndefined();
+    // Repeated build commands for another language don't outvote edited files.
+    const kotlin = [
+      call({ file_path: "src/Main.kt" }),
+      call({ file_path: "src/Util.kt" }),
+      ...Array.from({ length: 5 }, () => call({ command: "gradle test" })),
+    ];
+    expect(detectLanguage(makeTrace(kotlin as never))).toBe("Kotlin");
   });
 
   it("needs two mentions of a framework and prefers Next.js over React", () => {

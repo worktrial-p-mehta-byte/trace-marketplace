@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { canSell, shareTrace } from "@tm/core";
 import { fail, handle } from "@/lib/api";
 import { readJsonLimited } from "@/lib/body";
-import { getBlobs, getBus, getConfig, getCurrentUser, getDb } from "@/lib/server";
+import { getBlobs, getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const result = await shareTrace(
       getDb(),
-      { config: getConfig(), bus: getBus(), blobs: getBlobs() },
+      { config: getConfig(), bus: getBus(), blobs: getBlobs(), search: getSearch() },
       {
         sellerId: user.id,
         trace: body.trace,

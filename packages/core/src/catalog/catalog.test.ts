@@ -201,12 +201,12 @@ describe("revokeTrace and listSellerTraces", () => {
     expect(rows[0]).toMatchObject({ status: "active", tier: 0, revokedAt: null });
     expect(rows[0]!.labels).toContain("test_tampering");
 
-    revokeTrace(db, deps, sellerId, r.traceId);
+    await revokeTrace(db, deps, sellerId, r.traceId);
     rows = listSellerTraces(db, sellerId, deps.config);
     expect(rows[0]).toMatchObject({ status: "delisted" });
     expect(rows[0]!.revokedAt).toEqual(NOW);
 
-    expect(() => revokeTrace(db, deps, "someone-else", r.traceId)).toThrow(/not found/);
+    await expect(revokeTrace(db, deps, "someone-else", r.traceId)).rejects.toThrow(/not found/);
     await expect(
       shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 }),
     ).resolves.toBeDefined();

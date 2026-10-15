@@ -42,6 +42,12 @@ export const PricingConfig = z.object({
     maxDailyChange: share,
     /** Age of the snapshot used as the baseline for maxDailyChange. */
     changeWindowHours: positive,
+    /** Weight of each buyer action as a demand signal. */
+    signalWeights: z.object({
+      search: z.number().min(0),
+      view: z.number().min(0),
+      save: z.number().min(0),
+    }),
   }),
   freshness: z.object({ halfLifeDays: positive, floor: share, deprecatedModelFactor: share }),
   license: z.object({ research: positive, eval: positive, training: positive }),

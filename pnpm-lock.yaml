@@ -14,9 +14,18 @@ importers:
       '@tm/config':
         specifier: workspace:*
         version: link:packages/config
+      '@tm/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@tm/db':
+        specifier: workspace:*
+        version: link:packages/db
       '@tm/enrich':
         specifier: workspace:*
         version: link:packages/enrich
+      '@tm/schema':
+        specifier: workspace:*
+        version: link:packages/schema
       '@tm/scrub':
         specifier: workspace:*
         version: link:packages/scrub

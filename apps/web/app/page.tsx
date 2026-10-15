@@ -36,9 +36,9 @@ export default async function Home() {
             <Link href={start} className="btn">
               Share your sessions
             </Link>
-            <a href="#pricing" className="btn-quiet">
-              See what traces are worth
-            </a>
+            <Link href="/traces" className="btn-quiet">
+              Browse traces
+            </Link>
           </div>
         </div>
         <RedactingDemo />
