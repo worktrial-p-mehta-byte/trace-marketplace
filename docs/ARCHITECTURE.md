@@ -40,8 +40,8 @@ This file summarises what the code implements.
 
 | #   | Milestone                                                  | Status  |
 | --- | ---------------------------------------------------------- | ------- |
-| M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | This PR |
-| M1  | Canonical schema + Claude Code adapter                     |         |
+| M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
+| M1  | Canonical schema + Claude Code adapter                     | This PR |
 | M2  | Scrubber + labeler + trait extractor                       |         |
 | M3  | Pricing engine                                             |         |
 | M4  | Onboarding + sharing                                       |         |
@@ -49,3 +49,30 @@ This file summarises what the code implements.
 | M6  | Market simulator + seed data + failure lab                 |         |
 | M7  | Docs                                                       |         |
 | M8  | Rehearse + polish                                          |         |
+
+## Session log adapters
+
+`packages/adapters` turns a harness's native log into the canonical trace.
+The Claude Code adapter reads `~/.claude/projects/<project>/<session>.jsonl`:
+
+- One trace per session id in the file; the trace id is a hash of the session
+  id, so the raw id and the working directory never leave the parser.
+- User text, assistant text, tool calls and tool results become events, in
+  order. Tool results carry `isError`, which is also set when the user rejects
+  a tool call. Interrupts are flagged on the user message.
+- Slash commands, local command output and compaction become `system` events.
+  Messages Claude Code writes itself (model `<synthetic>`, e.g. API error
+  notices) become `system` events of kind `harness_message`, not model output.
+- Title: the latest `ai-title` line, else the first `summary` line.
+- Token usage is totalled once per model response (Claude Code repeats it on
+  every line of a multi-part response) into `trace.metrics`.
+- Meta lines, sub-agent (sidechain) turns, thinking blocks, bookkeeping system
+  lines (`turn_duration`, `away_summary`) and other line types (`attachment`,
+  `api-request*`, `cost-state`, `mode`, ...) are skipped and counted; malformed
+  lines become warnings. Parsing never throws.
+- Checked against real Claude Code 2.1.300 logs.
+- Tool output over 20,000 characters is truncated.
+
+The format is not a stable public contract, so the parser reads fields
+defensively. `pnpm inspect:sessions <folder>` parses real files locally and
+prints structure only (counts, tools, errors), never message content.

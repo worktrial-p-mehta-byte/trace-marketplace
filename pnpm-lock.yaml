@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@tm/adapters':
+        specifier: workspace:*
+        version: link:packages/adapters
+      '@tm/config':
+        specifier: workspace:*
+        version: link:packages/config
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.5

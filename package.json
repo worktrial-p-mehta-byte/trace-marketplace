@@ -21,7 +21,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "check:secrets": "tsx scripts/check-secrets.ts",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:secrets"
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:secrets",
+    "inspect:sessions": "tsx scripts/inspect-sessions.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -41,5 +42,9 @@
       "@tailwindcss/oxide",
       "unrs-resolver"
     ]
+  },
+  "dependencies": {
+    "@tm/adapters": "workspace:*",
+    "@tm/config": "workspace:*"
   }
 }

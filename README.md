@@ -22,17 +22,18 @@ No accounts, API keys or cloud services are needed. Everything runs locally.
 
 ## Useful commands
 
-| Command              | What it does                                                    |
-| -------------------- | --------------------------------------------------------------- |
-| `pnpm dev`           | Run the website in development mode                             |
-| `pnpm test`          | Run unit tests (Vitest)                                         |
-| `pnpm typecheck`     | Type-check every package                                        |
-| `pnpm lint`          | Lint the whole repo                                             |
-| `pnpm check:secrets` | Scan files for secrets and unscrubbed session data              |
-| `pnpm check`         | All of the above, as CI runs it                                 |
-| `pnpm db:generate`   | Generate a migration after changing `packages/db/src/schema.ts` |
-| `pnpm db:migrate`    | Apply migrations to the local database                          |
-| `pnpm db:reset`      | Delete and re-create the local database                         |
+| Command                          | What it does                                                       |
+| -------------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                       | Run the website in development mode                                |
+| `pnpm test`                      | Run unit tests (Vitest)                                            |
+| `pnpm typecheck`                 | Type-check every package                                           |
+| `pnpm lint`                      | Lint the whole repo                                                |
+| `pnpm check:secrets`             | Scan files for secrets and unscrubbed session data                 |
+| `pnpm check`                     | All of the above, as CI runs it                                    |
+| `pnpm db:generate`               | Generate a migration after changing `packages/db/src/schema.ts`    |
+| `pnpm db:migrate`                | Apply migrations to the local database                             |
+| `pnpm db:reset`                  | Delete and re-create the local database                            |
+| `pnpm inspect:sessions <folder>` | Parse session files locally and print their structure (no content) |
 
 ## Repository layout
 
