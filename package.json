@@ -24,6 +24,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:secrets",
     "inspect:sessions": "tsx scripts/inspect-sessions.ts",
     "search:rebuild": "tsx scripts/rebuild-search.ts",
+    "reprice": "tsx scripts/reprice.ts",
     "seed": "tsx scripts/seed.ts",
     "demo:reset": "pnpm db:reset && pnpm seed"
   },

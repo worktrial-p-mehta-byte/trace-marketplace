@@ -15,7 +15,7 @@ import {
   SOURCE_NAMES,
   TIER_NAMES,
 } from "@/lib/labels";
-import { getBlobs, getBus, getConfig, getCurrentUser, getDb } from "@/lib/server";
+import { getBlobs, getBus, getConfig, getCurrentUser, getDb, refreshPrices } from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,7 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const user = await getCurrentUser();
   const config = getConfig();
+  refreshPrices();
   const load = () => getListingDetail(getDb(), { config, blobs: getBlobs() }, id, user);
   let d = await load();
   if (!d) notFound();

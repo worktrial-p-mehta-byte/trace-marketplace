@@ -11,6 +11,8 @@ import {
   recordDemandSignal,
   repriceAll,
   runPricingConsumer,
+  lastRefreshAt,
+  refreshStalePrices,
   type EventBus,
 } from "../index";
 
@@ -229,5 +231,30 @@ describe("runPricingConsumer", () => {
     expect(priceHistory(db, l)[0]!.reason).toBe("listing.created,trace.ingested");
     // Its own price.updated event does not trigger another run.
     expect(runPricingConsumer(db, bus, { config, now: NOW })).toBeNull();
+  });
+  it("refreshes time-dependent prices with no new events once they are stale", () => {
+    const l = addListing(rust());
+    recordDemandSignal(db, bus, {
+      kind: "bounty",
+      criteria: { language: "Rust" },
+      weight: 0.4,
+      now: NOW,
+    });
+    runPricingConsumer(db, bus, { config, now: NOW });
+    const withDemand = priceOf(l);
+
+    // Within the refresh interval nothing runs.
+    const soon = new Date(NOW.getTime() + 30 * 60_000);
+    expect(runPricingConsumer(db, bus, { config, now: soon })).toBeNull();
+
+    // Past the demand window, with no new events, the bounty has aged out
+    // and the trace is older: the price must come down on its own.
+    const later = new Date(NOW.getTime() + (config.pricing.demand.windowDays + 1) * 86_400_000);
+    const r = runPricingConsumer(db, bus, { config, now: later });
+    expect(r?.changed).toBe(1);
+    expect(priceOf(l)).toBeLessThan(withDemand);
+    expect(priceHistory(db, l).at(-1)!.reason).toBe("scheduled refresh");
+    expect(lastRefreshAt(db)?.toISOString()).toBe(later.toISOString());
+    expect(refreshStalePrices(db, bus, { config, now: later })).toBeNull();
   });
 });

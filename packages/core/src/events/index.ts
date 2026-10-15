@@ -12,6 +12,8 @@ export const EventTypes = {
   ListingDelisted: "listing.delisted",
   ConsentRevoked: "consent.revoked",
   PriceUpdated: "price.updated",
+  /** A full reprice ran (whether or not anything changed); payload.at is its logical time. */
+  PricesRefreshed: "prices.refreshed",
   DemandSignaled: "demand.signaled",
   OrderPaid: "order.paid",
   BountyPosted: "bounty.posted",

@@ -45,6 +45,8 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
     freshness: { halfLifeDays: 90, floor: 0.4, deprecatedModelFactor: 0.7 },
     license: { research: 1.0, eval: 1.5, training: 2.0 },
     quoteLockMinutes: 15,
+    /** Prices depend on time (freshness, demand window): refresh them at least this often. */
+    refreshIntervalMinutes: 60,
   },
   database: {
     path: "data/trace-marketplace.db",

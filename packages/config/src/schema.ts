@@ -54,6 +54,7 @@ export const PricingConfig = z.object({
   freshness: z.object({ halfLifeDays: positive, floor: share, deprecatedModelFactor: share }),
   license: z.object({ research: positive, eval: positive, training: positive }),
   quoteLockMinutes: positive,
+  refreshIntervalMinutes: positive,
 });
 
 export const MarketplaceConfig = z
