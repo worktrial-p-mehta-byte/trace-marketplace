@@ -26,13 +26,22 @@ export const PricingConfig = z.object({
     perPreferencePair: z.number().min(0),
     maxPreferenceBonus: z.number().min(0),
   }),
-  rarity: z.object({ min: positive, max: positive, exponent: positive }),
+  rarity: z.object({
+    min: positive,
+    max: positive,
+    exponent: positive,
+    /** Count synthetic traces toward rarity (true for the demo catalog; false in production). */
+    includeSynthetic: z.boolean(),
+  }),
   demand: z.object({
     coef: z.number().min(0),
     min: positive,
     max: positive,
     windowDays: positive,
+    /** Max relative change of the demand factor versus the baseline snapshot. */
     maxDailyChange: share,
+    /** Age of the snapshot used as the baseline for maxDailyChange. */
+    changeWindowHours: positive,
   }),
   freshness: z.object({ halfLifeDays: positive, floor: share, deprecatedModelFactor: share }),
   license: z.object({ research: positive, eval: positive, training: positive }),

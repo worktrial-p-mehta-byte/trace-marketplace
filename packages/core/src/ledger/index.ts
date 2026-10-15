@@ -64,14 +64,5 @@ export function balanceOf(db: Db, account: string): number {
   return Number(row?.total ?? 0);
 }
 
-/**
- * Split a sale between seller and platform. Rounds in the seller's favour
- * by at most one cent so the two parts always add up to the price.
- */
-export function splitSale(
-  priceCents: number,
-  sellerShare: number,
-): { seller: number; platform: number } {
-  const seller = Math.ceil(priceCents * sellerShare);
-  return { seller, platform: priceCents - seller };
-}
+/** Sale split lives in @tm/pricing so the browser can show seller earnings too. */
+export { splitSale } from "@tm/pricing";

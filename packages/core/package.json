@@ -14,6 +14,8 @@
     "@tm/config": "workspace:*",
     "@tm/db": "workspace:*",
     "@tm/schema": "workspace:*",
-    "drizzle-orm": "^0.44.7"
+    "drizzle-orm": "^0.44.7",
+    "@tm/pricing": "workspace:*",
+    "@tm/enrich": "workspace:*"
   }
 }
