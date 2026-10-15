@@ -178,6 +178,21 @@ describe("shareTrace", () => {
   });
 });
 
+describe("shareTrace under concurrency", () => {
+  it("lets only one of two simultaneous uploads of the same session through", async () => {
+    const trace = scrubTrace(raw).trace;
+    const results = await Promise.allSettled([
+      shareTrace(db, deps, { sellerId, trace, tier: 0 }),
+      shareTrace(db, deps, { sellerId, trace, tier: 0 }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(ShareError);
+    expect(db.select().from(schema.listings).all()).toHaveLength(1);
+    expect(deps.blobs.keys()).toHaveLength(1); // the loser's blob is cleaned up
+  });
+});
+
 describe("revokeTrace and listSellerTraces", () => {
   it("delists a revoked trace, records the date and allows sharing again", async () => {
     const r = await shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 });

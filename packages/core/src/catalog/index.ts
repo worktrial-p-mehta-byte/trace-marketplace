@@ -130,19 +130,22 @@ export async function shareTrace(
   }
 
   const contentHash = createHash("sha256").update(JSON.stringify(stored.events)).digest("hex");
-  const existing = db
-    .select({ id: schema.traces.id })
-    .from(schema.traces)
-    .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
-    .where(
-      and(
-        eq(schema.traces.sellerId, input.sellerId),
-        eq(schema.traces.contentHash, contentHash),
-        isNull(schema.consents.revokedAt),
-      ),
-    )
-    .get();
-  if (existing) throw new ShareError("You have already shared this session.");
+  /** Same seller, same content, consent not revoked. */
+  const findDuplicate = (q: Db) =>
+    q
+      .select({ id: schema.traces.id })
+      .from(schema.traces)
+      .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
+      .where(
+        and(
+          eq(schema.traces.sellerId, input.sellerId),
+          eq(schema.traces.contentHash, contentHash),
+          isNull(schema.consents.revokedAt),
+        ),
+      )
+      .get();
+  // Fast path: refuse before writing anything.
+  if (findDuplicate(db)) throw new ShareError("You have already shared this session.");
 
   const traceId = newId("trc");
   const assetId = newId("ast");
@@ -150,69 +153,83 @@ export async function shareTrace(
   const blobKey = `traces/${traceId}.json`;
   await deps.blobs.put(blobKey, JSON.stringify(stored));
 
-  db.transaction((tx) => {
-    tx.insert(schema.traces)
-      .values({
-        id: traceId,
-        sellerId: input.sellerId,
-        schemaVersion: stored.schemaVersion,
-        source: stored.provenance.source,
-        title: stored.title,
-        harness: stored.provenance.harness.name,
-        model: stored.provenance.model.id,
-        language: traits.language,
-        framework: traits.framework,
-        startedAt: new Date(stored.startedAt),
-        endedAt: new Date(stored.endedAt),
-        turnCount: traits.turns,
-        toolCallCount: traits.toolCalls,
-        contentHash,
-        blobKey,
-        redactionCount: 0,
-        redactionDensity: traits.redactionDensity,
-        createdAt: now,
-      })
-      .run();
-    tx.insert(schema.consents)
-      .values({
-        id: newId("cns"),
-        traceId,
-        sellerId: input.sellerId,
-        tier,
-        scope: "session",
-        termsVersion: TERMS_VERSION,
-        grantedAt: now,
-      })
-      .run();
-    tx.insert(schema.assets)
-      .values({ id: assetId, traceId, kind: tier === 0 ? "scrubbed_trace" : "signals", blobKey })
-      .run();
-    for (const l of labels) {
-      tx.insert(schema.labels)
+  try {
+    // The duplicate check is repeated inside the insert transaction: other
+    // uploads may have run during the await above. better-sqlite3 runs the
+    // transaction synchronously, so check and insert are atomic here.
+    // (Postgres will also need a partial unique index: see LIMITATIONS.md.)
+    db.transaction((tx) => {
+      if (findDuplicate(tx as unknown as Db)) {
+        throw new ShareError("You have already shared this session.");
+      }
+      tx.insert(schema.traces)
         .values({
-          id: newId("lbl"),
-          traceId,
-          kind: l.kind,
-          code: l.code,
-          confidence: l.confidence,
-          source: l.source,
-          evidence: l.evidence,
+          id: traceId,
+          sellerId: input.sellerId,
+          schemaVersion: stored.schemaVersion,
+          source: stored.provenance.source,
+          title: stored.title,
+          harness: stored.provenance.harness.name,
+          model: stored.provenance.model.id,
+          language: traits.language,
+          framework: traits.framework,
+          startedAt: new Date(stored.startedAt),
+          endedAt: new Date(stored.endedAt),
+          turnCount: traits.turns,
+          toolCallCount: traits.toolCalls,
+          contentHash,
+          blobKey,
+          redactionCount: 0,
+          redactionDensity: traits.redactionDensity,
+          createdAt: now,
         })
         .run();
-    }
-    tx.insert(schema.traceTraits).values({ traceId, data: traits, comboKey, createdAt: now }).run();
-    tx.insert(schema.listings)
-      .values({
-        id: listingId,
-        assetId,
-        traceId,
-        tier,
-        status: "active",
-        allowedLicenses: ["research", "eval", "training"],
-        createdAt: now,
-      })
-      .run();
-  });
+      tx.insert(schema.consents)
+        .values({
+          id: newId("cns"),
+          traceId,
+          sellerId: input.sellerId,
+          tier,
+          scope: "session",
+          termsVersion: TERMS_VERSION,
+          grantedAt: now,
+        })
+        .run();
+      tx.insert(schema.assets)
+        .values({ id: assetId, traceId, kind: tier === 0 ? "scrubbed_trace" : "signals", blobKey })
+        .run();
+      for (const l of labels) {
+        tx.insert(schema.labels)
+          .values({
+            id: newId("lbl"),
+            traceId,
+            kind: l.kind,
+            code: l.code,
+            confidence: l.confidence,
+            source: l.source,
+            evidence: l.evidence,
+          })
+          .run();
+      }
+      tx.insert(schema.traceTraits)
+        .values({ traceId, data: traits, comboKey, createdAt: now })
+        .run();
+      tx.insert(schema.listings)
+        .values({
+          id: listingId,
+          assetId,
+          traceId,
+          tier,
+          status: "active",
+          allowedLicenses: ["research", "eval", "training"],
+          createdAt: now,
+        })
+        .run();
+    });
+  } catch (err) {
+    await deps.blobs.delete(blobKey);
+    throw err;
+  }
 
   deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
   deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });

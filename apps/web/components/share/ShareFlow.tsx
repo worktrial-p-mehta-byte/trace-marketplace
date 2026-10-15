@@ -41,7 +41,13 @@ function build(raw: Trace, fileName: string, customTerms: string[], prev?: Item)
     ineligibleReason: noOutput
       ? "No replies from the model, so there is nothing to share."
       : undefined,
-    quote: prev?.quote,
+    // Keep a previous price only if what it priced has not changed.
+    quote:
+      prev &&
+      prev.enrich.comboKey === enrich.comboKey &&
+      prev.enrich.traits.redactionDensity === enrich.traits.redactionDensity
+        ? prev.quote
+        : undefined,
     state: prev?.state ?? "ready",
     message: prev?.message,
     outcome: prev?.outcome,
@@ -130,23 +136,49 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
     .join("|");
   useEffect(() => {
     if (!estimateKey) return;
+    // A newer estimate supersedes this one: abort the request so an older
+    // response can never overwrite a newer price.
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
-      const payload = items
+      const sent = items
         .filter((i) => i.eligible)
-        .map((i) => ({ key: i.key, tier: i.tier, traits: i.enrich.traits }));
-      const res = await fetch("/api/pricing/estimate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ items: payload }),
-      });
-      if (!res.ok) return;
-      const { quotes } = (await res.json()) as { quotes: (Quote & { key: string })[] };
+        .map((i) => ({
+          key: i.key,
+          tier: i.tier,
+          traits: i.enrich.traits,
+          stamp: `${i.tier}:${i.enrich.comboKey}:${i.enrich.traits.redactionDensity.toFixed(3)}`,
+        }));
+      let quotes: (Quote & { key: string })[];
+      try {
+        const res = await fetch("/api/pricing/estimate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            items: sent.map(({ key, tier, traits }) => ({ key, tier, traits })),
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        quotes = ((await res.json()) as { quotes: (Quote & { key: string })[] }).quotes;
+      } catch {
+        return; // aborted or offline: a newer request (or none) owns the price
+      }
+      if (controller.signal.aborted) return;
+      const stampOf = new Map(sent.map((s) => [s.key, s.stamp]));
       const byKey = new Map(quotes.map((q) => [q.key, q]));
       setItems((cur) =>
-        cur.map((it) => (byKey.has(it.key) ? { ...it, quote: byKey.get(it.key) } : it)),
+        cur.map((it) => {
+          const q = byKey.get(it.key);
+          // Belt and braces: apply only if the item still has the tier and traits we priced.
+          const now = `${it.tier}:${it.enrich.comboKey}:${it.enrich.traits.redactionDensity.toFixed(3)}`;
+          return q && stampOf.get(it.key) === now ? { ...it, quote: q } : it;
+        }),
       );
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [estimateKey]);
 
   const update = useCallback((key: string, patch: Partial<Item>) => {
@@ -436,7 +468,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
                           className="mt-1 accent-cobalt"
                           checked={active.tier === tier}
                           disabled={active.state === "shared"}
-                          onChange={() => update(active.key, { tier })}
+                          onChange={() => update(active.key, { tier, quote: undefined })}
                         />
                         <span>
                           <span className="block font-semibold">{title}</span>

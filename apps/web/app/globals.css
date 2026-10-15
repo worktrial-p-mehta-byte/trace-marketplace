@@ -56,7 +56,6 @@
   }
   .price {
     background: linear-gradient(transparent 55%, var(--color-highlight) 55%);
-    font-variant-numeric:;
   }
   .btn {
     display: inline-flex;
