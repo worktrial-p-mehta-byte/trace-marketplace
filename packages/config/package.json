@@ -1,0 +1,17 @@
+{
+  "name": "@tm/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed marketplace configuration: revenue split, pricing weights, caps.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "trace-marketplace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A marketplace where people sell scrubbed AI agent session traces and buyers search, group and license them.",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "bootstrap": "pnpm install && pnpm db:migrate",
+    "dev": "pnpm --filter @tm/web dev",
+    "build": "pnpm --filter @tm/web build",
+    "start": "pnpm --filter @tm/web start",
+    "db:generate": "pnpm --filter @tm/db generate",
+    "db:migrate": "pnpm --filter @tm/db migrate",
+    "db:reset": "tsx scripts/reset-db.ts && pnpm db:migrate",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check:secrets": "tsx scripts/check-secrets.ts",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:secrets"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "sharp",
+      "@tailwindcss/oxide",
+      "unrs-resolver"
+    ]
+  }
+}

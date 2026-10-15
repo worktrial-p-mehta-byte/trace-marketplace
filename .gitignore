@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+
+# build output
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# local database and data — never commit
+data/*
+!data/.gitkeep
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# raw agent sessions — never commit
+# Only synthetic or already-scrubbed traces belong in fixtures/.
+**/.claude/
+**/sessions-raw/
+*.raw.jsonl
+
+# env
+.env
+.env.*
+!.env.example
+
+# test output
+coverage/
+test-results/
+playwright-report/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,16 @@
+{
+  "name": "@tm/scrub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scrubber pipeline: secret, PII and path redaction (browser-safe).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tm/schema": "workspace:*"
+  }
+}

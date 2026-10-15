@@ -1,0 +1,19 @@
+{
+  "name": "@tm/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Domain services: consent, catalog, ledger, orders, bounties, events, policy.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tm/config": "workspace:*",
+    "@tm/db": "workspace:*",
+    "@tm/schema": "workspace:*",
+    "drizzle-orm": "^0.44.7"
+  }
+}
