@@ -7,3 +7,4 @@ export * from "./auth";
 export * from "./storage";
 export * from "./catalog";
 export * from "./search";
+export * from "./market";

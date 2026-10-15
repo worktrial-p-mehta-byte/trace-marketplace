@@ -29,6 +29,9 @@ importers:
       '@tm/scrub':
         specifier: workspace:*
         version: link:packages/scrub
+      '@tm/synth':
+        specifier: workspace:*
+        version: link:packages/synth
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.5
@@ -97,6 +100,9 @@ importers:
       '@tm/scrub':
         specifier: workspace:*
         version: link:../../packages/scrub
+      '@tm/synth':
+        specifier: workspace:*
+        version: link:../../packages/synth
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -161,6 +167,9 @@ importers:
       '@tm/scrub':
         specifier: workspace:*
         version: link:../scrub
+      '@tm/synth':
+        specifier: workspace:*
+        version: link:../synth
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)
@@ -231,6 +240,16 @@ importers:
       '@tm/adapters':
         specifier: workspace:*
         version: link:../adapters
+
+  packages/synth:
+    dependencies:
+      '@tm/schema':
+        specifier: workspace:*
+        version: link:../schema
+    devDependencies:
+      '@tm/enrich':
+        specifier: workspace:*
+        version: link:../enrich
 
 packages:
 

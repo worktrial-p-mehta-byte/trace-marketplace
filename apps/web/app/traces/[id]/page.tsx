@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getListingDetail, recordBuyerInterest } from "@tm/core";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
+import { PriceChart } from "@/components/PriceChart";
 import { Timeline } from "@/components/share/Timeline";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import {
@@ -10,6 +11,7 @@ import {
   FAILURE_NAMES,
   money,
   OUTCOME_NAMES,
+  reasonText,
   SOURCE_NAMES,
   TIER_NAMES,
 } from "@/lib/labels";
@@ -186,12 +188,28 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
             </section>
           )}
           {d.quotes && <PriceCard quotes={d.quotes} />}
-          {d.history.length > 1 && (
-            <p className="text-sm text-ink-3">
-              Price changed {d.history.length - 1} time{d.history.length > 2 ? "s" : ""} since
-              listing, most recently because of{" "}
-              {d.history.at(-1)!.reason.replace(/[.,]/g, " ").replace(/_/g, " ")}.
-            </p>
+          {d.history.length > 0 && (
+            <section
+              className="rounded-lg border border-rule bg-surface p-5"
+              aria-label="Price history"
+            >
+              <h3 className="text-sm font-semibold">Price history, research license</h3>
+              <p className="mt-1 text-xs text-ink-3">
+                {d.history.length === 1
+                  ? "Listed at this price; no changes yet."
+                  : `${d.history.length - 1} change${d.history.length > 2 ? "s" : ""} since listing.`}
+              </p>
+              <div className="mt-3">
+                <PriceChart
+                  points={d.history.map((h) => ({
+                    t: h.createdAt.toISOString(),
+                    cents: h.priceCents,
+                    reason: reasonText(h.reason),
+                  }))}
+                  height={150}
+                />
+              </div>
+            </section>
           )}
         </aside>
       </div>

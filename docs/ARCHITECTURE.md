@@ -45,8 +45,8 @@ This file summarises what the code implements.
 | M2  | Scrubber + labeler + trait extractor                       | Done    |
 | M3  | Pricing engine                                             | Done    |
 | M4  | Onboarding + sharing                                       | Done    |
-| M5  | Catalog + trace viewer                                     | This PR |
-| M6  | Market simulator + seed data + failure lab                 |         |
+| M5  | Catalog + trace viewer                                     | Done    |
+| M6  | Market simulator + seed data + failure lab                 | This PR |
 | M7  | Docs                                                       |         |
 | M8  | Rehearse + polish                                          |         |
 
@@ -182,3 +182,45 @@ before returning, so pages can't leak it by accident.
 `search` demand signal (weight 0.2) and a trace view records a `view`
 signal (0.05) for its language and failure type; prices reprice
 immediately. Weights are in `pricing.demand.signalWeights`.
+
+## Market simulator, seed data and failure lab (M6)
+
+**Synthetic generator (`packages/synth`)**: a seeded generator (mulberry32,
+so the same seed gives the same catalog) that writes canonical traces for a
+weighted mix of stacks, from common (TypeScript/React, Python) to rare
+(COBOL, Verilog, Haskell), and failure patterns (retry loop, test tampering,
+user correction, tool rejected, interrupt, tool error, clean). Traces are
+built so the real `enrich` labelers detect the intended pattern, which the
+tests check. Every generated trace has provenance `synthetic`; the public
+share API rejects synthetic traces, and only internal callers
+(`shareTrace(…, { allowSynthetic: true })`) can list them.
+
+**Seed (`pnpm seed`)**: 200 traces from 9 sellers, replayed week by week
+over the last 9 weeks. Each week lists that week's sessions, adds a few buyer
+searches and reprices, so every listing starts with a real price history
+rather than a single point. Demo logins: `seller@example.com`,
+`buyer@example.com` (password `demo-password`).
+
+**Market simulator (`/market`, `packages/core/src/market`)**: for a chosen
+language and failure type, a signed-in user can:
+
+- **post a bounty**: stored in `bounties` and recorded as a `bounty` demand
+  signal with weight = budget in dollars × `bountyWeightPerDollar`; matching
+  prices rise, most where supply is scarce;
+- **add supply**: generate N synthetic sessions of that kind, owned by the
+  simulator account; the combination becomes common and rarity pulls prices
+  down;
+- **reset**: close bounties, delete bounty demand and withdraw every
+  simulator listing, which returns prices to where they were.
+
+The watch list follows the four most valuable matching listings, excluding
+simulator supply so the same listings stay in view, and draws each price
+history as a small multiple on one shared price scale, with changes evenly
+spaced so recent moves are visible next to weeks of history. The trace
+viewer has the same chart at full size, on a time axis, with a table view.
+
+**Failure lab (`demo/failure-lab`)**: four small Node and Python projects
+whose tests fail as shipped, each with the prompt to give the agent and what
+to watch for: test tampering, a retry loop on a flaky test, a scripted user
+correction, and a scripted tool rejection and interrupt. Sessions from them
+are shared through the normal flow and marked _staged_.

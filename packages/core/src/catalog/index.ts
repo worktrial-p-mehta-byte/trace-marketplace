@@ -89,17 +89,26 @@ export interface ShareResult {
  * for signals-only, recomputes labels and traits, checks eligibility and
  * duplicates, then stores, lists and prices it.
  */
+/** Options for trusted, server-side callers only (seed script, market simulator). Never exposed over HTTP. */
+export interface InternalShareOptions {
+  /** Accept provenance.source = "synthetic". */
+  allowSynthetic?: boolean;
+  /** Skip repricing and indexing; the caller runs them once after a batch. */
+  deferMarket?: boolean;
+}
+
 export async function shareTrace(
   db: Db,
   deps: CatalogDeps,
   input: ShareInput,
+  internal: InternalShareOptions = {},
 ): Promise<ShareResult> {
   const now = deps.now ?? new Date();
   const parsed = Trace.safeParse(input.trace);
   if (!parsed.success) throw new ShareError("The upload is not a valid trace.");
   if (!isTierSupported(input.tier)) throw new ShareError("Choose open source or signals only.");
   const tier = input.tier as Tier;
-  if (parsed.data.provenance.source === "synthetic") {
+  if (parsed.data.provenance.source === "synthetic" && !internal.allowSynthetic) {
     throw new ShareError("Synthetic traces can only be added by the seed script.");
   }
 
@@ -236,8 +245,10 @@ export async function shareTrace(
 
   deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
   deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });
-  runPricingConsumer(db, deps.bus, { config: deps.config, now });
-  if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
+  if (!internal.deferMarket) {
+    runPricingConsumer(db, deps.bus, { config: deps.config, now });
+    if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
+  }
 
   const priceCents =
     db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get()!

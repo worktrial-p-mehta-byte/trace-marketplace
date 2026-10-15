@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/dist/**",
       "packages/db/drizzle/**",
       "**/next-env.d.ts",
+      // Deliberately buggy sample projects for provoking agent failures.
+      "demo/failure-lab/**",
     ],
   },
   js.configs.recommended,
@@ -34,6 +36,7 @@ export default tseslint.config(
       "packages/scrub/src/**",
       "packages/enrich/src/**",
       "packages/pricing/src/**",
+      "packages/synth/src/**",
     ],
     ignores: ["**/*.test.ts"],
     rules: {

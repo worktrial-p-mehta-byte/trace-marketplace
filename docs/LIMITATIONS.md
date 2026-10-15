@@ -71,6 +71,17 @@ where the limit lives and what would lift it.
 | Search indexing runs inside the share and withdraw requests                                                                             | Slower requests as traces grow                                                               | Background worker (S3)                                                 |
 | Seller aliases are stable per seller                                                                                                    | Buyers can tell that two traces share a seller (by design), but not who it is                | —                                                                      |
 
+## Market simulator, seed data and failure lab — M6
+
+| Limitation                                                                                   | Impact                                                         | Lifted by                                                        |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Seeded and simulated traces are synthetic: realistic structure, invented content             | Good for showing pricing and search; not training data         | Real supply, including failure-lab sessions                      |
+| Any signed-in user can post bounties, add supply and reset the simulator                     | Fine for a local demo; anyone can move prices                  | Admin-only simulator; real bounties funded through checkout (S2) |
+| Bounties only add demand; nobody can fulfil one, and they never expire                       | No bounty payouts or matching traces to bounties               | Bounty submissions and payouts (post-v0)                         |
+| Reset removes all bounty demand, including bounties not posted from the simulator            | Mixing real bounties with the simulator would lose real demand | Tag simulator demand separately                                  |
+| Price history keeps every simulator move after a reset                                       | Charts show past experiments as steps                          | Mark or hide simulator moves                                     |
+| Failure-lab tasks raise the odds of a failure but don't guarantee one, and are not run in CI | A run can produce a clean session; a task could rot unnoticed  | Check the tasks' starting failures in CI                         |
+
 ## Platform
 
 | Limitation                                         | Impact                                     | Lifted by                                               |

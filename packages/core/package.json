@@ -17,7 +17,8 @@
     "drizzle-orm": "^0.44.7",
     "@tm/pricing": "workspace:*",
     "@tm/enrich": "workspace:*",
-    "@tm/scrub": "workspace:*"
+    "@tm/scrub": "workspace:*",
+    "@tm/synth": "workspace:*"
   },
   "devDependencies": {
     "@tm/adapters": "workspace:*"

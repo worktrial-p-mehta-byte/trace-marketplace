@@ -35,3 +35,19 @@ export const SOURCE_NAMES: Record<string, string> = {
 export const TIER_NAMES: Record<string, string> = { "0": "Open source", "1": "Signals only" };
 
 export const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+/** Event names behind a price change, in words. */
+export function reasonText(reason: string): string {
+  const words: Record<string, string> = {
+    "trace.ingested": "new supply",
+    "listing.created": "new listing",
+    "listing.delisted": "a listing withdrawn",
+    "consent.revoked": "a listing withdrawn",
+    "demand.signaled": "buyer demand",
+    "bounty.posted": "a bounty posted",
+    "weekly market update": "weekly market update",
+    "seed complete": "market update",
+  };
+  const parts = reason.split(",").map((r) => words[r] ?? r);
+  return [...new Set(parts)].join(", ").replace(/^./, (c) => c.toUpperCase());
+}
