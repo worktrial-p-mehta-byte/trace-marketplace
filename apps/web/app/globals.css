@@ -1,1 +1,144 @@
 @import "tailwindcss";
+
+/*
+ * Trace Marketplace visual system.
+ * Motif: redaction. Removed content is shown as solid ink bars labelled with
+ * what was removed. Trace content is set in a monospace face; everything else
+ * in Schibsted Grotesk. Cobalt marks actions; highlighter yellow marks money.
+ */
+@theme {
+  --font-sans: "Schibsted Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-paper: #f2f4f0;
+  --color-surface: #ffffff;
+  --color-ink: #1b211e;
+  --color-ink-2: #505a55;
+  --color-ink-3: #7c857f;
+  --color-rule: #d3d9d2;
+  --color-cobalt: #2b3fd6;
+  --color-cobalt-dark: #1f2fa8;
+  --color-highlight: #f3de4a;
+  --color-brick: #b23a2f;
+  --color-moss: #2e7149;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01";
+  }
+  ::selection {
+    background: var(--color-highlight);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-cobalt);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* A redaction bar: solid ink with the removed kind in small reversed text. */
+  .redaction {
+    display: inline-block;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-radius: 2px;
+    padding: 0 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    line-height: 1.5;
+    vertical-align: baseline;
+    white-space: nowrap;
+  }
+  .price {
+    background: linear-gradient(transparent 55%, var(--color-highlight) 55%);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    background: var(--color-cobalt);
+    color: white;
+    transition: background-color 120ms;
+  }
+  .btn:hover {
+    background: var(--color-cobalt-dark);
+  }
+  .btn:disabled {
+    background: var(--color-ink-3);
+    cursor: not-allowed;
+  }
+  .btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 6px;
+    padding: 0.55rem 0.9rem;
+    font-weight: 600;
+    border: 1px solid var(--color-rule);
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .btn-quiet:hover {
+    border-color: var(--color-ink-3);
+  }
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-rule);
+    background: var(--color-surface);
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+  }
+  .field:focus {
+    outline: 2px solid var(--color-cobalt);
+    outline-offset: 0;
+    border-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Landing-page demo: secrets are covered by redaction bars, one after another. */
+@keyframes redact-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.redact-target {
+  position: relative;
+  display: inline-block;
+}
+.redact-target > .redact-cover {
+  position: absolute;
+  inset: 0 -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: redact-in 420ms cubic-bezier(0.6, 0, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .redact-target > .redact-cover {
+    transform: scaleX(1);
+  }
+}

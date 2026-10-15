@@ -57,7 +57,10 @@ function drivers(
             ? `; ${t.preferencePairs} preference pair${t.preferencePairs > 1 ? "s" : ""}`
             : ""
         }`,
-    rarity: `${combo} + ${t.failureCategory ?? "no failure"}: seen ${comboCount}× (typical ${medianComboCount}×)`,
+    rarity:
+      medianComboCount <= 0
+        ? `${combo} + ${t.failureCategory ?? "no failure"}: first of its kind, no comparison yet`
+        : `${combo} + ${t.failureCategory ?? "no failure"}: seen ${comboCount}× (typical ${medianComboCount}×)`,
     demand:
       f.demand > 1.005
         ? "buyers are searching for this"

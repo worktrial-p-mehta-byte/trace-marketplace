@@ -43,8 +43,8 @@ This file summarises what the code implements.
 | M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
 | M1  | Canonical schema + Claude Code adapter                     | Done    |
 | M2  | Scrubber + labeler + trait extractor                       | Done    |
-| M3  | Pricing engine                                             | This PR |
-| M4  | Onboarding + sharing                                       |         |
+| M3  | Pricing engine                                             | Done    |
+| M4  | Onboarding + sharing                                       | This PR |
 | M5  | Catalog + trace viewer                                     |         |
 | M6  | Market simulator + seed data + failure lab                 |         |
 | M7  | Docs                                                       |         |
@@ -119,3 +119,35 @@ order) goes into the combo key `language|framework|failure|model` used for
 rarity. Language comes from edited file extensions, then build commands;
 framework needs two mentions. A preference pair is a correction or
 rejection that the agent then acts on.
+
+## Accounts, onboarding and sharing (M4)
+
+**Flow:** sign up (email, password, role) → onboarding (data terms, versioned
+as `TERMS_VERSION`) → `/share` → `/me/traces`.
+
+**What runs where**
+
+| Step                                        | Runs in                           | Code                                           |
+| ------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| Read `.jsonl` files, detect adapter, parse  | Browser                           | `@tm/adapters`                                 |
+| Scrub (plus the seller's own words to hide) | Browser                           | `@tm/scrub`                                    |
+| Labels and traits                           | Browser                           | `@tm/enrich`                                   |
+| Price estimate                              | Server, from **traits only**      | `POST /api/pricing/estimate` → `estimatePrice` |
+| Strip content for signals only              | Browser, then again on the server | `toSignalsOnly`                                |
+| Store, label, list, price                   | Server                            | `POST /api/traces` → `shareTrace`              |
+
+**The server never trusts an upload.** `shareTrace` validates the schema,
+scrubs again, strips content again for signals only, recomputes labels and
+traits (for signals only, browser-reported traits are bounded by what the
+server can see), computes redaction density from the placeholders left in the
+text, refuses sessions with no model output, synthetic uploads, duplicates and
+sellers who haven't accepted the current terms, then writes the trace, consent,
+asset, labels, traits and listing in one transaction and reprices.
+
+**Accounts.** Passwords are hashed with scrypt. The session cookie holds a
+random token; the database stores only its SHA-256 hash. Sessions last 7 days.
+Buyer accounts get a buyer organisation.
+
+**Withdrawing** sets `consents.revoked_at`, delists the listing, emits
+`consent.revoked` and `listing.delisted`, and reprices. The same session can
+be shared again later.

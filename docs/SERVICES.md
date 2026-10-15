@@ -6,16 +6,17 @@ local pieces in production. Keep it current when adding a service.
 
 ## Used in v0
 
-| Dependency                           | Purpose                                      | Account or key needed |
-| ------------------------------------ | -------------------------------------------- | --------------------- |
-| Node.js 22 + pnpm 10                 | Runtime and package manager                  | No                    |
-| Next.js 15, React 19                 | Website and API routes                       | No                    |
-| Tailwind CSS 4                       | Styling                                      | No                    |
-| SQLite via better-sqlite3            | Local database (`data/trace-marketplace.db`) | No                    |
-| Drizzle ORM / drizzle-kit            | Schema, queries, migrations                  | No                    |
-| Zod                                  | Schema validation (traces, config)           | No                    |
-| Vitest, ESLint, Prettier, TypeScript | Tests and code quality                       | No                    |
-| GitHub Actions                       | CI: typecheck, lint, tests, secret scan      | GitHub repo only      |
+| Dependency                           | Purpose                                                                           | Account or key needed |
+| ------------------------------------ | --------------------------------------------------------------------------------- | --------------------- |
+| Node.js 22 + pnpm 10                 | Runtime and package manager                                                       | No                    |
+| Next.js 15, React 19                 | Website and API routes                                                            | No                    |
+| Tailwind CSS 4                       | Styling                                                                           | No                    |
+| Schibsted Grotesk, JetBrains Mono    | Fonts, bundled from npm (`@fontsource-variable`), no Google Fonts call at runtime | No                    |
+| SQLite via better-sqlite3            | Local database (`data/trace-marketplace.db`)                                      | No                    |
+| Drizzle ORM / drizzle-kit            | Schema, queries, migrations                                                       | No                    |
+| Zod                                  | Schema validation (traces, config)                                                | No                    |
+| Vitest, ESLint, Prettier, TypeScript | Tests and code quality                                                            | No                    |
+| GitHub Actions                       | CI: typecheck, lint, tests, secret scan                                           | GitHub repo only      |
 
 ## Production replacements (not used in v0)
 
