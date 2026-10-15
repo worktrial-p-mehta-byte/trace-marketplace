@@ -162,11 +162,14 @@ selection, so buyers see what switching it would give.
 
 **Search** (`packages/core/src/search`): SQLite FTS5 table `listing_search`
 behind the `SearchIndex` port, ranked by bm25 (title weighted 3×). Each
-listing's document holds its title, stack, model, labels and tools, plus
-message text and commands for open-source listings only. Signals-only content
-is never indexed. A `search` event consumer indexes on `listing.created` and
-removes on `listing.delisted`; `rebuildSearchIndex` recreates it from the
-database and blobs.
+listing has three columns: `title`; `meta` (stack, model, labels, tools); and
+`content` (message text and commands, open-source listings only). Signals-only
+content is never indexed. Content follows the same rule as the viewer:
+signed-in searches match all three columns, anonymous searches only title and
+`meta` (`includeContent`, off by default). A `search` event consumer indexes on
+`listing.created` and removes on `listing.delisted`; `rebuildSearchIndex`
+recreates it from the database and blobs, and `ensureSearchIndex` does so
+automatically when the index and the active listings disagree.
 
 **Viewer (`/traces/[id]`)**: what went wrong (labels linked to the events
 that triggered them, which are highlighted in the timeline), key numbers,

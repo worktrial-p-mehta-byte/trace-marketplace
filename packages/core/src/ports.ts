@@ -12,6 +12,12 @@ export interface BlobStore {
 
 export interface SearchQuery {
   text?: string;
+  /**
+   * Also match trace content (messages, commands). Only for callers allowed
+   * to read it (signed in, per canViewContent); false matches title and
+   * metadata only. Defaults to false so a forgotten flag can't leak content.
+   */
+  includeContent?: boolean;
   filters?: Record<string, string | string[] | undefined>;
   limit?: number;
   offset?: number;

@@ -8,7 +8,15 @@ import {
   type FacetValue,
 } from "@tm/core";
 import { FAILURE_NAMES, money, OUTCOME_NAMES, SOURCE_NAMES, TIER_NAMES } from "@/lib/labels";
-import { getBlobs, getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
+import {
+  getBlobs,
+  getBus,
+  getConfig,
+  getCurrentUser,
+  getDb,
+  getSearch,
+  refreshPrices,
+} from "@/lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +121,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const search = getSearch();
   // Heals an index that is missing listings, e.g. after upgrading an older database.
   await ensureSearchIndex(getDb(), getBlobs(), search);
-  const r = await browseCatalog(getDb(), { config, search }, q);
+  refreshPrices();
+  // Signed-out visitors can't read trace content, so their text search can't match it either.
+  const r = await browseCatalog(
+    getDb(),
+    { config, search },
+    { ...q, includeContent: Boolean(user) },
+  );
   const active = FILTER_KEYS.filter((k) => p[k]);
   const page = Number(p.page ?? 1);
   const pages = Math.max(1, Math.ceil(r.total / PAGE));
@@ -160,6 +174,15 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             <p className="text-ink-2">
               <strong className="text-ink">{r.total}</strong> trace{r.total === 1 ? "" : "s"}
               {p.q ? ` matching “${p.q}”` : ""}
+              {p.q && !user && (
+                <>
+                  {" "}
+                  in titles and tags ·{" "}
+                  <Link href="/login" className="text-cobalt">
+                    Sign in to search inside traces
+                  </Link>
+                </>
+              )}
               {active.length > 0 && (
                 <>
                   {" "}

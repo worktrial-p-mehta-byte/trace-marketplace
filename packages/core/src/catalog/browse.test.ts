@@ -190,21 +190,45 @@ describe("search index", () => {
   });
 
   it("finds open-source listings by their content, and others only by metadata", async () => {
-    expect((await search.search({ text: "semaphore" })).ids).toEqual([rustLoop]);
-    expect((await search.search({ text: "timezone parse" })).ids).toEqual([tsTamper]);
+    const signedIn = (text: string) => search.search({ text, includeContent: true });
+    expect((await signedIn("semaphore")).ids).toEqual([rustLoop]);
+    expect((await signedIn("timezone parse")).ids).toEqual([tsTamper]);
     // Signals-only content is never indexed.
-    expect((await search.search({ text: "internal details" })).ids).toEqual([]);
+    expect((await signedIn("internal details")).ids).toEqual([]);
     // Metadata (labels, language) is indexed for every listing.
+    expect((await signedIn("retry loop")).ids).toEqual([rustLoop]);
+  });
+
+  it("never matches trace content for searches without content access", async () => {
+    // Anonymous visitors can't read content, so they can't probe it by search.
+    expect((await search.search({ text: "semaphore" })).ids).toEqual([]);
+    expect((await search.search({ text: "timezone parse" })).ids).toEqual([]);
+    // A mix of a metadata word and a content word must not match either.
+    expect((await search.search({ text: "rust semaphore" })).ids).toEqual([]);
+    // Metadata still works.
     expect((await search.search({ text: "retry loop" })).ids).toEqual([rustLoop]);
+    expect((await search.search({ text: "rust" })).ids).toContain(rustLoop);
+    // Through the catalog, too.
+    const anon = await browseCatalog(db, { config, search }, { text: "semaphore" });
+    const member = await browseCatalog(
+      db,
+      { config, search },
+      { text: "semaphore", includeContent: true },
+    );
+    expect(anon.total).toBe(0);
+    expect(member.items.map((i) => i.listingId)).toEqual([rustLoop]);
   });
 });
 
 describe("ensureSearchIndex", () => {
   it("rebuilds an index that is missing listings (e.g. after an upgrade), then leaves it alone", async () => {
     db.$client.prepare("DELETE FROM listing_search").run(); // like a fresh migration on an old database
-    expect((await search.search({ text: "semaphore" })).ids).toEqual([]);
+    expect((await search.search({ text: "retry loop" })).ids).toEqual([]);
     expect(await ensureSearchIndex(db, blobs, search)).toBe(true);
-    expect((await search.search({ text: "semaphore" })).ids).toEqual([rustLoop]);
+    expect((await search.search({ text: "retry loop" })).ids).toEqual([rustLoop]);
+    expect((await search.search({ text: "semaphore", includeContent: true })).ids).toEqual([
+      rustLoop,
+    ]);
     expect(await ensureSearchIndex(db, blobs, search)).toBe(false);
   });
 });
@@ -229,8 +253,25 @@ describe("browseCatalog", () => {
     expect(await ids({ language: "Rust", tier: 0 })).toEqual([rustLoop]);
   });
 
+  it("shows every failure type the labeler emits, including harness errors", async () => {
+    const apiError = await add({
+      title: "Session cut short by API errors",
+      t: traits({ language: "Go", failureCategory: "harness_error" }),
+      labels: ["harness_error"],
+    });
+    repriceAll(db, { config, reason: "test" });
+    const r = await browseCatalog(db, { config, search }, { failure: "harness_error" });
+    expect(r.items.map((i) => i.listingId)).toEqual([apiError]);
+    expect(r.items[0]!.failures).toContain("harness_error");
+    expect(r.facets.failure.find((f) => f.value === "harness_error")?.count).toBe(1);
+  });
+
   it("combines free text with filters", async () => {
-    const r = await browseCatalog(db, { config, search }, { text: "tokio", language: "Rust" });
+    const r = await browseCatalog(
+      db,
+      { config, search },
+      { text: "tokio", language: "Rust", includeContent: true },
+    );
     expect(r.items.map((i) => i.listingId)).toEqual([rustLoop]);
   });
 

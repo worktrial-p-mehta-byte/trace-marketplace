@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { schema, type Db } from "@tm/db";
-import { comboKeyOf, type TraceTraits } from "@tm/enrich";
+import { comboKeyOf, FAILURE_CODES, type TraceTraits } from "@tm/enrich";
 import type { DemandCriteria, PriceQuote } from "@tm/pricing";
 import { toSignalsOnly } from "@tm/scrub";
 import type { LicenseScope, Trace } from "@tm/schema";
@@ -16,6 +16,8 @@ export type SortKey = "relevance" | "price_desc" | "price_asc" | "newest" | "rar
 
 export interface BrowseQuery {
   text?: string;
+  /** Let free text match trace content; only for viewers allowed to read it (signed in). */
+  includeContent?: boolean;
   language?: string;
   framework?: string;
   failure?: string;
@@ -137,14 +139,7 @@ function loadCatalog(db: Db, config: MarketplaceConfig): CatalogItem[] {
       ),
     )
     .all();
-  const failureCodes = new Set([
-    "test_tampering",
-    "retry_loop",
-    "user_correction",
-    "tool_rejected",
-    "user_interrupt",
-    "tool_error",
-  ]);
+  const failureCodes = new Set<string>(FAILURE_CODES);
   const market = buildMarket(db, { config });
   return rows.map((r) => {
     const traits = r.traits as TraceTraits;
@@ -194,7 +189,10 @@ export async function browseCatalog(
   let items = loadCatalog(db, deps.config);
   let rank: Map<string, number> | undefined;
   if (q.text?.trim()) {
-    const { ids } = await deps.search.search({ text: q.text });
+    const { ids } = await deps.search.search({
+      text: q.text,
+      includeContent: q.includeContent === true,
+    });
     rank = new Map(ids.map((id, i) => [id, i]));
     items = items.filter((i) => rank!.has(i.listingId));
   }
