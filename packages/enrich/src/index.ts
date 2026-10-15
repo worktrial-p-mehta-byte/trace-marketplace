@@ -4,6 +4,8 @@ export {
   isCorrection,
   isTestCommand,
   testRunPassed,
+  testRunResult,
+  type TestRunResult,
   FAILURE_CODES,
   OUTCOME_CODES,
   SIGNAL_CODES,
