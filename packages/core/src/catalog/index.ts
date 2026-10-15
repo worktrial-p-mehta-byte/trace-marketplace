@@ -1,0 +1,347 @@
+import { createHash } from "node:crypto";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import type { MarketplaceConfig } from "@tm/config";
+import { newId, schema, type Db } from "@tm/db";
+import { comboKeyOf, enrichTrace, type TraceTraits } from "@tm/enrich";
+import { splitSale, traitPolicyV1, type PriceQuote } from "@tm/pricing";
+import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
+import { Trace, type Label, type Tier } from "@tm/schema";
+import { TERMS_VERSION } from "../auth";
+import { EventTypes, type EventBus } from "../events";
+import { isTierSupported } from "../policy";
+import type { BlobStore } from "../ports";
+import { buildMarket, runPricingConsumer } from "../pricing";
+
+export class ShareError extends Error {}
+
+export interface CatalogDeps {
+  config: MarketplaceConfig;
+  bus: EventBus;
+  blobs: BlobStore;
+  now?: Date;
+}
+
+/** Traits a signals-only (tier 1) upload reports from the seller's browser. */
+export type ClientTraits = Partial<
+  Pick<
+    TraceTraits,
+    | "userCorrections"
+    | "preferencePairs"
+    | "testsRanAtEnd"
+    | "testsPassedAtEnd"
+    | "recovered"
+    | "hadFailure"
+    | "failureCategory"
+    | "language"
+    | "framework"
+    | "redactionDensity"
+  >
+>;
+
+/**
+ * For signals-only uploads the server can't see text, so a few traits come
+ * from the seller's browser. Structure-derived traits (turns, tool calls,
+ * errors, interrupts) are recomputed here; reported ones are bounded by them.
+ */
+function mergeSignalsTraits(server: TraceTraits, client: ClientTraits): TraceTraits {
+  const userMessages = server.turns; // upper bound
+  const corrections = Math.min(Math.max(0, client.userCorrections ?? 0), userMessages);
+  const pairs = Math.min(Math.max(0, client.preferencePairs ?? 0), corrections + server.toolErrors);
+  const hadFailure = server.hadFailure || corrections > 0;
+  return {
+    ...server,
+    userCorrections: corrections,
+    preferencePairs: pairs,
+    hadFailure,
+    recovered: hadFailure && Boolean(client.recovered),
+    testsRanAtEnd: Boolean(client.testsRanAtEnd),
+    testsPassedAtEnd: Boolean(client.testsRanAtEnd && client.testsPassedAtEnd),
+    failureCategory: client.failureCategory ?? server.failureCategory,
+    language: client.language ?? server.language,
+    framework: client.framework ?? server.framework,
+    redactionDensity: Math.min(1, Math.max(0, client.redactionDensity ?? 0)),
+  };
+}
+
+export interface ShareInput {
+  sellerId: string;
+  trace: unknown;
+  tier: number;
+  /** Only used for tier 1, where the server cannot see content. */
+  clientTraits?: ClientTraits;
+  clientLabels?: Label[];
+}
+
+export interface ShareResult {
+  traceId: string;
+  listingId: string;
+  priceCents: number;
+  sellerCents: number;
+  labels: string[];
+}
+
+/**
+ * Accept a trace the seller approved in their browser. The server never
+ * trusts the upload: it validates the schema, scrubs again, strips content
+ * for signals-only, recomputes labels and traits, checks eligibility and
+ * duplicates, then stores, lists and prices it.
+ */
+export async function shareTrace(
+  db: Db,
+  deps: CatalogDeps,
+  input: ShareInput,
+): Promise<ShareResult> {
+  const now = deps.now ?? new Date();
+  const parsed = Trace.safeParse(input.trace);
+  if (!parsed.success) throw new ShareError("The upload is not a valid trace.");
+  if (!isTierSupported(input.tier)) throw new ShareError("Choose open source or signals only.");
+  const tier = input.tier as Tier;
+  if (parsed.data.provenance.source === "synthetic") {
+    throw new ShareError("Synthetic traces can only be added by the seed script.");
+  }
+
+  const seller = db.select().from(schema.users).where(eq(schema.users.id, input.sellerId)).get();
+  if (!seller) throw new ShareError("Sign in to share traces.");
+  if (seller.termsAcceptedVersion !== TERMS_VERSION) {
+    throw new ShareError("Accept the data terms before sharing.");
+  }
+
+  // Defense in depth: scrub again server-side, then strip content for tier 1.
+  const scrubbed = scrubTrace(parsed.data).trace;
+  const stored = tier === 1 ? toSignalsOnly(scrubbed) : scrubbed;
+
+  let labels: Label[];
+  let traits: TraceTraits;
+  if (tier === 0) {
+    const e = enrichTrace(stored, { redactionDensity: placeholderDensity(stored) });
+    labels = e.labels;
+    traits = e.traits;
+  } else {
+    const e = enrichTrace(stored);
+    traits = mergeSignalsTraits(e.traits, input.clientTraits ?? {});
+    labels = (input.clientLabels ?? e.labels).filter((l) => l.source === "heuristic");
+  }
+  const comboKey = comboKeyOf(traits);
+
+  if (labels.some((l) => l.code === "no_model_output") || traits.turns === 0) {
+    throw new ShareError(
+      "This session has no replies from the model, so there is nothing to share.",
+    );
+  }
+
+  const contentHash = createHash("sha256").update(JSON.stringify(stored.events)).digest("hex");
+  const existing = db
+    .select({ id: schema.traces.id })
+    .from(schema.traces)
+    .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
+    .where(
+      and(
+        eq(schema.traces.sellerId, input.sellerId),
+        eq(schema.traces.contentHash, contentHash),
+        isNull(schema.consents.revokedAt),
+      ),
+    )
+    .get();
+  if (existing) throw new ShareError("You have already shared this session.");
+
+  const traceId = newId("trc");
+  const assetId = newId("ast");
+  const listingId = newId("lst");
+  const blobKey = `traces/${traceId}.json`;
+  await deps.blobs.put(blobKey, JSON.stringify(stored));
+
+  db.transaction((tx) => {
+    tx.insert(schema.traces)
+      .values({
+        id: traceId,
+        sellerId: input.sellerId,
+        schemaVersion: stored.schemaVersion,
+        source: stored.provenance.source,
+        title: stored.title,
+        harness: stored.provenance.harness.name,
+        model: stored.provenance.model.id,
+        language: traits.language,
+        framework: traits.framework,
+        startedAt: new Date(stored.startedAt),
+        endedAt: new Date(stored.endedAt),
+        turnCount: traits.turns,
+        toolCallCount: traits.toolCalls,
+        contentHash,
+        blobKey,
+        redactionCount: 0,
+        redactionDensity: traits.redactionDensity,
+        createdAt: now,
+      })
+      .run();
+    tx.insert(schema.consents)
+      .values({
+        id: newId("cns"),
+        traceId,
+        sellerId: input.sellerId,
+        tier,
+        scope: "session",
+        termsVersion: TERMS_VERSION,
+        grantedAt: now,
+      })
+      .run();
+    tx.insert(schema.assets)
+      .values({ id: assetId, traceId, kind: tier === 0 ? "scrubbed_trace" : "signals", blobKey })
+      .run();
+    for (const l of labels) {
+      tx.insert(schema.labels)
+        .values({
+          id: newId("lbl"),
+          traceId,
+          kind: l.kind,
+          code: l.code,
+          confidence: l.confidence,
+          source: l.source,
+          evidence: l.evidence,
+        })
+        .run();
+    }
+    tx.insert(schema.traceTraits).values({ traceId, data: traits, comboKey, createdAt: now }).run();
+    tx.insert(schema.listings)
+      .values({
+        id: listingId,
+        assetId,
+        traceId,
+        tier,
+        status: "active",
+        allowedLicenses: ["research", "eval", "training"],
+        createdAt: now,
+      })
+      .run();
+  });
+
+  deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
+  deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });
+  runPricingConsumer(db, deps.bus, { config: deps.config, now });
+
+  const priceCents =
+    db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get()!
+      .currentPriceCents ?? 0;
+  return {
+    traceId,
+    listingId,
+    priceCents,
+    sellerCents: splitSale(priceCents, deps.config.revenue.sellerShare).seller,
+    labels: labels.map((l) => l.code),
+  };
+}
+
+/**
+ * Withdraw consent: the listing leaves the catalog and nothing new is sold.
+ * Past sales stand (the consent ledger keeps both dates).
+ */
+export function revokeTrace(
+  db: Db,
+  deps: Omit<CatalogDeps, "blobs">,
+  sellerId: string,
+  traceId: string,
+) {
+  const now = deps.now ?? new Date();
+  const trace = db.select().from(schema.traces).where(eq(schema.traces.id, traceId)).get();
+  if (!trace || trace.sellerId !== sellerId) throw new ShareError("Trace not found.");
+  db.transaction((tx) => {
+    tx.update(schema.consents)
+      .set({ revokedAt: now })
+      .where(and(eq(schema.consents.traceId, traceId), isNull(schema.consents.revokedAt)))
+      .run();
+    tx.update(schema.listings)
+      .set({ status: "delisted" })
+      .where(eq(schema.listings.traceId, traceId))
+      .run();
+  });
+  deps.bus.emit(EventTypes.ConsentRevoked, { traceId });
+  deps.bus.emit(EventTypes.ListingDelisted, { traceId });
+  runPricingConsumer(db, deps.bus, { config: deps.config, now });
+}
+
+export interface SellerTraceRow {
+  traceId: string;
+  listingId: string;
+  title: string | null;
+  tier: number;
+  status: "active" | "delisted";
+  priceCents: number | null;
+  sellerCents: number | null;
+  model: string;
+  language: string | null;
+  turns: number;
+  labels: string[];
+  startedAt: Date;
+  sharedAt: Date;
+  revokedAt: Date | null;
+}
+
+export function listSellerTraces(
+  db: Db,
+  sellerId: string,
+  config: MarketplaceConfig,
+): SellerTraceRow[] {
+  const rows = db
+    .select({
+      traceId: schema.traces.id,
+      listingId: schema.listings.id,
+      title: schema.traces.title,
+      tier: schema.listings.tier,
+      status: schema.listings.status,
+      priceCents: schema.listings.currentPriceCents,
+      model: schema.traces.model,
+      language: schema.traces.language,
+      turns: schema.traces.turnCount,
+      startedAt: schema.traces.startedAt,
+      sharedAt: schema.traces.createdAt,
+      revokedAt: schema.consents.revokedAt,
+    })
+    .from(schema.traces)
+    .innerJoin(schema.listings, eq(schema.listings.traceId, schema.traces.id))
+    .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
+    .where(eq(schema.traces.sellerId, sellerId))
+    .orderBy(desc(schema.traces.createdAt))
+    .all();
+  const labelRows = db
+    .select({ traceId: schema.labels.traceId, code: schema.labels.code, kind: schema.labels.kind })
+    .from(schema.labels)
+    .innerJoin(schema.traces, eq(schema.traces.id, schema.labels.traceId))
+    .where(eq(schema.traces.sellerId, sellerId))
+    .all();
+  return rows.map((r) => ({
+    ...r,
+    sellerCents:
+      r.priceCents === null ? null : splitSale(r.priceCents, config.revenue.sellerShare).seller,
+    labels: labelRows
+      .filter((l) => l.traceId === r.traceId && l.kind === "failure" && l.code !== "harness_error")
+      .map((l) => l.code),
+  }));
+}
+
+/**
+ * Price a trace that is not listed yet (the seller's review screen). Only
+ * traits are sent to the server, never content.
+ */
+export function estimatePrice(
+  db: Db,
+  deps: { config: MarketplaceConfig; now?: Date },
+  traits: TraceTraits,
+  tier: Tier,
+): PriceQuote {
+  const market = buildMarket(db, deps);
+  const comboKey = comboKeyOf(traits);
+  const counts = [...market.comboCounts.entries()];
+  const comboCount = (market.comboCounts.get(comboKey) ?? 0) + 1;
+  const medianComboCount = market.medianComboCount || (counts.length ? 1 : 0);
+  return traitPolicyV1.price({
+    traits,
+    tier,
+    license: "research",
+    config: deps.config.pricing,
+    market: {
+      comboCount,
+      medianComboCount,
+      demandPressure: market.pressureFor(traits),
+      now: market.now,
+    },
+  });
+}

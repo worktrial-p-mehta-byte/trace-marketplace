@@ -10,15 +10,22 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/schibsted-grotesk": "^5.3.0",
+    "@tm/adapters": "workspace:*",
     "@tm/config": "workspace:*",
     "@tm/core": "workspace:*",
     "@tm/db": "workspace:*",
+    "@tm/enrich": "workspace:*",
+    "@tm/pricing": "workspace:*",
     "@tm/schema": "workspace:*",
+    "@tm/scrub": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "next": "^15.5.28",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",

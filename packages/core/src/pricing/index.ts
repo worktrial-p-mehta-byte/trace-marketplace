@@ -125,6 +125,10 @@ export function buildMarket(db: Db, deps: PricingDeps) {
     active,
     comboCounts,
     medianComboCount,
+    /** Demand pressure on any traits, listed or not. */
+    pressureFor(traits: TraceTraits): number {
+      return demandPressure(traits, signals, supplyFor, now, c.demand.windowDays);
+    },
     quote(row: ActiveListing, license: LicenseScope = "research"): PriceQuote {
       const policy = deps.policy ?? traitPolicyV1;
       return policy.price({

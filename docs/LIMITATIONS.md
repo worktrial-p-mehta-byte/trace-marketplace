@@ -44,6 +44,20 @@ where the limit lives and what would lift it.
 | Whole catalog is repriced on any relevant event                                    | Fine for thousands of listings, slow beyond                             | Reprice only affected combinations                    |
 | `no_model_output` traces still get a price                                         | Low-value traces can be listed                                          | Eligibility check at listing time (M4)                |
 
+## Accounts, onboarding and sharing — M4
+
+| Limitation                                                                                                                                                      | Impact                                                                    | Lifted by                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Email and password only; no email verification, password reset or login rate limiting                                                                           | Fine for a local demo, not for the internet                               | Auth.js or Clerk with SSO and verification (S3)                    |
+| No CSRF tokens; relies on `SameSite=Lax` session cookies                                                                                                        | Adequate for same-site use only                                           | CSRF tokens or an auth provider                                    |
+| For signals-only uploads, corrections, test outcome, recovery, language and framework are reported by the seller's browser (bounded by what the server can see) | A tampered browser could inflate a signals-only price within those bounds | Signed client builds; per-event derived flags the server can check |
+| Sessions are read whole into browser memory                                                                                                                     | Very large session files (100 MB+) are slow to review                     | Streaming parse in a Web Worker                                    |
+| Review shows events 40 at a time; the "compare with original" view is side by side, not a diff                                                                  | Long sessions take scrolling to check                                     | Jump-to-redaction navigation; inline diff                          |
+| Uploads over 15 MB (after scrubbing) are refused                                                                                                                | Very long sessions can't be shared yet                                    | Blob upload with resumable transfer                                |
+| Withdrawing delists a trace but keeps its stored copy                                                                                                           | Needed for buyers who already bought it; nothing new is sold              | Deletion once no live entitlements reference it                    |
+| Pricing runs inside the share and withdraw requests                                                                                                             | Requests slow down as the catalog grows                                   | Background worker (S3)                                             |
+| Rarity uses the market as it is now; nothing is sold yet                                                                                                        | The seller's estimate can change after sharing                            | Expected behaviour; shown as "estimated"                           |
+
 ## Platform
 
 | Limitation                                         | Impact                                     | Lifted by                                               |

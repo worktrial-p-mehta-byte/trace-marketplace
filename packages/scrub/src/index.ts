@@ -18,3 +18,4 @@ export {
   tag,
   type Rule,
 } from "./rules";
+export { toSignalsOnly, isSignalsOnly, placeholderDensity, SIGNALS_ONLY_TEXT } from "./signals";
