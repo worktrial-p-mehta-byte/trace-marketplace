@@ -41,7 +41,9 @@ async function main() {
   const config = loadServerConfig();
   const db = openDb(config.database.path);
   if (db.select().from(schema.traces).all().length > 0) {
-    console.error("The database already has traces. Run `pnpm demo:reset` for a fresh demo market.");
+    console.error(
+      "The database already has traces. Run `pnpm demo:reset` for a fresh demo market.",
+    );
     process.exit(1);
   }
   const bus = createDbEventBus(db);
@@ -50,14 +52,29 @@ async function main() {
   const now = new Date();
   const rng = createRng(seed + 1);
 
-  const demoSeller = await ensureAccount(db, "seller@example.com", "seller", "Demo seller", DEMO_PASSWORD);
+  const demoSeller = await ensureAccount(
+    db,
+    "seller@example.com",
+    "seller",
+    "Demo seller",
+    DEMO_PASSWORD,
+  );
   const buyer = await ensureAccount(db, "buyer@example.com", "buyer", "Demo buyer", DEMO_PASSWORD);
   const sellers = [demoSeller];
   for (let i = 1; i <= 8; i++) {
-    sellers.push(await ensureAccount(db, `synthetic-seller-${i}@example.com`, "seller", `Synthetic seller ${i}`));
+    sellers.push(
+      await ensureAccount(
+        db,
+        `synthetic-seller-${i}@example.com`,
+        "seller",
+        `Synthetic seller ${i}`,
+      ),
+    );
   }
 
-  const traces = generateCatalog(seed, count, now).sort((a, b) => a.endedAt.localeCompare(b.endedAt));
+  const traces = generateCatalog(seed, count, now).sort((a, b) =>
+    a.endedAt.localeCompare(b.endedAt),
+  );
   const criteriaPool = [
     { language: "Rust" },
     { language: "Python", failure: "retry_loop" },
@@ -113,10 +130,16 @@ async function main() {
   bus.poll("search", () => {}, 1_000_000);
   const indexed = await rebuildSearchIndex(db, blobs, search);
 
-  const prices = db.select({ p: schema.listings.currentPriceCents }).from(schema.listings).all().map((r) => r.p ?? 0);
+  const prices = db
+    .select({ p: schema.listings.currentPriceCents })
+    .from(schema.listings)
+    .all()
+    .map((r) => r.p ?? 0);
   prices.sort((a, b) => a - b);
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
-  console.log(`Seeded ${listed} synthetic traces from ${sellers.length} sellers; ${indexed} indexed for search.`);
+  console.log(
+    `Seeded ${listed} synthetic traces from ${sellers.length} sellers; ${indexed} indexed for search.`,
+  );
   console.log(
     `Prices: lowest ${money(prices[0] ?? 0)}, median ${money(prices[Math.floor(prices.length / 2)] ?? 0)}, highest ${money(prices.at(-1) ?? 0)}.`,
   );

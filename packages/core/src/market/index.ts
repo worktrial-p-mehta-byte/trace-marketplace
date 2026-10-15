@@ -54,7 +54,11 @@ export interface PriceMove {
 function pricesMatching(db: Db, config: MarketplaceConfig, criteria: DemandCriteria) {
   const market = buildMarket(db, { config });
   const rows = db
-    .select({ id: schema.listings.id, price: schema.listings.currentPriceCents, title: schema.traces.title })
+    .select({
+      id: schema.listings.id,
+      price: schema.listings.currentPriceCents,
+      title: schema.traces.title,
+    })
     .from(schema.listings)
     .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
     .where(eq(schema.listings.status, "active"))
@@ -75,7 +79,12 @@ function moves(
 ): PriceMove[] {
   return [...before]
     .filter(([id]) => after.has(id))
-    .map(([id, b]) => ({ listingId: id, title: b.title, before: b.price, after: after.get(id)!.price }))
+    .map(([id, b]) => ({
+      listingId: id,
+      title: b.title,
+      before: b.price,
+      after: after.get(id)!.price,
+    }))
     .sort((a, b) => b.after - a.after);
 }
 
@@ -114,7 +123,8 @@ export function postBounty(
     })
     .run();
   const weight =
-    ((input.perTraceCents * input.quantity) / 100) * deps.config.pricing.demand.bountyWeightPerDollar;
+    ((input.perTraceCents * input.quantity) / 100) *
+    deps.config.pricing.demand.bountyWeightPerDollar;
   recordDemandSignal(db, deps.bus, {
     kind: "bounty",
     criteria: input.criteria,
@@ -124,7 +134,11 @@ export function postBounty(
   });
   deps.bus.emit(EventTypes.BountyPosted, { bountyId });
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
-  return { bountyId, weight, moves: moves(before, pricesMatching(db, deps.config, input.criteria)) };
+  return {
+    bountyId,
+    weight,
+    moves: moves(before, pricesMatching(db, deps.config, input.criteria)),
+  };
 }
 
 export interface FloodInput {
@@ -153,7 +167,12 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
   let added = 0;
   for (const trace of traces) {
     try {
-      await shareTrace(db, deps, { sellerId: sim.id, trace, tier: 0 }, { allowSynthetic: true, deferMarket: true });
+      await shareTrace(
+        db,
+        deps,
+        { sellerId: sim.id, trace, tier: 0 },
+        { allowSynthetic: true, deferMarket: true },
+      );
       added++;
     } catch {
       // A rare duplicate from the generator is skipped.
@@ -171,8 +190,15 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
 export async function resetSimulation(db: Db, deps: CatalogDeps) {
   const now = deps.now ?? new Date();
   db.delete(schema.demandSignals).where(eq(schema.demandSignals.kind, "bounty")).run();
-  db.update(schema.bounties).set({ status: "closed" }).where(eq(schema.bounties.status, "open")).run();
-  const sim = db.select().from(schema.users).where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL)).get();
+  db.update(schema.bounties)
+    .set({ status: "closed" })
+    .where(eq(schema.bounties.status, "open"))
+    .run();
+  const sim = db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL))
+    .get();
   let withdrawn = 0;
   if (sim) {
     const live = db
@@ -182,8 +208,14 @@ export async function resetSimulation(db: Db, deps: CatalogDeps) {
       .all();
     db.transaction((tx) => {
       for (const { traceId } of live) {
-        tx.update(schema.consents).set({ revokedAt: now }).where(eq(schema.consents.traceId, traceId)).run();
-        tx.update(schema.listings).set({ status: "delisted" }).where(eq(schema.listings.traceId, traceId)).run();
+        tx.update(schema.consents)
+          .set({ revokedAt: now })
+          .where(eq(schema.consents.traceId, traceId))
+          .run();
+        tx.update(schema.listings)
+          .set({ status: "delisted" })
+          .where(eq(schema.listings.traceId, traceId))
+          .run();
       }
     });
     for (const { traceId } of live) deps.bus.emit(EventTypes.ListingDelisted, { traceId });
@@ -202,7 +234,11 @@ export async function resetSimulation(db: Db, deps: CatalogDeps) {
  */
 export function watchList(db: Db, config: MarketplaceConfig, criteria: DemandCriteria, limit = 4) {
   const prices = pricesMatching(db, config, criteria);
-  const sim = db.select().from(schema.users).where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL)).get();
+  const sim = db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL))
+    .get();
   if (sim) {
     const simulated = db
       .select({ id: schema.listings.id })
@@ -215,7 +251,12 @@ export function watchList(db: Db, config: MarketplaceConfig, criteria: DemandCri
   return [...prices]
     .sort((a, b) => b[1].price - a[1].price)
     .slice(0, limit)
-    .map(([listingId, p]) => ({ listingId, title: p.title, priceCents: p.price, history: priceHistory(db, listingId) }));
+    .map(([listingId, p]) => ({
+      listingId,
+      title: p.title,
+      priceCents: p.price,
+      history: priceHistory(db, listingId),
+    }));
 }
 
 export function openBounties(db: Db) {

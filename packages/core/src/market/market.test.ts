@@ -42,7 +42,12 @@ beforeEach(async () => {
     ...generateFlood(5, 2, NOW, { language: "Rust", framework: "Tokio", pattern: "retry_loop" }),
   ];
   for (const trace of traces) {
-    await shareTrace(db, deps, { sellerId: seller.id, trace, tier: 0 }, { allowSynthetic: true, deferMarket: true });
+    await shareTrace(
+      db,
+      deps,
+      { sellerId: seller.id, trace, tier: 0 },
+      { allowSynthetic: true, deferMarket: true },
+    );
   }
   repriceAll(db, { ...deps, reason: "seed" });
   buyerOrgId = (await ensureAccount(db, "lab@example.com", "buyer", "Lab")).buyerOrgId!;
@@ -54,7 +59,9 @@ describe("internal ingest", () => {
   it("accepts synthetic traces only for internal callers", async () => {
     const seller = await ensureAccount(db, "x@example.com", "seller", "X");
     const [t] = generateFlood(77, 1, NOW, { language: "Go", pattern: "tool_error" });
-    await expect(shareTrace(db, deps, { sellerId: seller.id, trace: t, tier: 0 })).rejects.toThrow(ShareError);
+    await expect(shareTrace(db, deps, { sellerId: seller.id, trace: t, tier: 0 })).rejects.toThrow(
+      ShareError,
+    );
     await expect(
       shareTrace(db, deps, { sellerId: seller.id, trace: t, tier: 0 }, { allowSynthetic: true }),
     ).resolves.toBeDefined();
@@ -83,7 +90,11 @@ describe("postBounty", () => {
     expect(r.moves).toHaveLength(2);
     for (const m of r.moves) expect(m.after).toBeGreaterThan(m.before);
     for (const o of others) {
-      const now = db.select().from(schema.listings).where(eq(schema.listings.id, o.listingId)).get()!;
+      const now = db
+        .select()
+        .from(schema.listings)
+        .where(eq(schema.listings.id, o.listingId))
+        .get()!;
       expect(now.currentPriceCents).toBe(o.priceCents);
     }
     expect(openBounties(db)).toHaveLength(1);
@@ -92,7 +103,13 @@ describe("postBounty", () => {
 
 describe("floodSupply", () => {
   it("adds simulator-owned supply and lowers the matching prices", async () => {
-    const r = await floodSupply(db, deps, { language: "Rust", framework: "Tokio", pattern: "retry_loop", count: 20, seed: 3 });
+    const r = await floodSupply(db, deps, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+      count: 20,
+      seed: 3,
+    });
     expect(r.added).toBe(20);
     const originals = r.moves.filter((m) => m.before > 0);
     expect(originals.length).toBeGreaterThanOrEqual(2);
@@ -105,13 +122,32 @@ describe("floodSupply", () => {
 describe("resetSimulation", () => {
   it("closes bounties, drops bounty demand and withdraws only simulator supply", async () => {
     const start = watchList(db, deps.config, rust).map((w) => w.priceCents);
-    postBounty(db, deps, { buyerOrgId, title: "b", criteria: rust, perTraceCents: 2000, quantity: 10, now: NOW });
-    await floodSupply(db, deps, { language: "Rust", framework: "Tokio", pattern: "retry_loop", count: 10, seed: 4 });
+    postBounty(db, deps, {
+      buyerOrgId,
+      title: "b",
+      criteria: rust,
+      perTraceCents: 2000,
+      quantity: 10,
+      now: NOW,
+    });
+    await floodSupply(db, deps, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+      count: 10,
+      seed: 4,
+    });
     const r = await resetSimulation(db, deps);
     expect(r.withdrawn).toBe(10);
     expect(openBounties(db)).toEqual([]);
-    expect(db.select().from(schema.demandSignals).where(eq(schema.demandSignals.kind, "bounty")).all()).toEqual([]);
-    const sim = db.select().from(schema.users).where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL)).get()!;
+    expect(
+      db.select().from(schema.demandSignals).where(eq(schema.demandSignals.kind, "bounty")).all(),
+    ).toEqual([]);
+    const sim = db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, SIMULATOR_SELLER_EMAIL))
+      .get()!;
     const live = db
       .select()
       .from(schema.listings)
@@ -127,7 +163,14 @@ describe("resetSimulation", () => {
 
 describe("watchList", () => {
   it("follows the most expensive matches, with price history", () => {
-    postBounty(db, deps, { buyerOrgId, title: "b", criteria: rust, perTraceCents: 1000, quantity: 5, now: NOW });
+    postBounty(db, deps, {
+      buyerOrgId,
+      title: "b",
+      criteria: rust,
+      perTraceCents: 1000,
+      quantity: 5,
+      now: NOW,
+    });
     const w = watchList(db, deps.config, rust);
     expect(w).toHaveLength(2);
     expect(w[0]!.history.length).toBeGreaterThanOrEqual(2);
@@ -136,7 +179,17 @@ describe("watchList", () => {
 
   it("keeps following the same listings after the simulator adds supply", async () => {
     const before = watchList(db, deps.config, rust).map((w) => w.listingId);
-    await floodSupply(db, deps, { language: "Rust", framework: "Tokio", pattern: "retry_loop", count: 10, seed: 9 });
-    expect(watchList(db, deps.config, rust).map((w) => w.listingId).sort()).toEqual([...before].sort());
+    await floodSupply(db, deps, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+      count: 10,
+      seed: 9,
+    });
+    expect(
+      watchList(db, deps.config, rust)
+        .map((w) => w.listingId)
+        .sort(),
+    ).toEqual([...before].sort());
   });
 });
