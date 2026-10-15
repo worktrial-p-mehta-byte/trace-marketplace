@@ -9,7 +9,8 @@ import { Trace, type Label, type Tier } from "@tm/schema";
 import { TERMS_VERSION } from "../auth";
 import { EventTypes, type EventBus } from "../events";
 import { isTierSupported } from "../policy";
-import type { BlobStore } from "../ports";
+import type { BlobStore, SearchIndex } from "../ports";
+import { runSearchConsumer } from "../search";
 import { buildMarket, runPricingConsumer } from "../pricing";
 
 export class ShareError extends Error {}
@@ -18,6 +19,8 @@ export interface CatalogDeps {
   config: MarketplaceConfig;
   bus: EventBus;
   blobs: BlobStore;
+  /** When given, the search index is updated right after the change. */
+  search?: SearchIndex;
   now?: Date;
 }
 
@@ -234,6 +237,7 @@ export async function shareTrace(
   deps.bus.emit(EventTypes.TraceIngested, { traceId, sellerId: input.sellerId });
   deps.bus.emit(EventTypes.ListingCreated, { listingId, traceId });
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
+  if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
 
   const priceCents =
     db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get()!
@@ -251,12 +255,12 @@ export async function shareTrace(
  * Withdraw consent: the listing leaves the catalog and nothing new is sold.
  * Past sales stand (the consent ledger keeps both dates).
  */
-export function revokeTrace(
+export async function revokeTrace(
   db: Db,
-  deps: Omit<CatalogDeps, "blobs">,
+  deps: Omit<CatalogDeps, "blobs"> & { blobs?: BlobStore },
   sellerId: string,
   traceId: string,
-) {
+): Promise<void> {
   const now = deps.now ?? new Date();
   const trace = db.select().from(schema.traces).where(eq(schema.traces.id, traceId)).get();
   if (!trace || trace.sellerId !== sellerId) throw new ShareError("Trace not found.");
@@ -273,6 +277,7 @@ export function revokeTrace(
   deps.bus.emit(EventTypes.ConsentRevoked, { traceId });
   deps.bus.emit(EventTypes.ListingDelisted, { traceId });
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
+  if (deps.search && deps.blobs) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
 }
 
 export interface SellerTraceRow {
@@ -362,3 +367,5 @@ export function estimatePrice(
     },
   });
 }
+
+export * from "./browse";

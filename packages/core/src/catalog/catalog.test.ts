@@ -6,7 +6,7 @@ import { parseClaudeCodeSession } from "@tm/adapters";
 import { loadConfig } from "@tm/config";
 import { openDb, runMigrations, schema, type Db } from "@tm/db";
 import { enrichTrace } from "@tm/enrich";
-import { scrubTrace, toSignalsOnly } from "@tm/scrub";
+import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
 import {
   acceptTerms,
@@ -193,6 +193,30 @@ describe("shareTrace under concurrency", () => {
   });
 });
 
+describe("estimate matches the shared price", () => {
+  it("uses the same redaction measure as the server, even for a long private key", async () => {
+    // A long secret shrinks to one short placeholder: "characters removed" and
+    // "placeholders left" disagree, so both sides must use the same measure.
+    const key =
+      "-----BEGIN RSA PRIVATE KEY-----\n" + "A".repeat(4000) + "\n-----END RSA PRIVATE KEY-----"; // tm-allow-secret
+    const withKey: Trace = {
+      ...raw,
+      events: raw.events.map((e) =>
+        e.seq === 2 && e.type === "user_message" ? { ...e, text: `use this key:\n${key}` } : e,
+      ),
+    };
+    const scrubbed = scrubTrace(withKey);
+    expect(scrubbed.stats.density).toBeGreaterThan(0.2); // removed-characters view: penalised
+    expect(placeholderDensity(scrubbed.trace)).toBeLessThan(0.2); // placeholders-left view: not
+    const { traits } = enrichTrace(scrubbed.trace, {
+      redactionDensity: placeholderDensity(scrubbed.trace),
+    });
+    const estimate = estimatePrice(db, deps, traits, 0);
+    const shared = await shareTrace(db, deps, { sellerId, trace: scrubbed.trace, tier: 0 });
+    expect(shared.priceCents).toBe(estimate.priceCents);
+  });
+});
+
 describe("revokeTrace and listSellerTraces", () => {
   it("delists a revoked trace, records the date and allows sharing again", async () => {
     const r = await shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 });
@@ -201,12 +225,12 @@ describe("revokeTrace and listSellerTraces", () => {
     expect(rows[0]).toMatchObject({ status: "active", tier: 0, revokedAt: null });
     expect(rows[0]!.labels).toContain("test_tampering");
 
-    revokeTrace(db, deps, sellerId, r.traceId);
+    await revokeTrace(db, deps, sellerId, r.traceId);
     rows = listSellerTraces(db, sellerId, deps.config);
     expect(rows[0]).toMatchObject({ status: "delisted" });
     expect(rows[0]!.revokedAt).toEqual(NOW);
 
-    expect(() => revokeTrace(db, deps, "someone-else", r.traceId)).toThrow(/not found/);
+    await expect(revokeTrace(db, deps, "someone-else", r.traceId)).rejects.toThrow(/not found/);
     await expect(
       shareTrace(db, deps, { sellerId, trace: scrubTrace(raw).trace, tier: 0 }),
     ).resolves.toBeDefined();

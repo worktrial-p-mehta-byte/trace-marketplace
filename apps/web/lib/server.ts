@@ -5,8 +5,10 @@ import { findRepoRoot, loadServerConfig } from "@tm/config/server";
 import {
   createDbEventBus,
   createLocalBlobStore,
+  createSqliteSearchIndex,
   getUserBySession,
   type BlobStore,
+  type SearchIndex,
   type EventBus,
   type PublicUser,
 } from "@tm/core";
@@ -33,6 +35,10 @@ export function getBus(): EventBus {
 export function getBlobs(): BlobStore {
   if (!g.__tmBlobs) g.__tmBlobs = createLocalBlobStore(join(findRepoRoot(), "data", "blobs"));
   return g.__tmBlobs;
+}
+
+export function getSearch(): SearchIndex {
+  return createSqliteSearchIndex(getDb());
 }
 
 export async function getCurrentUser(): Promise<PublicUser | undefined> {

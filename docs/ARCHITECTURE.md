@@ -44,8 +44,8 @@ This file summarises what the code implements.
 | M1  | Canonical schema + Claude Code adapter                     | Done    |
 | M2  | Scrubber + labeler + trait extractor                       | Done    |
 | M3  | Pricing engine                                             | Done    |
-| M4  | Onboarding + sharing                                       | This PR |
-| M5  | Catalog + trace viewer                                     |         |
+| M4  | Onboarding + sharing                                       | Done    |
+| M5  | Catalog + trace viewer                                     | This PR |
 | M6  | Market simulator + seed data + failure lab                 |         |
 | M7  | Docs                                                       |         |
 | M8  | Rehearse + polish                                          |         |
@@ -151,3 +151,34 @@ Buyer accounts get a buyer organisation.
 **Withdrawing** sets `consents.revoked_at`, delists the listing, emits
 `consent.revoked` and `listing.delisted`, and reprices. The same session can
 be shared again later.
+
+## Catalog and viewer (M5)
+
+**Catalog (`/traces`)**: server-rendered, works without JavaScript. Free-text
+search, filters (what went wrong, outcome, language, framework, model, shared
+as, source), sorting (highest price, rarest, newest, lowest price, best
+match) and pagination. Facet counts for each filter ignore that filter's own
+selection, so buyers see what switching it would give.
+
+**Search** (`packages/core/src/search`): SQLite FTS5 table `listing_search`
+behind the `SearchIndex` port, ranked by bm25 (title weighted 3×). Each
+listing's document holds its title, stack, model, labels and tools, plus
+message text and commands for open-source listings only. Signals-only content
+is never indexed. A `search` event consumer indexes on `listing.created` and
+removes on `listing.delisted`; `rebuildSearchIndex` recreates it from the
+database and blobs.
+
+**Viewer (`/traces/[id]`)**: what went wrong (labels linked to the events
+that triggered them, which are highlighted in the timeline), key numbers,
+the session timeline, and a price card with a license switch (research,
+evaluation, training) and the "why this price" breakdown.
+
+**Content policy** (`canViewContent`): the owner always sees their trace;
+signed-in users see open-source traces in full; anonymous visitors and
+signals-only listings get structure only. `getListingDetail` strips content
+before returning, so pages can't leak it by accident.
+
+**Demand from browsing**: a signed-in buyer's search with filters records a
+`search` demand signal (weight 0.2) and a trace view records a `view`
+signal (0.05) for its language and failure type; prices reprice
+immediately. Weights are in `pricing.demand.signalWeights`.

@@ -59,6 +59,18 @@ where the limit lives and what would lift it.
 | Pricing runs inside the share and withdraw requests                                                                                                             | Requests slow down as the catalog grows                                   | Background worker (S3)                                                              |
 | Rarity uses the market as it is now; nothing is sold yet                                                                                                        | The seller's estimate can change after sharing                            | Expected behaviour; shown as "estimated"                                            |
 
+## Catalog and viewer — M5
+
+| Limitation                                                                                                                              | Impact                                                                                       | Lifted by                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Signed-in users can read open-source traces in full before buying; buying is a license to use them                                      | Fine for open-source work; a buyer could read without paying                                 | Previews limited to the first events, full content after purchase (S2) |
+| Checkout is not built; the buy button is disabled                                                                                       | No sales, so no seller earnings yet                                                          | Collections and checkout (S2)                                          |
+| Every buyer search and view with criteria counts as demand, with no per-buyer cap or dedup                                              | A buyer can push prices up by repeating searches (bounded by the demand cap and daily limit) | Count each buyer once per criteria per window                          |
+| Filters and facet counts are computed in memory over all active listings                                                                | Fine to a few thousand listings                                                              | SQL facets, or OpenSearch aggregations behind `SearchIndex`            |
+| Full-text search indexes titles, labels, stack, tools and, for open-source traces, the first 20,000 characters of messages and commands | Matches deep in long sessions are missed                                                     | Chunked indexing; semantic search                                      |
+| Search indexing runs inside the share and withdraw requests                                                                             | Slower requests as traces grow                                                               | Background worker (S3)                                                 |
+| Seller aliases are stable per seller                                                                                                    | Buyers can tell that two traces share a seller (by design), but not who it is                | —                                                                      |
+
 ## Platform
 
 | Limitation                                         | Impact                                     | Lifted by                                               |

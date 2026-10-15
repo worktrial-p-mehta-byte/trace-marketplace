@@ -66,9 +66,12 @@ export default async function MyTracesPage() {
               {rows.map((r) => (
                 <tr key={r.traceId} className={r.status === "delisted" ? "text-ink-3" : ""}>
                   <td className="max-w-xs px-4 py-3">
-                    <span className="block truncate font-semibold">
+                    <Link
+                      href={`/traces/${r.listingId}`}
+                      className="block truncate font-semibold hover:text-cobalt"
+                    >
                       {r.title ?? `Session from ${r.startedAt.toLocaleDateString()}`}
-                    </span>
+                    </Link>
                     <span className="text-xs text-ink-3">
                       {r.language ?? "Unknown language"}, {r.turns} turns
                       {r.labels.length

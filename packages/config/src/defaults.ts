@@ -39,6 +39,7 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       windowDays: 14,
       maxDailyChange: 0.2,
       changeWindowHours: 24,
+      signalWeights: { search: 0.2, view: 0.05, save: 0.5 },
     },
     freshness: { halfLifeDays: 90, floor: 0.4, deprecatedModelFactor: 0.7 },
     license: { research: 1.0, eval: 1.5, training: 2.0 },

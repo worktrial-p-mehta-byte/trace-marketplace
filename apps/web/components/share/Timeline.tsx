@@ -32,8 +32,15 @@ const WHO: Record<TraceEvent["type"], string> = {
   system: "System",
 };
 
-function Row({ e, plain }: { e: TraceEvent; plain: boolean }) {
-  const Text = ({ t }: { t: string }) => (plain ? <>{clip(t)}</> : <Redacted text={clip(t)} />);
+function Row({ e, plain, highlighted }: { e: TraceEvent; plain: boolean; highlighted: boolean }) {
+  const Text = ({ t }: { t: string }) =>
+    t === "[signals only]" ? (
+      <span className="text-ink-3">(text not shared)</span>
+    ) : plain ? (
+      <>{clip(t)}</>
+    ) : (
+      <Redacted text={clip(t)} />
+    );
   let tone = "border-transparent";
   let body: React.ReactNode = null;
   let who = WHO[e.type];
@@ -80,7 +87,12 @@ function Row({ e, plain }: { e: TraceEvent; plain: boolean }) {
       break;
   }
   return (
-    <li className={`grid grid-cols-[6.5rem_1fr] gap-3 border-l-2 py-2 pl-3 ${tone}`}>
+    <li
+      id={`e-${e.seq}`}
+      className={`grid scroll-mt-24 grid-cols-[6.5rem_1fr] gap-3 border-l-2 py-2 pl-3 ${tone} ${
+        highlighted ? "bg-highlight/25" : ""
+      }`}
+    >
       <span className="pt-0.5 font-sans text-xs font-semibold text-ink-3">{who}</span>
       <span className="font-mono text-[0.78rem] leading-relaxed break-words whitespace-pre-wrap">
         {body}
@@ -89,14 +101,26 @@ function Row({ e, plain }: { e: TraceEvent; plain: boolean }) {
   );
 }
 
-export function Timeline({ trace, plain = false }: { trace: Trace; plain?: boolean }) {
-  const [shown, setShown] = useState(PAGE);
+export function Timeline({
+  trace,
+  plain = false,
+  highlight,
+  initial = PAGE,
+}: {
+  trace: Trace;
+  plain?: boolean;
+  /** Event seqs to highlight (label evidence). */
+  highlight?: number[];
+  initial?: number;
+}) {
+  const [shown, setShown] = useState(initial);
+  const marked = new Set(highlight ?? []);
   const events = trace.events.slice(0, shown);
   return (
     <div>
       <ol className="divide-y divide-rule/60">
         {events.map((e) => (
-          <Row key={e.seq} e={e} plain={plain} />
+          <Row key={e.seq} e={e} plain={plain} highlighted={marked.has(e.seq)} />
         ))}
       </ol>
       {trace.events.length > shown && (

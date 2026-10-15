@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { detectAdapter } from "@tm/adapters";
 import { enrichTrace } from "@tm/enrich";
-import { scrubTrace, toSignalsOnly } from "@tm/scrub";
+import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
 import { redactionLabel } from "../Redacted";
 import { Timeline } from "./Timeline";
@@ -25,7 +25,9 @@ const COPY_COMMAND =
 
 function build(raw: Trace, fileName: string, customTerms: string[], prev?: Item): Item {
   const scrub = scrubTrace(raw, { customTerms });
-  const enrich = enrichTrace(scrub.trace, { redactionDensity: scrub.stats.density });
+  // Price on the same redaction measure the server uses (placeholders left in
+  // the scrubbed text), so the estimate the seller approves is the price they get.
+  const enrich = enrichTrace(scrub.trace, { redactionDensity: placeholderDensity(scrub.trace) });
   const noOutput = enrich.labels.some((l) => l.code === "no_model_output");
   return {
     key: prev?.key ?? `${fileName}:${raw.id}`,
@@ -43,9 +45,7 @@ function build(raw: Trace, fileName: string, customTerms: string[], prev?: Item)
       : undefined,
     // Keep a previous price only if what it priced has not changed.
     quote:
-      prev &&
-      prev.enrich.comboKey === enrich.comboKey &&
-      prev.enrich.traits.redactionDensity === enrich.traits.redactionDensity
+      prev && JSON.stringify(prev.enrich.traits) === JSON.stringify(enrich.traits)
         ? prev.quote
         : undefined,
     state: prev?.state ?? "ready",
@@ -61,6 +61,11 @@ function outgoing(item: Item): Trace {
     provenance: { ...item.scrub.trace.provenance, source: item.staged ? "staged" : "real" },
   };
   return item.tier === 1 ? toSignalsOnly(t) : t;
+}
+
+/** Everything a price estimate depends on, exactly. */
+function pricingStamp(item: Item): string {
+  return `${item.tier}:${JSON.stringify(item.enrich.traits)}`;
 }
 
 function failureLabels(item: Item) {
@@ -129,10 +134,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
   // Fetch price estimates (traits only, never content) when tiers or traits change.
   const estimateKey = items
     .filter((i) => i.eligible)
-    .map(
-      (i) =>
-        `${i.key}:${i.tier}:${i.enrich.comboKey}:${i.enrich.traits.redactionDensity.toFixed(3)}`,
-    )
+    .map((i) => `${i.key}=${pricingStamp(i)}`)
     .join("|");
   useEffect(() => {
     if (!estimateKey) return;
@@ -146,7 +148,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
           key: i.key,
           tier: i.tier,
           traits: i.enrich.traits,
-          stamp: `${i.tier}:${i.enrich.comboKey}:${i.enrich.traits.redactionDensity.toFixed(3)}`,
+          stamp: pricingStamp(i),
         }));
       let quotes: (Quote & { key: string })[];
       try {
@@ -170,8 +172,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
         cur.map((it) => {
           const q = byKey.get(it.key);
           // Belt and braces: apply only if the item still has the tier and traits we priced.
-          const now = `${it.tier}:${it.enrich.comboKey}:${it.enrich.traits.redactionDensity.toFixed(3)}`;
-          return q && stampOf.get(it.key) === now ? { ...it, quote: q } : it;
+          return q && stampOf.get(it.key) === pricingStamp(it) ? { ...it, quote: q } : it;
         }),
       );
     }, 250);
@@ -192,28 +193,43 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
 
   async function shareSelected() {
     setSharing(true);
-    for (const it of toShare) {
-      if (it.tier === 0 && !it.rightToShare) continue;
-      update(it.key, { state: "sharing", message: undefined });
-      const body =
-        it.tier === 1
-          ? {
-              trace: outgoing(it),
-              tier: 1,
-              clientTraits: it.enrich.traits,
-              clientLabels: it.enrich.labels,
-            }
-          : { trace: outgoing(it), tier: 0 };
-      const res = await fetch("/api/traces", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.ok) update(it.key, { state: "shared", outcome: data as ShareOutcome });
-      else update(it.key, { state: "error", message: data.error });
+    try {
+      for (const it of toShare) {
+        if (it.tier === 0 && !it.rightToShare) continue;
+        update(it.key, { state: "sharing", message: undefined });
+        const body =
+          it.tier === 1
+            ? {
+                trace: outgoing(it),
+                tier: 1,
+                clientTraits: it.enrich.traits,
+                clientLabels: it.enrich.labels,
+              }
+            : { trace: outgoing(it), tier: 0 };
+        try {
+          const res = await fetch("/api/traces", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          if (res.ok) update(it.key, { state: "shared", outcome: data as unknown as ShareOutcome });
+          else
+            update(it.key, {
+              state: "error",
+              message: data.error ?? `The server answered ${res.status}. Try again.`,
+            });
+        } catch {
+          // Network drop: mark this one and carry on with the rest.
+          update(it.key, {
+            state: "error",
+            message: "Couldn't reach the server. Check your connection and share again.",
+          });
+        }
+      }
+    } finally {
+      setSharing(false);
     }
-    setSharing(false);
   }
 
   // ---------------------------------------------------------------- step 1: choose

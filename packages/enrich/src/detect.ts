@@ -137,18 +137,26 @@ export function commandsOf(trace: Trace): string[] {
 
 /** Most-used language, from file extensions in tool calls, then build commands. */
 export function detectLanguage(trace: Trace): string | undefined {
-  const counts = new Map<string, number>();
-  for (const p of filePathsOf(trace)) {
+  // Files the agent touched are the strongest signal; build commands only
+  // break ties or fill in when no files were touched. Repeats don't count
+  // twice, so re-running `gradle test` five times can't outvote .kt edits.
+  const fromFiles = new Map<string, number>();
+  for (const p of new Set(filePathsOf(trace))) {
     const ext = p.split(".").pop()?.toLowerCase();
     const lang = ext && ext !== p.toLowerCase() ? EXTENSIONS[ext] : undefined;
-    if (lang) counts.set(lang, (counts.get(lang) ?? 0) + 2); // edits weigh more
+    if (lang) fromFiles.set(lang, (fromFiles.get(lang) ?? 0) + 1);
   }
-  for (const c of commandsOf(trace)) {
+  const fromCommands = new Map<string, number>();
+  for (const c of new Set(commandsOf(trace))) {
     for (const [re, lang] of COMMAND_HINTS) {
-      if (re.test(c)) counts.set(lang, (counts.get(lang) ?? 0) + 1);
+      if (re.test(c)) fromCommands.set(lang, (fromCommands.get(lang) ?? 0) + 1);
     }
   }
-  return topKey(counts);
+  if (!fromFiles.size) return topKey(fromCommands);
+  for (const [lang, n] of fromCommands) {
+    if (fromFiles.has(lang)) fromFiles.set(lang, fromFiles.get(lang)! + n * 0.1); // tie-break only
+  }
+  return topKey(fromFiles);
 }
 
 /** Most-mentioned framework across tool inputs and outputs (needs 2+ mentions). */
