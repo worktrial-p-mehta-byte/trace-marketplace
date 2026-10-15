@@ -1,7 +1,5 @@
 # Pricing
 
-> The engine is built in milestone M3. This page records the model it implements.
-
 Each trace is priced from its traits with an explainable formula:
 
 ```
@@ -20,6 +18,42 @@ P = clamp( B_tier × min(cap, Q × R × F × X × D × T) × L , floor, ceiling 
 | L license       | Chosen at quote                                   | research 1.0, eval 1.5, training 2.0                                        |
 
 Defaults: multiplier cap 12×, floor $0.10, ceiling $50, seller share 70%.
+
+## Worked examples (from the tests)
+
+| Factor                  | Everyday TypeScript/React trace       | Rare Rust/Tokio near-miss                                                             |
+| ----------------------- | ------------------------------------- | ------------------------------------------------------------------------------------- |
+| Traits                  | 18 turns, one tool error, 30 days old | 64 turns, retry loop then recovery, 2 preference pairs, tests ran at end, 12 days old |
+| Market                  | combo seen 120× vs median 40×         | combo seen 6× vs median 40×, open bounty (pressure 0.4)                               |
+| Q · R · F               | 1.00 · 1.37 · 1.40                    | 1.10 · 1.83 · 2.00                                                                    |
+| X · D · T               | 0.58 · 1.00 · 0.79                    | 2.58 · 1.20 · 0.91                                                                    |
+| Multiplier              | 0.88                                  | 11.36 (under the 12× cap)                                                             |
+| Price, research license | **$1.76**                             | **$22.72**                                                                            |
+
+## How it is wired
+
+- `packages/pricing` (browser-safe): factor functions, `traitPolicyV1`,
+  demand matching and `splitSale`. Every quote carries `drivers`: one plain
+  reason per factor (e.g. "Rust + retry_loop: seen 6× (typical 40×)") and a
+  one-line summary, for the "why this price" view.
+- `packages/core/src/pricing`: builds the market from the database and
+  reprices listings.
+  - **Rarity** counts distinct content per combination
+    (`language|framework|failure|model`), so re-uploading the same trace
+    creates neither scarcity nor volume.
+  - **Demand**: each signal (search, save, bounty) in the last 14 days adds
+    `weight ÷ listings it matches`, so a bounty for a rare combination moves
+    those few prices a lot. Signals with no criteria are ignored.
+  - **Daily limit**: demand moves at most ±20% against the newest snapshot
+    that is at least 24 hours old.
+  - `repriceAll` writes a `price_snapshots` row and updates the listing when
+    a price changes, then emits `price.updated`. `quoteListing` prices under a
+    license without writing. `priceHistory` feeds the price chart.
+  - `runPricingConsumer` reprices once per batch of `trace.ingested`,
+    `listing.created`, `listing.delisted`, `consent.revoked`,
+    `demand.signaled` and `bounty.posted` events.
+
+Known limits are tracked in [LIMITATIONS.md](LIMITATIONS.md).
 All of these are configurable: see [config/README.md](../config/README.md) and
 `packages/config/src/defaults.ts`. The weights are starting guesses, not market
 data; a learned model replaces them once there are real sales.

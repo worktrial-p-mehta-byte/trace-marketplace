@@ -72,3 +72,4 @@ docs/          architecture, services, pricing, demo script
 - [Third-party services](docs/SERVICES.md): what v0 uses and what replaces what later
 - [Pricing](docs/PRICING.md): the trait-based pricing model
 - [Demo script](docs/DEMO.md)
+- [Known v0 limitations](docs/LIMITATIONS.md)

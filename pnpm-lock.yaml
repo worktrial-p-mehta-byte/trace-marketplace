@@ -119,6 +119,12 @@ importers:
       '@tm/db':
         specifier: workspace:*
         version: link:../db
+      '@tm/enrich':
+        specifier: workspace:*
+        version: link:../enrich
+      '@tm/pricing':
+        specifier: workspace:*
+        version: link:../pricing
       '@tm/schema':
         specifier: workspace:*
         version: link:../schema
@@ -166,6 +172,9 @@ importers:
       '@tm/config':
         specifier: workspace:*
         version: link:../config
+      '@tm/enrich':
+        specifier: workspace:*
+        version: link:../enrich
       '@tm/schema':
         specifier: workspace:*
         version: link:../schema

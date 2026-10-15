@@ -42,8 +42,8 @@ This file summarises what the code implements.
 | --- | ---------------------------------------------------------- | ------- |
 | M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
 | M1  | Canonical schema + Claude Code adapter                     | Done    |
-| M2  | Scrubber + labeler + trait extractor                       | This PR |
-| M3  | Pricing engine                                             |         |
+| M2  | Scrubber + labeler + trait extractor                       | Done    |
+| M3  | Pricing engine                                             | This PR |
 | M4  | Onboarding + sharing                                       |         |
 | M5  | Catalog + trace viewer                                     |         |
 | M6  | Market simulator + seed data + failure lab                 |         |

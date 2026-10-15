@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tm/schema": "workspace:*",
-    "@tm/config": "workspace:*"
+    "@tm/config": "workspace:*",
+    "@tm/enrich": "workspace:*"
   }
 }
