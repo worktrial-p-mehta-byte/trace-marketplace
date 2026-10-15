@@ -68,6 +68,8 @@ export const ToolResultEvent = EventBase.extend({
   callId: z.string(),
   output: z.string(),
   isError: z.boolean().default(false),
+  /** True when the user rejected the tool call (also counted as an error). */
+  rejected: z.boolean().optional(),
 });
 
 export const SystemEvent = EventBase.extend({

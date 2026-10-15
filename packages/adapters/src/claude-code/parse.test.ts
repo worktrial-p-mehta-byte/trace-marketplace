@@ -61,6 +61,7 @@ describe("Claude Code adapter: synthetic session fixture", () => {
   it("flags tool errors, rejected tool calls and interrupts", () => {
     const results = trace.events.filter((e) => e.type === "tool_result");
     expect(results.map((r) => r.isError)).toEqual([true, true, false, false]);
+    expect(results.map((r) => r.rejected ?? false)).toEqual([false, true, false, false]);
     const interrupt = trace.events[10];
     expect(interrupt).toMatchObject({ type: "user_message", interrupted: true });
   });

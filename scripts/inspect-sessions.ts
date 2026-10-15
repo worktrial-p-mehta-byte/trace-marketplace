@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { detectAdapter, parseClaudeCodeSession } from "@tm/adapters";
+import { enrichTrace } from "@tm/enrich";
+import { scrubTrace } from "@tm/scrub";
 
 /**
  * Parse real session files locally and print structure only (counts, event
@@ -60,6 +62,17 @@ for (const file of files) {
     console.log(`    events ${JSON.stringify(byType)}`);
     console.log(`    tools  ${JSON.stringify(tools)}`);
     if (t.metrics) console.log(`    tokens ${JSON.stringify(t.metrics)}`);
+    const scrubbed = scrubTrace(t);
+    const { labels, traits, comboKey } = enrichTrace(scrubbed.trace, {
+      redactionDensity: scrubbed.stats.density,
+    });
+    console.log(
+      `    scrub  ${scrubbed.stats.redactions} redactions ${JSON.stringify(scrubbed.stats.byKind)}, density ${(scrubbed.stats.density * 100).toFixed(2)}%`,
+    );
+    console.log(`    labels ${labels.map((l) => l.code).join(", ") || "(none)"}`);
+    console.log(
+      `    traits turns ${traits.turns}, prefPairs ${traits.preferencePairs}, recovered ${traits.recovered}, testsAtEnd ${traits.testsRanAtEnd}, combo ${comboKey}`,
+    );
     console.log(
       `    tool errors ${errors}, interrupts ${interrupts}, has title ${Boolean(t.title)}`,
     );

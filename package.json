@@ -45,6 +45,8 @@
   },
   "dependencies": {
     "@tm/adapters": "workspace:*",
-    "@tm/config": "workspace:*"
+    "@tm/config": "workspace:*",
+    "@tm/enrich": "workspace:*",
+    "@tm/scrub": "workspace:*"
   }
 }

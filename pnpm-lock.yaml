@@ -14,6 +14,12 @@ importers:
       '@tm/config':
         specifier: workspace:*
         version: link:packages/config
+      '@tm/enrich':
+        specifier: workspace:*
+        version: link:packages/enrich
+      '@tm/scrub':
+        specifier: workspace:*
+        version: link:packages/scrub
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.5
@@ -147,6 +153,13 @@ importers:
       '@tm/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      '@tm/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@tm/scrub':
+        specifier: workspace:*
+        version: link:../scrub
 
   packages/pricing:
     dependencies:
