@@ -1,28 +1,19 @@
-import type { Trace } from "@tm/schema";
+import { claudeCodeAdapter } from "./claude-code";
+import type { TraceAdapter } from "./types";
 
-/**
- * Converts one harness's native session log into canonical traces.
- * Adding a harness (Codex, Cursor, Aider) means adding one adapter;
- * nothing downstream changes. The Claude Code adapter arrives in M1.
- */
-export interface TraceAdapter {
-  /** Stable name stored in provenance.harness.name, e.g. "claude-code". */
-  readonly name: string;
-  /** Cheap check: does this file look like this harness's format? */
-  detect(fileName: string, firstLine: string): boolean;
-  /** Parse a whole session file. Returns an empty list for unusable files. */
-  parse(fileName: string, contents: string): Trace[];
-}
+export type { TraceAdapter } from "./types";
+export { claudeCodeAdapter, parseClaudeCodeSession } from "./claude-code";
+export type { ParseReport, ParseWarning } from "./claude-code";
 
-const registry: TraceAdapter[] = [];
+/** Adapters known to this build, in detection order. */
+export const ADAPTERS: readonly TraceAdapter[] = [claudeCodeAdapter];
 
-export function registerAdapter(adapter: TraceAdapter): void {
-  if (registry.some((a) => a.name === adapter.name)) {
-    throw new Error(`Adapter "${adapter.name}" is already registered`);
-  }
-  registry.push(adapter);
-}
-
-export function listAdapters(): readonly TraceAdapter[] {
-  return registry;
+/** Pick the adapter for a file from its name and first non-empty line. */
+export function detectAdapter(
+  fileName: string,
+  contents: string,
+  adapters: readonly TraceAdapter[] = ADAPTERS,
+): TraceAdapter | undefined {
+  const firstLine = contents.split(/\r?\n/).find((l) => l.trim()) ?? "";
+  return adapters.find((a) => a.detect(fileName, firstLine));
 }

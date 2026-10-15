@@ -35,6 +35,7 @@ export default tseslint.config(
       "packages/enrich/src/**",
       "packages/pricing/src/**",
     ],
+    ignores: ["**/*.test.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

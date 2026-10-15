@@ -40,8 +40,8 @@ This file summarises what the code implements.
 
 | #   | Milestone                                                  | Status  |
 | --- | ---------------------------------------------------------- | ------- |
-| M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | This PR |
-| M1  | Canonical schema + Claude Code adapter                     |         |
+| M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
+| M1  | Canonical schema + Claude Code adapter                     | This PR |
 | M2  | Scrubber + labeler + trait extractor                       |         |
 | M3  | Pricing engine                                             |         |
 | M4  | Onboarding + sharing                                       |         |
@@ -49,3 +49,22 @@ This file summarises what the code implements.
 | M6  | Market simulator + seed data + failure lab                 |         |
 | M7  | Docs                                                       |         |
 | M8  | Rehearse + polish                                          |         |
+
+## Session log adapters
+
+`packages/adapters` turns a harness's native log into the canonical trace.
+The Claude Code adapter reads `~/.claude/projects/<project>/<session>.jsonl`:
+
+- One trace per session id in the file; the trace id is a hash of the session
+  id, so the raw id and the working directory never leave the parser.
+- User text, assistant text, tool calls and tool results become events, in
+  order. Tool results carry `isError`, which is also set when the user rejects
+  a tool call. Interrupts are flagged on the user message.
+- Slash commands and compaction become `system` events. Meta lines, sub-agent
+  (sidechain) turns, thinking blocks and unknown line types are skipped and
+  counted; malformed lines become warnings. Parsing never throws.
+- Tool output over 20,000 characters is truncated.
+
+The format is not a stable public contract, so the parser reads fields
+defensively. `pnpm inspect:sessions <folder>` parses real files locally and
+prints structure only (counts, tools, errors), never message content.
