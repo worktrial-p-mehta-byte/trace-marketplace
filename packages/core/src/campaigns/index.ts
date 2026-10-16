@@ -16,6 +16,7 @@ import { resolveQuery } from "../catalog/browse";
 import { EventTypes, type EventBus } from "../events";
 import { Accounts, balanceOf, postTransaction } from "../ledger";
 import { buildMarket, recordDemandSignal, runPricingConsumer } from "../pricing";
+import { notify } from "../notifications";
 import { notifyCampaignFollowers } from "../trends";
 
 /**
@@ -188,6 +189,8 @@ export function clearCampaign(
   deps: CampaignDeps,
   campaignId: string,
   only?: string[],
+  /** Auction: pay this instead of the list price (never less than list, never above the bid). */
+  clearing?: { priceCents: number; via: string },
 ): number {
   const now = deps.now ?? new Date();
   const c = db.select().from(schema.campaigns).where(eq(schema.campaigns.id, campaignId)).get();
@@ -224,7 +227,13 @@ export function clearCampaign(
     .filter((a) => !members.has(a.sellerId))
     .filter((a) => !licensesHeld(db, c.buyerOrgId, a.listingId).includes(c.license))
     .filter((a) => offered(a.listingId))
-    .map((a) => ({ a, price: market.quote(a, c.license).priceCents }))
+    .map((a) => {
+      const list = market.quote(a, c.license).priceCents;
+      return {
+        a,
+        price: clearing ? Math.min(c.maxPriceCents, Math.max(list, clearing.priceCents)) : list,
+      };
+    })
     .filter((x) => x.price <= c.maxPriceCents)
     .sort((x, y) => x.price - y.price);
   let filled = 0;
@@ -273,7 +282,7 @@ export function clearCampaign(
         rows,
         fundingAccount: Accounts.escrow(c.id),
         now,
-        via: `the campaign “${c.title}”`,
+        via: clearing ? `${clearing.via} (the campaign “${c.title}”)` : `the campaign “${c.title}”`,
       });
       tx.insert(schema.campaignFills)
         .values({
@@ -371,9 +380,118 @@ export function expireCampaigns(db: Db, deps: Pick<CampaignDeps, "now">): number
   return due.length;
 }
 
+/** What a campaign would pay for a listing at list price, or why it can't bid. */
+function bidFor(
+  db: Db,
+  market: ReturnType<typeof buildMarket>,
+  c: CampaignRow,
+  listingId: string,
+): number | undefined {
+  if (c.status !== "open" || c.filled >= c.quantity) return undefined;
+  const a = market.active.find((x) => x.listingId === listingId);
+  if (!a || !matchesCriteria(a.traits, c.criteria as DemandCriteria)) return undefined;
+  if (orgMemberIds(db, c.buyerOrgId).has(a.sellerId)) return undefined;
+  if (licensesHeld(db, c.buyerOrgId, listingId).includes(c.license)) return undefined;
+  // Only under a licence the seller offers.
+  const allowed = db
+    .select({ allowed: schema.listings.allowedLicenses })
+    .from(schema.listings)
+    .where(eq(schema.listings.id, listingId))
+    .get()?.allowed;
+  if (!allowed?.includes(c.license)) return undefined;
+  const list = market.quote(a, c.license).priceCents;
+  if (list > c.maxPriceCents || list > balanceOf(db, Accounts.escrow(c.id))) return undefined;
+  return list;
+}
+
+export interface AuctionResult {
+  listingId: string;
+  /** Bids, highest first: each campaign's maximum price. */
+  bids: { campaignId: string; maxPriceCents: number }[];
+  winner: string;
+  /** What the winner paid: the second-highest bid, or the list price if higher. */
+  priceCents: number;
+  listPriceCents: number;
+}
+
 /**
- * Event consumer: new listings are offered to open campaigns, the highest
- * bid first. Called after a share and after the simulator adds supply.
+ * A new listing goes to auction among the open campaigns that want it
+ * (different teams; one bid each, their maximum price). The highest bid
+ * wins and pays the second-highest bid, or the list price if that is
+ * higher (the reserve), never more than its own bid: a second-price auction,
+ * so bidding your true value is the best strategy. With one bidder it
+ * clears at the list price. Losing teams are told the price they lost at.
+ */
+export function auctionListing(
+  db: Db,
+  deps: CampaignDeps,
+  listingId: string,
+): AuctionResult | undefined {
+  const now = deps.now ?? new Date();
+  // Each new listing is auctioned once. A listing with a fill already went
+  // to auction (a new listing only gets fills here), so a retried event, e.g.
+  // after a later listing in the same batch failed, never sells it again.
+  if (campaignFillsFor(db, listingId) > 0) return undefined;
+  const market = buildMarket(db, { config: deps.config, now });
+  const open = db
+    .select()
+    .from(schema.campaigns)
+    .where(eq(schema.campaigns.status, "open"))
+    .orderBy(desc(schema.campaigns.maxPriceCents), asc(schema.campaigns.createdAt))
+    .all()
+    .filter((c) => c.expiresAt.getTime() > now.getTime());
+  const eligible: { c: CampaignRow; list: number }[] = [];
+  for (const c of open) {
+    // One bid per team: its highest campaign.
+    if (eligible.some((e) => e.c.buyerOrgId === c.buyerOrgId)) continue;
+    const list = bidFor(db, market, c, listingId);
+    if (list !== undefined) eligible.push({ c, list });
+  }
+  if (!eligible.length) return undefined;
+  const [win, second] = eligible;
+  const price = Math.min(
+    win!.c.maxPriceCents,
+    Math.max(win!.list, second?.c.maxPriceCents ?? 0),
+    balanceOf(db, Accounts.escrow(win!.c.id)),
+  );
+  const via = eligible.length > 1 ? `an auction among ${eligible.length} campaigns` : "a campaign";
+  const filled = clearCampaign(db, deps, win!.c.id, [listingId], {
+    priceCents: price,
+    via,
+  });
+  if (!filled) return undefined;
+  for (const lost of eligible.slice(1)) {
+    // Equal bids go to the earlier campaign: say so, rather than "bid more".
+    const tie = lost.c.maxPriceCents === win!.c.maxPriceCents;
+    for (const userId of orgMemberIds(db, lost.c.buyerOrgId)) {
+      notify(db, userId, {
+        kind: "outbid",
+        title: tie
+          ? `Lost a tie on a trace for “${lost.c.title}”`
+          : `Outbid on a trace for “${lost.c.title}”`,
+        body: tie
+          ? `Another campaign bid the same, $${(lost.c.maxPriceCents / 100).toFixed(2)}, and started earlier, so it won the tie and paid $${(price / 100).toFixed(2)}. Raise your maximum to win the next one.`
+          : `Another campaign bid more. It paid $${(price / 100).toFixed(2)}; your bid was $${(lost.c.maxPriceCents / 100).toFixed(2)}. Raise your maximum to win the next one.`,
+        href: `/traces/${listingId}`,
+        now,
+      });
+    }
+  }
+  const result: AuctionResult = {
+    listingId,
+    bids: eligible.map((e) => ({ campaignId: e.c.id, maxPriceCents: e.c.maxPriceCents })),
+    winner: win!.c.id,
+    priceCents: price,
+    listPriceCents: win!.list,
+  };
+  deps.bus.emit(EventTypes.BountyMatched, result);
+  return result;
+}
+
+/**
+ * Event consumer: each new listing is auctioned among the open campaigns
+ * that want it (see auctionListing). Called after a share and after the
+ * simulator adds supply.
  */
 export function runCampaignConsumer(db: Db, deps: CampaignDeps): number {
   expireCampaigns(db, deps);
@@ -388,15 +506,7 @@ export function runCampaignConsumer(db: Db, deps: CampaignDeps): number {
       .filter((e) => e.type === EventTypes.ListingCreated)
       .map((e) => (e.payload as { listingId?: string }).listingId)
       .filter((x): x is string => Boolean(x));
-    if (listingIds.length) {
-      const open = db
-        .select({ id: schema.campaigns.id })
-        .from(schema.campaigns)
-        .where(eq(schema.campaigns.status, "open"))
-        .orderBy(desc(schema.campaigns.maxPriceCents), asc(schema.campaigns.createdAt))
-        .all();
-      for (const c of open) filled += clearCampaign(db, deps, c.id, listingIds);
-    }
+    for (const id of listingIds) if (auctionListing(db, deps, id)) filled++;
     deps.bus.ack("campaigns", batch.at(-1)!.seq);
     if (batch.length < BATCH) break;
   }

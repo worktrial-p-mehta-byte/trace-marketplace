@@ -105,7 +105,10 @@ describe("marketTrends", () => {
     });
     const legal = marketTrends(db, deps).domains.find((d) => d.domain === "legal")!;
     expect(legal.openCampaigns + legal.sales).toBeGreaterThan(0);
-    if (legal.openCampaigns) expect(legal.bestBidCents).toBe(4200);
+    if (legal.openCampaigns) {
+      expect(legal.bestBidCents).toBe(4200);
+      expect(legal.bids).toEqual([4200]);
+    }
     // Nothing legal listed at all and a campaign waiting: wanted, none listed.
     const productivity = marketTrends(db, deps).domains.find((d) => d.domain === "productivity")!;
     if (!productivity.supply) expect(productivity.status).toBe("quiet");

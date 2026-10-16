@@ -321,20 +321,23 @@ duration. The budget (max price × quantity) moves into `escrow:<id>`
 
 - **at once**, against active listings that match (cheapest first), and
 - **on every new listing** (`runCampaignConsumer`, on `listing.created`,
-  run after each share and after the simulator adds supply), open
-  campaigns offered the listing highest bid first.
+  run after each share and after the simulator adds supply), by a
+  **second-price auction** (`auctionListing`): each team's highest eligible
+  campaign bids its maximum price; the highest bid wins and pays the
+  second-highest bid, or the list price if that is higher, never more than
+  its own bid. With one bidder it clears at the list price. Losing teams are
+  notified of the price they lost at. The trends board shows the bid
+  landscape (every open campaign's maximum, per domain and segment).
 
-A match is bought when its price under the campaign's licence is at or
-under the max price, the team doesn't hold that licence yet, and quantity
-and escrow remain. With one bidder the auction clears at the reserve: the
-buyer pays the list price, not the bid. Each fill is an ordinary order
+A campaign can bid when the listing's price under its licence is at or
+under its max price, the team doesn't hold that licence yet, it isn't the
+team's own members' work, and quantity and escrow remain. Each fill is an ordinary order
 (a one-line quote on the campaign's collection, order, line, licence,
 entitlement, balanced sale posting funded from escrow), is purchase demand,
 and notifies the seller. The campaign's collection is the dataset it is
 assembling. When filled, ended by the buyer, or expired, the rest of the
 escrow returns to the buyer. Creating a campaign is `campaign` demand
-(weighted like a bounty by its budget). Multi-bidder clearing, exclusivity
-and bid landscapes come after the demo.
+(weighted like a bounty by its budget). Exclusive licences come later.
 
 ## Seller trends and notifications
 
