@@ -201,7 +201,7 @@ export const demandSignals = sqliteTable(
   "demand_signals",
   {
     id: id(),
-    kind: text("kind", { enum: ["search", "view", "save", "bounty"] }).notNull(),
+    kind: text("kind", { enum: ["search", "view", "save", "bounty", "purchase"] }).notNull(),
     buyerOrgId: text("buyer_org_id").references(() => buyerOrgs.id),
     /** Matching criteria, e.g. { language, framework, failure }. */
     criteria: text("criteria", { mode: "json" }).notNull(),

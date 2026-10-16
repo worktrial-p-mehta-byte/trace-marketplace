@@ -428,7 +428,7 @@ export function recordDemandSignal(
   db: Db,
   bus: EventBus,
   s: {
-    kind: "search" | "view" | "save" | "bounty";
+    kind: "search" | "view" | "save" | "bounty" | "purchase";
     criteria: DemandCriteria;
     weight?: number;
     buyerOrgId?: string;

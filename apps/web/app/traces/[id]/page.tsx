@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
+import { getListingDetail, licensesHeld, listingTitle, recordBuyerInterest } from "@tm/core";
 import { sellerShareFor } from "@tm/config";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
@@ -44,8 +44,15 @@ export async function generateMetadata({
   return { title: listingTitle(getDb(), id) ?? "Trace" };
 }
 
-export default async function TracePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TracePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const p = await searchParams;
   const user = await getCurrentUser();
   const config = getConfig();
   refreshPrices();
@@ -308,7 +315,34 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
               )}
             </section>
           )}
-          {d.quotes && <PriceCard quotes={d.quotes} />}
+          {p.added && (
+            <p
+              role="status"
+              className="rounded-md border border-moss/40 bg-moss/5 px-3 py-2 text-sm"
+            >
+              Added to your{" "}
+              <Link href="/cart" className="font-semibold text-cobalt">
+                cart
+              </Link>
+              .
+            </p>
+          )}
+          {p.error && (
+            <p
+              role="alert"
+              className="rounded-md border border-brick/40 bg-brick/5 px-3 py-2 text-sm text-brick"
+            >
+              {p.error}
+            </p>
+          )}
+          {d.quotes && (
+            <PriceCard
+              quotes={d.quotes}
+              listingId={d.listingId}
+              buyer={user?.buyerOrgId ? "buyer" : user ? "seller" : "none"}
+              held={user?.buyerOrgId ? licensesHeld(getDb(), user.buyerOrgId, d.listingId) : []}
+            />
+          )}
           {d.history.length > 0 && (
             <section
               className="rounded-lg border border-rule bg-surface p-5"

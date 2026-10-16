@@ -186,6 +186,33 @@ test.describe.serial("demo flow", () => {
     expect(await price()).toBe(start);
   });
 
+  test("the buyer buys a licence with demo credits and downloads the trace", async ({ page }) => {
+    await signIn(page, BUYER);
+    await page.goto(listingUrl);
+    const card = page.getByRole("region", { name: "Price" });
+    await card.getByRole("radio", { name: "Evaluation" }).click();
+    const price = dollars(await card.locator(".price").textContent());
+    await card.getByRole("button", { name: "Buy evaluation" }).click();
+    await expect(page).toHaveURL(/\/checkout\/quo_/);
+    await expect(page.getByText(/prices held for \d+ more minute/)).toBeVisible();
+    await page.getByRole("button", { name: /^Pay \$/ }).click();
+    await expect(page).toHaveURL(/\/orders\/ord_.*paid=1/);
+    await expect(page.getByRole("status")).toContainText("Paid");
+    const total = dollars(
+      await page.getByRole("table", { name: "Order lines" }).locator("tr").last().textContent(),
+    );
+    expect(total).toBeCloseTo(price, 2);
+    // The licence unlocks the download.
+    const res = await page.request.get(`/api/listings/${listingUrl.split("/").pop()}/download`);
+    expect(res.ok()).toBe(true);
+    const body = await res.json();
+    expect(body.license.scopes).toEqual(["eval"]);
+    expect(body.trace.events.length).toBeGreaterThan(0);
+    await page.goto(listingUrl);
+    await card.getByRole("radio", { name: "Evaluation" }).click();
+    await expect(card.getByText("You hold an evaluation licence")).toBeVisible();
+  });
+
   test("a buyer account is told it can't sell instead of being bounced", async ({ page }) => {
     await signIn(page, BUYER);
     await expect(page.getByRole("banner").getByRole("link", { name: /^Share/ })).toHaveCount(0);
@@ -196,6 +223,7 @@ test.describe.serial("demo flow", () => {
   test("the seller withdraws the trace and it leaves the catalog", async ({ page }) => {
     await signIn(page, SELLER);
     await page.goto("/me/traces");
+    await expect(page.getByLabel("Earnings")).toContainText("1 licence sold");
     await page.getByRole("button", { name: "Withdraw" }).click();
     await page.getByRole("button", { name: "Withdraw" }).click(); // confirm
     await expect(page.getByText("Withdrawn").first()).toBeVisible();
