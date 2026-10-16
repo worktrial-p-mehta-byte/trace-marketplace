@@ -455,7 +455,7 @@ export function explainTrace(
   const title: EventNote[] = [];
   const titleHit = domainHits.get(-1);
   if (titleHit?.terms.length) {
-    title.push({
+    const n: EventNote = {
       kind: "domain",
       title: `Points to ${domainName(domain)}`,
       detail: `The session's title has words ${titleHit.terms
@@ -463,7 +463,11 @@ export function explainTrace(
         .map((t: string) => `“${t}”`)
         .join(", ")}. Titles count as much as the person's own words (3×).`,
       feeds: [`label:domain:${domain}`, "factor:rarity", "factor:niche"],
-    });
+    };
+    title.push(n);
+    // Selectable like any line: the title is "line -1".
+    feed(n.feeds, -1);
+    for (const k of n.feeds) sources[k]?.sort((a, b) => a - b);
   }
   return { events, title, sources };
 }

@@ -145,6 +145,8 @@ describe("explainTrace", () => {
     expect(titles(x, 4)).not.toContain("First success after the last failure");
     expect(titles(x, 6)).toContain("First success after the last failure");
     expect(x.title.map((n) => n.title).join()).toMatch(/Points to/);
+    // The title is selectable like a line (seq -1) for the domain.
+    expect(x.sources["label:domain:software_engineering"]?.[0]).toBe(-1);
   });
 
   it("explains corrections, preference pairs and test tampering", () => {

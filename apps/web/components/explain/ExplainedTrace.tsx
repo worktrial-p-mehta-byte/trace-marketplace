@@ -62,12 +62,13 @@ function contentOf(e: TraceEvent): string {
   }
 }
 
-function Content({ e }: { e: TraceEvent }) {
+function Content({ e, signalsOnly }: { e: TraceEvent; signalsOnly: boolean }) {
   const [open, setOpen] = useState(false);
   const text = contentOf(e);
-  if (text === "[signals only]" || (e.type === "tool_result" && !text)) {
+  if (text === "[signals only]" || (signalsOnly && e.type === "tool_result" && !text)) {
     return <span className="text-ink-3">(text not shared: signals only)</span>;
   }
+  if (e.type === "tool_result" && !text) return <span className="text-ink-3">(no output)</span>;
   const long = text.length > CLIP;
   return (
     <>
@@ -145,10 +146,13 @@ export function ExplainedTrace({
   trace,
   explanation,
   groups,
+  signalsOnly = false,
 }: {
   trace: Trace;
   explanation: TraceExplanation;
   groups: DerivationGroup[];
+  /** The listing was shared as signals only: empty text means "not shared". */
+  signalsOnly?: boolean;
 }) {
   const [selected, setSelected] = useState<string | undefined>();
   const [onlyNoted, setOnlyNoted] = useState(trace.events.length > 120);
@@ -229,7 +233,12 @@ export function ExplainedTrace({
           )}
         </div>
         {explanation.title.length > 0 && trace.title && (
-          <div className="grid gap-3 border-b border-rule/60 py-3 md:grid-cols-[3rem_1fr] xl:grid-cols-[3rem_minmax(0,1fr)_22rem]">
+          <div
+            id="x--1"
+            className={`grid scroll-mt-28 gap-3 border-b border-rule/60 py-3 md:grid-cols-[3rem_1fr] xl:grid-cols-[3rem_minmax(0,1fr)_22rem] ${
+              lit.has(-1) ? "bg-highlight/20" : selected !== undefined ? "opacity-55" : ""
+            }`}
+          >
             <div className="text-xs font-semibold text-ink-3">Title</div>
             <p className="font-mono text-[0.78rem]">{trace.title}</p>
             <ul
@@ -263,7 +272,7 @@ export function ExplainedTrace({
                 </div>
                 <div className="min-w-0">
                   <p className="font-mono text-[0.78rem] leading-relaxed break-words whitespace-pre-wrap">
-                    <Content e={e} />
+                    <Content e={e} signalsOnly={signalsOnly} />
                   </p>
                 </div>
                 <div className="md:col-start-2 xl:col-start-auto">

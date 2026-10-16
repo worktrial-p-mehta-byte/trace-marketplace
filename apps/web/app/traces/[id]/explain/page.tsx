@@ -111,12 +111,18 @@ export default async function ExplainPage({ params }: { params: Promise<{ id: st
       })),
       ...outcomes.map((l) => ({
         key: `label:outcome:${l.code}`,
-        name: OUTCOMES[l.code]![0],
+        name:
+          (l.code === "tests_passed_at_end" || l.code === "tests_failed_at_end") && !t.testsRanAtEnd
+            ? `Last test run ${l.code === "tests_passed_at_end" ? "passed" : "failed"}`
+            : OUTCOMES[l.code]![0],
         tone:
           l.code === "unresolved" || l.code === "tests_failed_at_end"
             ? ("bad" as const)
             : ("good" as const),
-        detail: OUTCOMES[l.code]![1],
+        detail:
+          (l.code === "tests_passed_at_end" || l.code === "tests_failed_at_end") && !t.testsRanAtEnd
+            ? `The last test run ${l.code === "tests_passed_at_end" ? "passed" : "failed"}, but something failed after it, so it doesn't prove how the session ended.`
+            : OUTCOMES[l.code]![1],
       })),
       ...signals.map((l) => ({
         key: `label:signal:${l.code}`,
@@ -239,7 +245,12 @@ export default async function ExplainPage({ params }: { params: Promise<{ id: st
         </p>
       )}
       <div className="mt-8">
-        <ExplainedTrace trace={d.trace} explanation={x} groups={groups} />
+        <ExplainedTrace
+          trace={d.trace}
+          explanation={x}
+          groups={groups}
+          signalsOnly={d.tier === 1}
+        />
       </div>
     </main>
   );
