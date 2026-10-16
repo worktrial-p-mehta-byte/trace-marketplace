@@ -251,9 +251,21 @@ export default async function TracePage({
           </section>
 
           <section aria-labelledby="session">
-            <h2 id="session" className="text-lg font-semibold">
-              The session
-            </h2>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="session" className="text-lg font-semibold">
+                The session
+              </h2>
+              {d.trace && (
+                <Link
+                  href={`/traces/${d.listingId}/explain`}
+                  className="text-sm font-semibold text-cobalt"
+                >
+                  {d.isOwner
+                    ? "See how your session was read, line by line →"
+                    : "Explain each line →"}
+                </Link>
+              )}
+            </div>
             {!d.contentVisible && (
               <p className="mt-2 rounded-md border border-rule bg-surface p-3 text-sm text-ink-2">
                 {d.tier === 1 ? (

@@ -88,6 +88,14 @@ export default async function MyTracesPage() {
                         ? `, ${r.labels.map((l) => l.replace(/_/g, " ")).join(", ")}`
                         : ""}
                     </span>
+                    {r.listingId && (
+                      <Link
+                        href={`/traces/${r.listingId}/explain`}
+                        className="block text-xs font-semibold text-cobalt"
+                      >
+                        Why these labels and this price?
+                      </Link>
+                    )}
                   </td>
                   <td className="px-4 py-3">{r.tier === 0 ? "Open source" : "Signals only"}</td>
                   <td className="px-4 py-3 text-right font-semibold">{money(r.priceCents)}</td>

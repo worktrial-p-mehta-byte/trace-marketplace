@@ -62,6 +62,11 @@ export function isCorrection(text: string): boolean {
   return CORRECTION_START.test(text) || CORRECTION_ANYWHERE.test(text);
 }
 
+/** The words that made a message read as a correction ("no", "not what I asked"), if any. */
+export function correctionPhrase(text: string): string | undefined {
+  return (text.match(CORRECTION_START)?.[0] ?? text.match(CORRECTION_ANYWHERE)?.[0])?.trim();
+}
+
 export function isTestCommand(command: string): boolean {
   return TEST_COMMAND.test(command);
 }
@@ -86,7 +91,7 @@ export function testRunPassed(output: string, isError: boolean): boolean {
 }
 
 /** An edit to a test file that removes assertions (old text has them, new text doesn't). */
-function isTestTampering(e: TraceEvent): boolean {
+export function isTestTampering(e: TraceEvent): boolean {
   if (e.type !== "tool_call" || !e.input || typeof e.input !== "object") return false;
   const input = e.input as Record<string, unknown>;
   const path = input.file_path ?? input.path;

@@ -64,6 +64,11 @@ Prefer Docker? `docker compose up --build` runs the same thing (see
   reasons.
 - Share as **open source** (scrubbed content) or **signals only** (structure
   and labels, no content). Withdraw any trace later.
+- See **how each session was read**, line by line (`/traces/<id>/explain`):
+  every line has a note on what it counted toward (a correction, the third
+  failure of a retry loop, the words that pointed at the domain, what was
+  scrubbed, the final test run), and each label and price factor links to
+  the lines behind it.
 - See **what buyers want** by domain and segment, follow your domains, and
   get notified of new campaigns and every sale.
 
