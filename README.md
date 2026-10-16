@@ -1,19 +1,24 @@
 # Trace Marketplace
 
-People who use AI coding agents already have a valuable by-product: the
-session logs their agents write. Labs and data companies want those traces,
-especially the rare ones, where the agent got stuck in a loop, edited a test
-to make it pass, or was corrected by its user. This marketplace lets sellers
-share scrubbed traces and lets buyers search, compare and license them, with
-prices set by each trace's traits and by supply and demand.
+People who use AI agents already have a valuable by-product: the session
+logs their agents write, whether the work was code, SQL, research,
+clinical evaluation or customer support. Labs and data companies want those
+traces, especially the rare ones, where the agent got stuck in a loop, edited
+a test to make it pass, or was corrected by its user, and from every domain
+they train on. This marketplace lets sellers share scrubbed traces and lets
+buyers find, license and bid for them, with prices set by each trace's
+traits and by supply and demand.
 
-Raw traces never leave the seller's machine. They are parsed, scrubbed and
-reviewed in the browser, and only the approved, scrubbed version is uploaded.
+Raw traces never leave the seller's machine. They are parsed, scrubbed,
+labelled and reviewed in the browser, and only the approved, scrubbed
+version is uploaded.
 
 ![Market simulator: post a bounty and watch matching prices rise](docs/screenshots/market.png)
 
-> **Status: v0 demo** (milestones M0–M8). Everything runs locally with no
-> accounts or API keys. What v0 does not do yet is in
+> **Status: phase 2 demo.** v0 (M0–M8) plus domains, Pricing V2,
+> authenticity checks, intent search, local checkout, campaigns, the seller
+> trends board and buyer onboarding. Everything runs locally with no
+> accounts, API keys or network calls. What it does not do yet is in
 > [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 ## Quick start
@@ -38,32 +43,42 @@ Prefer Docker? `docker compose up --build` runs the same thing (see
 
 ## What you can do
 
-**As a seller** (`/share`)
+**As a seller** (`/share`, `/trends`, `/me/traces`)
 
-- Pick Claude Code session files (`~/.claude/projects/<project>/*.jsonl`).
+- Pick agent session files (Claude Code's `~/.claude/projects/<project>/*.jsonl`).
   The browser parses them, removes secrets, personal data, home paths and
   internal hosts, and shows a before-and-after with every redaction marked.
-- See what was detected (test tampering, retry loops, corrections, rejected
-  actions, interrupts, tool and API errors) and an estimated price with the
-  reasons behind it.
-- Share each session as **open source** (scrubbed content) or **signals
-  only** (structure and labels, no content). Each upload records your
-  consent; withdraw any trace later from **My traces**.
+- See what each session was about (14 domains, from software engineering to
+  medical evaluation and legal review), whether it passes the authenticity
+  checks, what went wrong in it, and an estimated price with its range and
+  reasons.
+- Share as **open source** (scrubbed content) or **signals only** (structure
+  and labels, no content). Withdraw any trace later.
+- See **what buyers want** by domain and segment, follow your domains, and
+  get notified of new campaigns and every sale.
 
-**As a buyer** (`/traces`)
+**As a buyer** (`/traces`, `/cart`, `/campaigns`)
 
-- Search and filter the catalog by what went wrong, outcome, language,
-  framework, model, sharing tier and source (real, staged or synthetic).
-- Open a trace: what went wrong, linked to the exact events; the timeline;
-  its price history; and the price under a research, evaluation or training
-  license, with "why this price".
+- Tell us what you need when you join and get traces picked for you.
+- Describe what you need in a sentence ("medical evaluations where the agent
+  was corrected and recovered"): it becomes filters you can edit, and every
+  result says why it matched. Save searches.
+- Open a trace: its domain, authenticity checks, what went wrong linked to
+  the exact events, its price history, and the price under a research,
+  evaluation or training licence, with "why this price".
+- Buy with demo credits (the only simulated step): cart, a price held for
+  15 minutes, a balanced ledger, licences, receipts and downloads.
+- Start a **campaign**: a standing bid with escrow that buys every matching
+  trace at its list price, now and as sellers share new ones.
 
 **In the market** (`/market`)
 
 - Post a bounty for a kind of trace and watch matching prices rise; add
   similar supply and watch them fall; reset. Prices come from
-  [a trait-based model](docs/PRICING.md): base × quality × richness ×
-  failure value × rarity × demand × freshness × license.
+  [Pricing V2](docs/PRICING.md): base × quality × richness × failure
+  evidence × domain-first rarity × domain niche × demand × near-duplicates ×
+  authenticity × freshness × licence, pulled towards any open bounty, with a
+  price band. `pnpm pricing:shadow` compares it with v1.
 
 **In the failure lab** ([`demo/failure-lab`](demo/failure-lab))
 
@@ -72,12 +87,17 @@ Prefer Docker? `docker compose up --build` runs the same thing (see
   purpose and share them as _staged_.
 
 <p>
-  <img src="docs/screenshots/review.png" width="32%" alt="Seller review: redactions, detected failures and the estimated price">
-  <img src="docs/screenshots/catalog.png" width="32%" alt="Buyer catalog filtered to test tampering">
-  <img src="docs/screenshots/trace.png" width="32%" alt="Trace viewer with what went wrong, the session and why this price">
+  <img src="docs/screenshots/review.png" width="32%" alt="Seller review: domain, authenticity, the estimated price with its range and reasons">
+  <img src="docs/screenshots/catalog.png" width="32%" alt="Buyer search read as filter chips, with why each result matched">
+  <img src="docs/screenshots/trace.png" width="32%" alt="Trace page: domain, authenticity checks, what went wrong and why this price">
+</p>
+<p>
+  <img src="docs/screenshots/trends.png" width="32%" alt="What buyers want: demand against supply by domain and segment">
+  <img src="docs/screenshots/campaigns.png" width="32%" alt="A buyer's campaign buying matching traces from escrow">
+  <img src="docs/screenshots/landing.png" width="32%" alt="Landing page with browse by domain">
 </p>
 
-A four-minute walkthrough is in [docs/DEMO.md](docs/DEMO.md).
+A six-minute walkthrough is in [docs/DEMO.md](docs/DEMO.md).
 
 ## How it works
 
@@ -162,10 +182,10 @@ hosted services that replace the local pieces in production.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md): decisions, components, data flow, milestones
-- [Pricing](docs/PRICING.md): the trait-based pricing model
+- [Pricing](docs/PRICING.md): Pricing V2 (default) and v1, the shadow report and the wind tunnel
 - [Third-party services](docs/SERVICES.md): what v0 uses, what replaces it later
 - [Deploying](docs/DEPLOYING.md): production mode, Docker, hosts, path to production
-- [Demo script](docs/DEMO.md): a four-minute walkthrough
+- [Demo script](docs/DEMO.md): a six-minute walkthrough
 - [Known v0 limitations](docs/LIMITATIONS.md)
 - [Configuration](config/README.md)
 - Design doc with decisions and alternatives:

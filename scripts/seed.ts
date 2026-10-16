@@ -1,14 +1,22 @@
 import { eq } from "drizzle-orm";
 import { loadServerConfig } from "@tm/config/server";
 import {
+  Accounts,
+  createCampaign,
   createDbEventBus,
   createLocalBlobStore,
   createSqliteSearchIndex,
   ensureAccount,
+  creditBalance,
+  ensureWelcomeCredits,
   EventTypes,
+  placeOrder,
+  postTransaction,
+  quoteCart,
   rebuildSearchIndex,
   recordDemandSignal,
   repriceAll,
+  setInterest,
   shareTrace,
 } from "@tm/core";
 import { openDb, schema } from "@tm/db";
@@ -148,8 +156,59 @@ async function main() {
     listed++;
   }
   repriceAll(db, { config, now, reason: "seed complete", bus });
+
+  // The buying side of the demo: the buyer team has its welcome credits and
+  // a few past purchases (so sellers have sales and the trends board has
+  // history), the demo seller follows two domains, and an open campaign is
+  // buying medical evaluations where the agent was corrected, so sharing
+  // demo session 10 sells it the moment it is listed.
+  const checkoutDeps = { config, bus, now };
+  ensureWelcomeCredits(db, config, buyer.buyerOrgId!);
+  // The seed's own buying is funded here, whatever the welcome credits are
+  // configured to (they can be 0): three purchases and a $150 campaign.
+  const SEED_SPEND = 25_000;
+  const short = SEED_SPEND - creditBalance(db, buyer.buyerOrgId!);
+  if (short > 0) {
+    postTransaction(db, {
+      kind: "credit_grant",
+      refType: "seed",
+      refId: buyer.buyerOrgId!,
+      lines: [
+        { account: Accounts.creditIssuer, amountCents: -short },
+        { account: Accounts.buyer(buyer.buyerOrgId!), amountCents: short },
+      ],
+    });
+  }
+  const pastBuys = db
+    .select({ id: schema.listings.id, tier: schema.listings.tier, traits: schema.traceTraits.data })
+    .from(schema.listings)
+    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.listings.traceId))
+    .all()
+    .filter((r) => r.tier === 0 && (r.traits as { domain?: string }).domain === "data_querying")
+    .slice(0, 3)
+    .map((r) => r.id);
+  if (pastBuys.length) {
+    placeOrder(
+      db,
+      checkoutDeps,
+      buyer,
+      quoteCart(db, checkoutDeps, buyer, "research", pastBuys).id,
+    );
+  }
+  setInterest(db, demoSeller.id, "medical", true);
+  setInterest(db, demoSeller.id, "data_querying", true);
+  const campaign = createCampaign(db, checkoutDeps, buyer, {
+    title: "Clinical evaluations with corrections",
+    describe: "medical evaluations where the agent was corrected",
+    license: "research",
+    maxPriceCents: 2500,
+    quantity: 6,
+    days: 14,
+  });
+
   bus.poll("pricing", () => {}, 1_000_000); // seed already priced everything
   bus.poll("search", () => {}, 1_000_000);
+  bus.poll("campaigns", () => {}, 1_000_000); // the campaign already cleared the seeded market
   const indexed = await rebuildSearchIndex(db, blobs, search);
   bus.emit(EventTypes.DemoSeeded, { traces: listed, seed });
 
@@ -165,6 +224,9 @@ async function main() {
   );
   console.log(
     `Prices: lowest ${money(prices[0] ?? 0)}, median ${money(prices[Math.floor(prices.length / 2)] ?? 0)}, highest ${money(prices.at(-1) ?? 0)}.`,
+  );
+  console.log(
+    `Open campaign "${campaign.campaign.title}": bought ${campaign.filled} of ${campaign.campaign.quantity} so far.`,
   );
   console.log(`Demo logins (password "${DEMO_PASSWORD}"): seller@example.com, buyer@example.com`);
 }
