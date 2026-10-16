@@ -30,7 +30,7 @@ The whole script also runs as an automated test (`pnpm build && pnpm e2e`,
 [`e2e/demo.spec.ts`](../e2e/demo.spec.ts)), in CI on every pull request, so
 the steps below stay true.
 
-To show the pricing engine in depth, use the ten seller sessions from
+To show the pricing engine in depth, use the twelve seller sessions from
 `pnpm demo:sessions`; [demo/seller-sessions](../demo/seller-sessions/README.md)
 has a five-minute pricing walkthrough.
 
@@ -45,7 +45,7 @@ has a five-minute pricing walkthrough.
 | 1:30 | **Share**             | Tick the consent box (and **I set this session up on purpose…** for a failure-lab session) → **Share 1 session**                                                                                     | "Only the scrubbed version is uploaded. The server scrubs it again rather than trusting the browser."                                                           |
 | 1:50 | **Browse as a buyer** | Private window → **Browse traces** → filter **What went wrong** → _Test tampering_; then search `retry`                                                                                              | "Buyers filter by failure, outcome, stack and model, and by whether a trace is real, staged or synthetic."                                                      |
 | 2:20 | **Open a trace**      | Click a result → click a failure label to jump to the event → **Why this price** → switch the license                                                                                                | "Each label links to the exact events. The price explains itself: rarity, failure value, richness, freshness, demand."                                          |
-| 2:50 | **Move the market**   | **Market simulator** → shortcut _Rust + user corrected it_ → **Post bounty** → **Add sessions** → **Reset simulator**                                                                                | "One trace of this kind exists. A bounty pushes its price up about 20%. Twenty-five more like it and it's no longer rare: down about half. Reset puts it back." |
+| 2:50 | **Move the market**   | **Market simulator** → shortcut _Rust + user rejected an action_ (or _Medical and clinical evaluation + user corrected it_) → **Post bounty** → **Add sessions** → **Reset simulator**               | "Two traces of this kind exist. A bounty pushes its price up about 20%. Twenty-five more like it and it's no longer rare: down about half. Reset puts it back." |
 | 3:30 | **Withdraw**          | Seller window → **My traces** → **Withdraw** on the shared session                                                                                                                                   | "Sellers can stop selling at any time. The listing leaves the catalog and the consent record keeps the date."                                                   |
 | 3:50 | **Close**             | Back to the landing page                                                                                                                                                                             | "One repo, runs locally with no cloud accounts; production swaps in Postgres, S3, a queue and Stripe behind the same interfaces."                               |
 

@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { schema, type Db } from "@tm/db";
 import { comboKeyOf, FAILURE_CODES, type TraceTraits } from "@tm/enrich";
-import type { DemandCriteria, PriceQuote } from "@tm/pricing";
+import { isEmptyCriteria, type DemandCriteria, type PriceQuote } from "@tm/pricing";
 import { toSignalsOnly } from "@tm/scrub";
 import type { LicenseScope, Trace } from "@tm/schema";
 import type { PublicUser } from "../auth";
@@ -18,6 +18,8 @@ export interface BrowseQuery {
   text?: string;
   /** Let free text match trace content; only for viewers allowed to read it (signed in). */
   includeContent?: boolean;
+  /** A domain id from @tm/enrich ("medical", "data_querying", ...). */
+  domain?: string;
   language?: string;
   framework?: string;
   failure?: string;
@@ -36,6 +38,10 @@ export interface CatalogItem {
   tier: number;
   source: "real" | "staged" | "synthetic";
   model: string;
+  /** What the session was about; "unknown" when the labeler could not tell. */
+  domain: string;
+  /** Share of evidence per domain, top three (a session can span domains). */
+  domains: { domain: string; share: number }[];
   language: string | null;
   framework: string | null;
   turns: number;
@@ -57,7 +63,7 @@ export interface BrowseResult {
   total: number;
   items: CatalogItem[];
   facets: Record<
-    "language" | "framework" | "failure" | "outcome" | "model" | "tier" | "source",
+    "domain" | "language" | "framework" | "failure" | "outcome" | "model" | "tier" | "source",
     FacetValue[]
   >;
 }
@@ -75,6 +81,8 @@ type Dim = keyof BrowseResult["facets"];
 
 function dimValues(i: CatalogItem, d: Dim): string[] {
   switch (d) {
+    case "domain":
+      return [i.domain];
     case "language":
       return i.language ? [i.language] : [];
     case "framework":
@@ -94,6 +102,7 @@ function dimValues(i: CatalogItem, d: Dim): string[] {
 
 function matches(i: CatalogItem, q: BrowseQuery, skip?: Dim): boolean {
   const want: [Dim, string | undefined][] = [
+    ["domain", q.domain],
     ["language", q.language],
     ["framework", q.framework],
     ["failure", q.failure],
@@ -149,6 +158,8 @@ function loadCatalog(db: Db, config: MarketplaceConfig): CatalogItem[] {
       tier: r.tier,
       source: r.source,
       model: r.model,
+      domain: traits.domain ?? "unknown",
+      domains: traits.domains ?? [],
       language: r.language,
       framework: r.framework,
       turns: r.turns,
@@ -197,6 +208,7 @@ export async function browseCatalog(
     items = items.filter((i) => rank!.has(i.listingId));
   }
   const facets = {
+    domain: facet(items, q, "domain"),
     language: facet(items, q, "language"),
     framework: facet(items, q, "framework"),
     failure: facet(items, q, "failure"),
@@ -223,6 +235,7 @@ export async function browseCatalog(
 /** Criteria a buyer's filters express, for demand signals. Empty when nothing specific was asked. */
 export function criteriaOf(q: BrowseQuery): DemandCriteria {
   const c: DemandCriteria = {};
+  if (q.domain) c.domain = q.domain;
   if (q.language) c.language = q.language;
   if (q.framework) c.framework = q.framework;
   if (q.failure) c.failure = q.failure;
@@ -242,8 +255,7 @@ export function recordBuyerInterest(
   criteria: DemandCriteria,
 ): boolean {
   if (!viewer?.buyerOrgId) return false;
-  if (!criteria.language && !criteria.framework && !criteria.failure && !criteria.model)
-    return false;
+  if (isEmptyCriteria(criteria)) return false;
   recordDemandSignal(db, deps.bus, {
     kind,
     criteria,

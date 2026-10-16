@@ -9,6 +9,8 @@ import { SignalsView } from "@/components/share/SignalsView";
 import { Timeline } from "@/components/share/Timeline";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import {
+  DOMAIN_DESCRIPTIONS,
+  DOMAIN_NAMES,
   FAILURE_DESCRIPTIONS,
   FAILURE_NAMES,
   money,
@@ -52,6 +54,7 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
   if (
     !d.isOwner &&
     recordBuyerInterest(getDb(), { config, bus: getBus() }, user, "view", {
+      domain: d.traits.domain && d.traits.domain !== "unknown" ? d.traits.domain : undefined,
       language: d.language ?? undefined,
       failure: d.traits.failureCategory,
     })
@@ -60,6 +63,8 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
   }
 
   const t = d.traits;
+  const domain = t.domain ?? "unknown";
+  const domainLabel = d.labels.find((l) => l.kind === "domain");
   const failures = d.labels.filter((l) => l.kind === "failure");
   const outcomes = d.labels.filter((l) => l.kind === "outcome").map((l) => l.code);
   const evidence = failures.flatMap((l) => l.evidence);
@@ -75,8 +80,11 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
         <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
           <p className="mt-2 text-ink-2">
-            {[d.language, d.framework].filter(Boolean).join(" / ") || "Unknown stack"}, {d.model},
-            shared as {TIER_NAMES[String(d.tier)]?.toLowerCase()} by{" "}
+            {DOMAIN_NAMES[domain] ?? "Unknown domain"}
+            {(d.language || d.framework) && (
+              <> · {[d.language, d.framework].filter(Boolean).join(" / ")}</>
+            )}
+            , {d.model}, shared as {TIER_NAMES[String(d.tier)]?.toLowerCase()} by{" "}
             {d.isOwner ? "you" : d.sellerAlias}
           </p>
         </div>
@@ -91,6 +99,48 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem]">
         <div className="min-w-0 space-y-8">
+          <section aria-labelledby="about">
+            <h2 id="about" className="text-lg font-semibold">
+              What it was about
+            </h2>
+            <p className="mt-2 text-ink-2">
+              <span className="rounded bg-cobalt/10 px-1.5 py-0.5 text-sm font-semibold text-cobalt">
+                {DOMAIN_NAMES[domain] ?? "Unknown domain"}
+              </span>{" "}
+              <span className="text-sm">{DOMAIN_DESCRIPTIONS[domain]}</span>
+            </p>
+            <p className="mt-2 text-sm text-ink-2">
+              {domain === "unknown"
+                ? "There was not enough to go on to tell what this session was about."
+                : `${Math.round((t.domainConfidence ?? 0) * 100)}% sure`}
+              {(t.domains ?? []).length > 1 && (
+                <>
+                  ; also{" "}
+                  {t.domains
+                    .slice(1)
+                    .map(
+                      (x) => `${DOMAIN_NAMES[x.domain] ?? x.domain} ${Math.round(x.share * 100)}%`,
+                    )
+                    .join(", ")}
+                </>
+              )}
+              {d.tier === 1
+                ? ". Reported by the seller's browser: the text it was read from was never uploaded."
+                : ". Verified from the content on upload."}
+              {domainLabel && domainLabel.evidence.length > 0 && d.trace && (
+                <span>
+                  {" "}
+                  Evidence:{" "}
+                  {domainLabel.evidence.slice(0, 3).map((seq, i) => (
+                    <a key={seq} href={`#e-${seq}`} className="text-cobalt hover:underline">
+                      {i ? ", " : ""}event {seq}
+                    </a>
+                  ))}
+                </span>
+              )}
+            </p>
+          </section>
+
           <section aria-labelledby="happened">
             <h2 id="happened" className="text-lg font-semibold">
               What happened

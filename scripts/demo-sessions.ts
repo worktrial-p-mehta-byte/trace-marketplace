@@ -9,7 +9,8 @@ import { placeholderDensity, scrubTrace } from "@tm/scrub";
 
 /**
  * Seller demo sessions: synthetic Claude Code session logs, each built to
- * show off one dimension of the pricing engine.
+ * show off one dimension of the pricing engine, plus two from outside
+ * software engineering (a clinical evaluation, a warehouse investigation).
  *
  *   pnpm demo:sessions        # writes demo/seller-sessions/*.jsonl and prices them
  *   pnpm demo:sessions --out data/e2e-sessions   # somewhere else (the e2e run)
@@ -47,6 +48,11 @@ const read = (file_path: string, out: string): Tool => ({
   name: "Read",
   input: { file_path },
   out,
+});
+const write = (file_path: string, content: string): Tool => ({
+  name: "Write",
+  input: { file_path, content },
+  out: `File created successfully at: ${file_path}`,
 });
 const edit = (
   file_path: string,
@@ -618,6 +624,189 @@ function everything() {
   return s;
 }
 
+/** 10 · Domain: a clinical evaluation session; no code, no tests, a rubric. */
+function medicalEvaluation() {
+  const s = new Session(sid(), {
+    title: "Grade the triage model on the chest pain cases",
+    model: "claude-opus-5-5",
+    cwd: "/Users/sam/evals/clinical-triage",
+    endsAgoMs: 3 * HOUR,
+  });
+  const grader = "./scripts/grade --rubric rubrics/chest_pain_v2.json grades/";
+  s.user(
+    "Grade the model's answers on the 12 chest pain cases against the clinical rubric in rubrics/chest_pain_v2.json. For each patient: was the differential diagnosis right, did it catch any contraindication, and is the treatment plan within the 2024 guideline? Write a score per case into grades/.",
+  );
+  s.say(
+    "I'll read the rubric and the first case.",
+    read(
+      "rubrics/chest_pain_v2.json",
+      '{"items": [{"id": "differential", "points": 3, "text": "Differential diagnosis includes ACS, PE and aortic dissection"}, {"id": "contraindication", "points": 2, "text": "Flags anticoagulant use before recommending antiplatelet therapy"}, {"id": "treatment", "points": 3, "text": "Treatment plan follows the 2024 chest pain guideline"}], "rationale_required": true}',
+    ),
+    read(
+      "cases/case_0412.json",
+      '{"patient": {"age": 67, "sex": "F"}, "vitals": {"blood pressure": "142/91", "heart rate": 104}, "symptoms": ["chest pain radiating to the jaw", "dyspnoea"], "medication": ["apixaban"], "model_answer": {"diagnosis": "acute coronary syndrome", "differential": ["ACS", "PE"], "treatment": "aspirin 300 mg, troponin at 0 and 3 h"}}',
+    ),
+  );
+  s.say(
+    "The model missed aortic dissection in the differential, and the patient is on apixaban: recommending aspirin without noting the anticoagulant is a contraindication miss. Writing the grade.",
+    write(
+      "grades/case_0412.json",
+      '{"differential": 2, "contraindication": 0, "treatment": 2, "total": 4, "notes": "missed dissection; no anticoagulant check"}',
+    ),
+  );
+  s.say(
+    "Running the grader over what's written so far.",
+    bash(
+      grader,
+      "error: grades/case_0412.json: missing field 'rationale' (rubric v2 requires one per item)",
+      true,
+    ),
+  );
+  s.say(
+    "The rubric wants a rationale per item. Adding one.",
+    edit(
+      "grades/case_0412.json",
+      '"notes": "missed dissection; no anticoagulant check"',
+      '"rationale": {"differential": "ACS and PE named, aortic dissection missed", "contraindication": "apixaban not considered before aspirin", "treatment": "troponin timing per guideline; antiplatelet dose high for an anticoagulated patient"}',
+    ),
+  );
+  s.user(
+    "No, don't score the treatment item 2 out of 3. The guideline says aspirin is contraindicated here, so the plan fails outright: treatment is 0.",
+  );
+  s.say(
+    "Understood: with apixaban on board aspirin is contraindicated, so the treatment item scores 0.",
+    edit("grades/case_0412.json", '"treatment": 2, "total": 4', '"treatment": 0, "total": 2'),
+  );
+  const cases: [string, string, string][] = [
+    [
+      "0413",
+      '{"patient": {"age": 54, "sex": "M"}, "vitals": {"blood pressure": "118/76", "heart rate": 88}, "symptoms": ["chest pain on exertion"], "medication": [], "model_answer": {"diagnosis": "stable angina", "differential": ["stable angina", "GERD", "musculoskeletal pain"], "treatment": "GTN spray, outpatient stress test"}}',
+      '{"differential": 3, "contraindication": 2, "treatment": 3, "total": 8, "rationale": {"differential": "complete and ordered by likelihood", "contraindication": "no interacting medication, checked", "treatment": "matches the guideline for stable angina"}}',
+    ],
+    [
+      "0414",
+      '{"patient": {"age": 31, "sex": "F"}, "vitals": {"blood pressure": "104/68", "heart rate": 118, "spo2": 91}, "symptoms": ["pleuritic chest pain", "dyspnoea"], "medication": ["combined oral contraceptive"], "model_answer": {"diagnosis": "pulmonary embolism", "differential": ["PE", "pneumothorax", "ACS"], "treatment": "CT pulmonary angiogram, start anticoagulation if confirmed"}}',
+      '{"differential": 3, "contraindication": 2, "treatment": 3, "total": 8, "rationale": {"differential": "PE first given tachycardia, hypoxia and oestrogen use", "contraindication": "no anticoagulant on board, bleeding risk asked about", "treatment": "imaging before anticoagulation per guideline"}}',
+    ],
+    [
+      "0415",
+      '{"patient": {"age": 72, "sex": "M"}, "vitals": {"blood pressure": "176/102", "heart rate": 96}, "symptoms": ["tearing chest pain radiating to the back"], "medication": ["warfarin"], "model_answer": {"diagnosis": "acute coronary syndrome", "differential": ["ACS"], "treatment": "aspirin 300 mg, heparin"}}',
+      '{"differential": 0, "contraindication": 0, "treatment": 0, "total": 0, "rationale": {"differential": "tearing pain to the back with hypertension is aortic dissection until excluded; not considered", "contraindication": "warfarin not considered before aspirin and heparin", "treatment": "antiplatelet and anticoagulant therapy in a possible dissection is dangerous; flag for clinician review"}}',
+    ],
+    [
+      "0416",
+      '{"patient": {"age": 45, "sex": "F"}, "vitals": {"blood pressure": "128/82", "heart rate": 74}, "symptoms": ["burning chest pain after meals"], "medication": ["omeprazole"], "model_answer": {"diagnosis": "GERD", "differential": ["GERD", "ACS", "oesophageal spasm"], "treatment": "ECG and troponin to exclude ACS, then PPI dose review"}}',
+      '{"differential": 3, "contraindication": 2, "treatment": 3, "total": 8, "rationale": {"differential": "ACS kept in the differential despite the typical history", "contraindication": "medication reviewed", "treatment": "excludes ACS before treating reflux, per guideline"}}',
+    ],
+  ];
+  for (const [id, body, grade] of cases) {
+    s.say(`Case ${id}.`, read(`cases/case_${id}.json`, body));
+    s.say("Scoring it against the rubric.", write(`grades/case_${id}.json`, grade));
+  }
+  s.say(
+    "Seven more cases follow the same pattern; grading them now.",
+    ...["0417", "0418", "0419", "0420", "0421", "0422", "0423"].flatMap((id) => [
+      read(
+        `cases/case_${id}.json`,
+        `{"patient": {"age": ${40 + Number(id.slice(-2))}, "sex": "M"}, "symptoms": ["chest pain"], "medication": [], "model_answer": {"diagnosis": "stable angina", "differential": ["stable angina", "ACS", "GERD"], "treatment": "per guideline"}}`,
+      ),
+      write(
+        `grades/case_${id}.json`,
+        '{"differential": 3, "contraindication": 2, "treatment": 2, "total": 7, "rationale": {"differential": "complete", "contraindication": "no medication to check", "treatment": "guideline followed, stress test timing not stated"}}',
+      ),
+    ]),
+  );
+  s.say(
+    "Running the grader again.",
+    bash(
+      grader,
+      "12 cases graded against chest_pain_v2: mean 6.1/8, median 7/8\n3 cases flagged for clinician review (contraindication item = 0): 0412, 0415, 0419",
+    ),
+  );
+  s.say(
+    "Done: all 12 chest pain cases are graded against rubric v2 with a rationale per item. Three cases where the model missed a contraindication (an anticoagulated patient given antiplatelet therapy) are flagged for the clinician's chart review.",
+  );
+  return s;
+}
+
+/** 11 · Domain: a SQL investigation in a warehouse; dbt, no application code. */
+function dataQuerying() {
+  const s = new Session(sid(), {
+    title: "Weekly revenue dashboard is 12% low",
+    model: "claude-sonnet-4-5",
+    cwd: "/Users/sam/analytics/warehouse",
+    endsAgoMs: 6 * HOUR,
+  });
+  const model = "models/marts/revenue_weekly.sql";
+  s.user(
+    "The weekly revenue dashboard is about 12% below finance's number since the 1st. The metric comes from the dbt model revenue_weekly. Find the bug in the SQL query and fix it, and check the row count against the orders table in the warehouse.",
+  );
+  s.say(
+    "I'll read the model first.",
+    read(
+      model,
+      "{{ config(materialized='table') }}\n\nselect\n  date_trunc('week', o.order_date) as week,\n  sum(o.amount) as revenue,\n  count(*) as orders\nfrom {{ ref('stg_orders') }} o\njoin {{ ref('stg_customers') }} c on c.customer_id = o.customer_id\nwhere o.status = 'paid'\ngroup by 1\norder by 1",
+    ),
+  );
+  s.say(
+    "The inner join to customers drops any paid order without a customer row, which is what guest checkouts look like. Checking how many there are since the 1st.",
+    bash(
+      "psql \"$WAREHOUSE_URL\" -c \"select count(*) as rows, sum(amount) as revenue from analytics.stg_orders o left join analytics.stg_customers c using (customer_id) where c.customer_id is null and o.status = 'paid' and o.order_date >= '2026-10-01'\"",
+      " rows | revenue  \n------+----------\n 3412 | 48213.50\n(1 row)",
+    ),
+  );
+  s.say(
+    "3,412 paid guest orders, $48k: that is the gap. The join should be a left join.",
+    edit(model, "join {{ ref('stg_customers') }} c", "left join {{ ref('stg_customers') }} c"),
+  );
+  s.say(
+    "Rebuilding the model.",
+    bash(
+      "dbt run --select revenue_weekly",
+      "Running with dbt=1.9.0\nDatabase Error in model revenue_weekly (models/marts/revenue_weekly.sql)\n  connection to server timed out\nDone. PASS=0 WARN=0 ERROR=1 SKIP=0 TOTAL=1",
+      true,
+    ),
+  );
+  s.say(
+    "A warehouse timeout, not the SQL. Running it again.",
+    bash(
+      "dbt run --select revenue_weekly",
+      "Running with dbt=1.9.0\n1 of 1 START sql table model analytics.revenue_weekly ... [RUN]\n1 of 1 OK created sql table model analytics.revenue_weekly ... [SELECT 41 in 12.3s]\nCompleted successfully",
+    ),
+  );
+  s.say(
+    "Checking the rebuilt metric against the orders table directly.",
+    bash(
+      'psql "$WAREHOUSE_URL" -c "select sum(revenue) as revenue, sum(orders) as orders from analytics.revenue_weekly where week >= \'2026-10-01\'"',
+      "  revenue   | orders \n-----------+--------\n 401778.25 |  28914\n(1 row)",
+    ),
+    bash(
+      "psql \"$WAREHOUSE_URL\" -c \"select sum(amount) as revenue, count(*) as orders from analytics.stg_orders where status = 'paid' and order_date >= '2026-10-01'\"",
+      "  revenue   | orders \n-----------+--------\n 401778.25 |  28914\n(1 row)",
+    ),
+  );
+  s.say(
+    "The row count and the total match the orders table exactly. Running the model's tests.",
+    bash(
+      "dbt test --select revenue_weekly",
+      "Running with dbt=1.9.0\n1 of 3 PASS not_null_revenue_weekly_week\n2 of 3 PASS unique_revenue_weekly_week\n3 of 3 PASS accepted_range_revenue_weekly_revenue\nCompleted successfully: 3 tests passed",
+    ),
+  );
+  s.user("Nice. Add a note to the model so nobody puts the inner join back.");
+  s.say(
+    "Adding it at the top of the model.",
+    edit(
+      model,
+      "{{ config(materialized='table') }}",
+      "{{ config(materialized='table') }}\n-- Guest checkouts have no customer row: keep this a left join or revenue drops.",
+    ),
+  );
+  s.say(
+    "Done: the dashboard matches finance's number ($401,778.25 since the 1st, 28,914 orders), the model says why the join is left, and the dbt tests pass.",
+  );
+  return s;
+}
+
 const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
   {
     file: "01-everyday-baseline.jsonl",
@@ -671,6 +860,16 @@ const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
     build: demandRust,
   },
   { file: "09-everything.jsonl", shows: "Everything at once", build: everything },
+  {
+    file: "10-domain-medical.jsonl",
+    shows: "Domain: a clinical evaluation, no code; labelled medical",
+    build: medicalEvaluation,
+  },
+  {
+    file: "11-domain-data.jsonl",
+    shows: "Domain: a warehouse SQL investigation; labelled data and querying",
+    build: dataQuerying,
+  },
 ];
 
 // ---------------------------------------------------------------- write and price
@@ -713,6 +912,7 @@ function main() {
     const f = open.factors;
     return {
       file: file.replace(".jsonl", ""),
+      domain: `${traits.domain} ${Math.round(traits.domainConfidence * 100)}%`,
       stack: [traits.language, traits.framework].filter(Boolean).join("/"),
       labels: labels
         .filter((l) => l.kind === "failure")

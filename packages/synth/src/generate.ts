@@ -1,5 +1,18 @@
 import { TRACE_SCHEMA_VERSION, type Trace, type TraceEvent } from "@tm/schema";
-import { MODELS, PATTERN_TITLES, PATTERNS, STACKS, type Pattern, type Stack } from "./stacks";
+import {
+  GENERIC_TITLES,
+  MODELS,
+  PACK_BY_DOMAIN,
+  PACKS,
+  PATTERNS,
+  STACKS,
+  packOf,
+  type CallShape,
+  type DomainPack,
+  type Pattern,
+  type Stack,
+  type SynthDomain,
+} from "./stacks";
 
 /** Small, fast, seedable PRNG (mulberry32), so generated catalogs are repeatable. */
 export function createRng(seed: number) {
@@ -37,18 +50,46 @@ export interface SynthSpec {
   turns: number;
 }
 
+/** The domain a spec's stack belongs to. */
+export function domainOf(spec: Pick<SynthSpec, "stack">): SynthDomain {
+  return packOf(spec.stack).domain;
+}
+
+/** A random pattern the pack allows (only coding packs can tamper with tests). */
+function randomPattern(rng: Rng, pack: DomainPack): Pattern {
+  const allowed = pack.tampering
+    ? PATTERNS
+    : PATTERNS.filter((p) => p.pattern !== "test_tampering");
+  return rng.weighted(allowed).pattern;
+}
+
 export function randomSpec(rng: Rng): SynthSpec {
-  const pattern = rng.weighted(PATTERNS).pattern;
+  const pack = rng.weighted(PACKS);
+  const stack = rng.weighted(pack.stacks);
+  const pattern = randomPattern(rng, pack);
   // Skewed towards recent sessions, with a long tail back four months.
   const ageDays = Math.floor(120 * rng.next() ** 2);
   return {
-    stack: rng.weighted(STACKS),
+    stack,
     pattern,
     recovered: pattern !== "clean" && rng.chance(0.5),
     model: rng.weighted(MODELS).id,
     ageDays,
     turns: Math.round(8 + 110 * rng.next() ** 2.5),
   };
+}
+
+type Vars = Record<string, string | number>;
+
+/** Replace `{name}` placeholders from `vars`; unknown ones (JSON, dbt refs) stay. */
+export function fill(template: string, vars: Vars): string {
+  return template.replace(/\{([a-z0-9]+)\}/gi, (m, k: string) => (k in vars ? String(vars[k]) : m));
+}
+
+function fillInput(input: CallShape["input"], vars: Vars): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(input).map(([k, v]) => [k, typeof v === "string" ? fill(v, vars) : v]),
+  );
 }
 
 /**
@@ -62,11 +103,36 @@ export function generateTrace(
   opts: { now: Date; index: number },
 ): Trace {
   const { stack, pattern } = spec;
+  const pack = packOf(stack);
+  if (pattern === "test_tampering" && !pack.tampering) {
+    throw new Error(`The ${pack.domain} pack has no tests to tamper with`);
+  }
   const noun = rng.pick(stack.nouns);
+  const titles = pack.titles?.[pattern] ?? GENERIC_TITLES[pattern];
   const title = rng
-    .pick(PATTERN_TITLES[pattern])
+    .pick(titles)
     .replace("{noun}", noun)
     .replace(/^./, (c) => c.toUpperCase());
+  const slug = noun.replace(/[^a-z]+/gi, "_").toLowerCase();
+  const dir = pack.domain === "software_engineering" ? "src" : pack.domain.replace(/_/g, "-");
+  const base: Vars = {
+    noun,
+    slug,
+    word: slug.split("_")[0]!,
+    dir,
+    ext: stack.ext,
+    file: `${dir}/${slug}.${stack.ext}`,
+    mention: stack.mentions[0]!,
+    mention2: stack.mentions[1] ?? stack.mentions[0]!,
+    testCmd: stack.testCmd ?? "",
+    language: stack.language ?? "",
+    title,
+    index: opts.index,
+    skim: "util",
+  };
+  // Each call gets its own random number, used wherever `{n}` appears in it.
+  const vars = (extra: Vars = {}): Vars => ({ ...base, n: rng.int(8, 60), step: 0, ...extra });
+
   const end = new Date(opts.now.getTime() - spec.ageDays * 86_400_000 - rng.int(0, 600) * 60_000);
   const events: TraceEvent[] = [];
   // Timestamps are filled in at the end, counting back from `end`, so a long
@@ -91,58 +157,53 @@ export function generateTrace(
       ...(rejected ? { rejected: true } : {}),
     });
   };
-  const file = `src/${noun.replace(/[^a-z]+/gi, "_").toLowerCase()}.${stack.ext}`;
-  const testFile = `tests/${noun.replace(/[^a-z]+/gi, "_").toLowerCase()}_test.${stack.ext}`;
-  const ok = stack.testCmd.includes("terraform")
-    ? "Plan: 2 to add, 0 to change"
-    : `Tests: ${rng.int(8, 60)} passed`;
+  /** A call from a pack shape, with an output override for failures. */
+  const shaped = (
+    shape: CallShape,
+    o: { output?: string; isError?: boolean; rejected?: boolean; vars?: Vars } = {},
+  ) => {
+    const v = vars(o.vars);
+    call(
+      shape.tool,
+      fillInput(shape.input, v),
+      fill(o.output ?? shape.output, v),
+      o.isError ?? false,
+      o.rejected ?? false,
+    );
+  };
+  const nonResults = () => events.filter((e) => e.type !== "tool_result").length;
 
   push({
     type: "user_message",
-    text: `Synthetic session #${opts.index}: ${title.toLowerCase()} in our ${stack.language} code.`,
+    text: `Synthetic session #${opts.index}: ${fill(rng.pick(pack.briefs), vars({ title: title.toLowerCase() }))}`,
   });
-  push({ type: "assistant_message", text: `I'll start by reading the ${noun}.` });
-  call("Read", { file_path: file }, `${stack.mentions[0]}\n// ${noun} implementation`);
-  call(
-    "Grep",
-    { pattern: noun.split(" ")[0], path: "src" },
-    `${stack.mentions[1] ?? stack.mentions[0]}\n${file}`,
-  );
+  push({ type: "assistant_message", text: `I'll start by looking at the ${noun}.` });
+  shaped(pack.read);
+  shaped(pack.search);
 
   switch (pattern) {
     case "tool_error":
-      call("Bash", { command: stack.testCmd }, "FAIL: 2 failed, error in setup", true);
+      shaped(pack.check, { output: pack.check.error, isError: true });
       break;
-    case "retry_loop":
-      for (let i = 0; i < rng.int(3, 6); i++)
-        call("Bash", { command: stack.testCmd }, "error: test failed again", true);
+    case "retry_loop": {
+      const n = rng.int(3, 6);
+      for (let i = 0; i < n; i++) shaped(pack.check, { output: pack.check.error, isError: true });
       break;
+    }
     case "user_correction":
-      call("Edit", { file_path: file, old_string: "old", new_string: "new" }, "updated");
-      push({
-        type: "user_message",
-        text: rng.pick([
-          "No, that's not what I asked for. Keep the existing behaviour.",
-          "That's wrong, don't change the public API.",
-          "Wait, revert that and only touch the parser.",
-        ]),
-      });
+      shaped(pack.act);
+      push({ type: "user_message", text: fill(rng.pick(pack.corrections), vars()) });
       break;
     case "tool_rejected":
-      call(
-        "Bash",
-        { command: "git push --force" },
-        "The user doesn't want to proceed with this tool use.",
-        true,
-        true,
-      );
+      shaped(pack.risky, { isError: true, rejected: true });
       break;
     case "user_interrupt":
-      call("Edit", { file_path: file, old_string: "a", new_string: "b" }, "updated");
+      shaped(pack.act);
       push({ type: "user_message", text: "[Request interrupted by user]", interrupted: true });
       break;
-    case "test_tampering":
-      call("Bash", { command: stack.testCmd }, "1 failed", true);
+    case "test_tampering": {
+      // Coding only: a failing test is deleted instead of the code being fixed.
+      shaped(pack.check, { output: "1 failed", isError: true });
       push({
         type: "assistant_message",
         text: "This test looks flaky; I'll remove the failing assertion.",
@@ -150,7 +211,7 @@ export function generateTrace(
       call(
         "Edit",
         {
-          file_path: testFile,
+          file_path: `tests/${slug}_test.${stack.ext}`,
           old_string: "expect(result).toBe(expected)\nassert ok",
           new_string: "",
         },
@@ -158,33 +219,29 @@ export function generateTrace(
       );
       push({ type: "user_message", text: "No, don't delete the test. Fix the code instead." });
       break;
+    }
     case "clean":
       break;
   }
 
-  // Filler work so session length varies; keeps the stack detectable.
-  while (events.filter((e) => e.type !== "tool_result").length < spec.turns) {
+  // Filler work so session length varies; keeps the stack and domain detectable.
+  while (nonResults() < spec.turns) {
     if (rng.chance(0.5))
       push({
         type: "assistant_message",
-        text: `Checking how the ${noun} handles step ${events.length}.`,
+        text: fill(rng.pick(pack.notes), vars({ step: events.length })),
       });
-    else
-      call(
-        "Read",
-        { file_path: `src/util_${rng.int(1, 9)}.${stack.ext}` },
-        `// helper ${events.length}`,
-      );
+    else shaped(pack.skims, { vars: { n: rng.int(1, 9) } });
   }
 
   const success = pattern === "clean" || spec.recovered;
-  call("Edit", { file_path: file, old_string: "x", new_string: "y" }, "updated");
-  call("Bash", { command: stack.testCmd }, success ? ok : "3 failed", !success);
+  shaped(pack.act);
+  shaped(pack.check, success ? {} : { output: pack.check.fail, isError: true });
   push({
     type: "assistant_message",
     text: success
-      ? `Done: the ${noun} change is in and the checks pass.`
-      : `I couldn't get the ${noun} working.`,
+      ? `Done: the ${noun} is finished and the check passes.`
+      : `I couldn't get the ${noun} to pass the check.`,
   });
 
   const STEP_MS = 45_000;
@@ -200,44 +257,86 @@ export function generateTrace(
     endedAt: events.at(-1)!.ts!,
     provenance: {
       source: "synthetic",
-      harness: { name: "claude-code", version: "synthetic" },
+      harness: { name: pack.harness, version: "synthetic" },
       model: { id: spec.model, provider: "anthropic" },
-      repo: { languages: [stack.language], frameworks: stack.framework ? [stack.framework] : [] },
+      repo: {
+        languages: stack.language ? [stack.language] : [],
+        frameworks: stack.framework ? [stack.framework] : [],
+      },
       capturedAt: events.at(-1)!.ts!,
     },
     events,
   };
 }
 
-/** A whole catalog of synthetic sessions, deterministic for a given seed. */
-export function generateCatalog(seed: number, count: number, now: Date): Trace[] {
-  const rng = createRng(seed);
-  return Array.from({ length: count }, (_, i) =>
-    generateTrace(rng, randomSpec(rng), { now, index: i }),
-  );
-}
-
-/** Sessions for one stack and failure pattern (the simulator's "flood" action). */
-export function generateFlood(
+/** A whole catalog of synthetic sessions with the specs they came from. */
+export function generateCatalogWithSpecs(
   seed: number,
   count: number,
   now: Date,
-  want: { language: string; framework?: string; pattern: Pattern },
-): Trace[] {
+): { trace: Trace; spec: SynthSpec }[] {
   const rng = createRng(seed);
-  const stack =
-    STACKS.find(
+  return Array.from({ length: count }, (_, i) => {
+    const spec = randomSpec(rng);
+    return { spec, trace: generateTrace(rng, spec, { now, index: i }) };
+  });
+}
+
+/** A whole catalog of synthetic sessions, deterministic for a given seed. */
+export function generateCatalog(seed: number, count: number, now: Date): Trace[] {
+  return generateCatalogWithSpecs(seed, count, now).map((x) => x.trace);
+}
+
+export interface FloodWant {
+  /** Restrict to one domain; with no language, every stack of the domain is used. */
+  domain?: string;
+  language?: string;
+  framework?: string;
+  pattern: Pattern;
+}
+
+/**
+ * The stacks a flood draws from, narrowest match first. Only stacks whose
+ * pack can produce the pattern are kept (test tampering needs code and
+ * tests), so a flood never adds sessions of a different kind than asked.
+ */
+export function floodStacks(want: Omit<FloodWant, "pattern"> & { pattern?: Pattern }): Stack[] {
+  let pool = STACKS;
+  if (want.domain) {
+    const pack = PACK_BY_DOMAIN[want.domain];
+    if (!pack) throw new Error(`Unknown domain for flood: ${want.domain}`);
+    pool = pack.stacks;
+  }
+  if (want.language) {
+    const exact = pool.filter(
       (s) => s.language === want.language && (!want.framework || s.framework === want.framework),
-    ) ?? STACKS.find((s) => s.language === want.language);
-  if (!stack) throw new Error(`Unknown language for flood: ${want.language}`);
-  return Array.from({ length: count }, (_, i) =>
-    generateTrace(
+    );
+    pool = exact.length ? exact : pool.filter((s) => s.language === want.language);
+  } else if (want.framework) {
+    pool = pool.filter((s) => s.framework === want.framework);
+  }
+  if (!pool.length) {
+    throw new Error(
+      `No stack for flood: ${[want.domain, want.language, want.framework].filter(Boolean).join(" ")}`,
+    );
+  }
+  if (want.pattern === "test_tampering") {
+    pool = pool.filter((s) => packOf(s).tampering);
+    if (!pool.length) throw new Error("Test tampering only happens in coding sessions.");
+  }
+  return pool;
+}
+
+/** Sessions for one domain or stack and failure pattern (the simulator's "flood" action). */
+export function generateFlood(seed: number, count: number, now: Date, want: FloodWant): Trace[] {
+  const rng = createRng(seed);
+  const pool = floodStacks(want);
+  return Array.from({ length: count }, (_, i) => {
+    const stack = rng.weighted(pool);
+    return generateTrace(
       rng,
       { ...randomSpec(rng), stack, pattern: want.pattern, ageDays: rng.int(0, 7) },
-      {
-        now,
-        index: seed * 1000 + i,
-      },
-    ),
-  );
+      { now, index: seed * 1000 + i },
+    );
+  });
 }

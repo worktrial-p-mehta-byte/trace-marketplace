@@ -1,5 +1,6 @@
 import type { Label, Trace } from "@tm/schema";
 import { detectFramework, detectLanguage } from "./detect";
+import { detectDomains, type DomainId, type DomainScore } from "./domains";
 import { analyzeTrace, type FailureCode } from "./labels";
 
 /**
@@ -24,6 +25,12 @@ export interface TraceTraits {
   redactionDensity: number;
   language?: string;
   framework?: string;
+  /** What the session was about (see domains.ts); "unknown" when unclear. */
+  domain: DomainId;
+  /** How sure the detector was of `domain`, 0..1. */
+  domainConfidence: number;
+  /** Share of evidence per domain, top three. A session can span domains. */
+  domains: DomainScore[];
   failureCategory?: FailureCode;
   model: string;
   modelDeprecated: boolean;
@@ -55,6 +62,7 @@ export function comboKeyOf(
 /** Label a scrubbed trace and extract its pricing traits in one pass. */
 export function enrichTrace(trace: Trace, opts: ExtractOptions = {}): Enrichment {
   const a = analyzeTrace(trace);
+  const domain = detectDomains(trace);
   const turns = trace.events.filter(
     (e) => e.type === "user_message" || e.type === "assistant_message" || e.type === "tool_call",
   ).length;
@@ -77,6 +85,9 @@ export function enrichTrace(trace: Trace, opts: ExtractOptions = {}): Enrichment
     redactionDensity: opts.redactionDensity ?? 0,
     language: trace.provenance.repo.languages[0] ?? detectLanguage(trace),
     framework: trace.provenance.repo.frameworks[0] ?? detectFramework(trace),
+    domain: domain.primary,
+    domainConfidence: domain.confidence,
+    domains: domain.distribution,
     failureCategory: a.primaryFailure,
     model,
     modelDeprecated: (opts.deprecatedModels ?? []).includes(model),
@@ -84,5 +95,15 @@ export function enrichTrace(trace: Trace, opts: ExtractOptions = {}): Enrichment
     durationMinutes: Math.max(0, (Date.parse(trace.endedAt) - Date.parse(trace.startedAt)) / 60000),
     outputTokens: trace.metrics?.outputTokens,
   };
-  return { labels: a.labels, traits, comboKey: comboKeyOf(traits) };
+  const labels: Label[] = [
+    ...a.labels,
+    {
+      kind: "domain",
+      code: domain.primary,
+      confidence: domain.confidence,
+      source: "heuristic",
+      evidence: domain.evidence,
+    },
+  ];
+  return { labels, traits, comboKey: comboKeyOf(traits) };
 }

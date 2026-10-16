@@ -81,17 +81,18 @@ warehouse) is in the design doc. What changes on the way there is in
 
 ## Milestones
 
-| #   | Milestone                                                  | Status  |
-| --- | ---------------------------------------------------------- | ------- |
-| M0  | Scaffold: monorepo, config, all tables, events, ledger, CI | Done    |
-| M1  | Canonical schema + Claude Code adapter                     | Done    |
-| M2  | Scrubber + labeler + trait extractor                       | Done    |
-| M3  | Pricing engine                                             | Done    |
-| M4  | Onboarding + sharing                                       | Done    |
-| M5  | Catalog + trace viewer                                     | Done    |
-| M6  | Market simulator + seed data + failure lab                 | Done    |
-| M7  | Docs, deployment (Docker)                                  | Done    |
-| M8  | Rehearse, polish, end-to-end test                          | This PR |
+| #    | Milestone                                                   | Status  |
+| ---- | ----------------------------------------------------------- | ------- |
+| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI  | Done    |
+| M1   | Canonical schema + Claude Code adapter                      | Done    |
+| M2   | Scrubber + labeler + trait extractor                        | Done    |
+| M3   | Pricing engine                                              | Done    |
+| M4   | Onboarding + sharing                                        | Done    |
+| M5   | Catalog + trace viewer                                      | Done    |
+| M6   | Market simulator + seed data + failure lab                  | Done    |
+| M7   | Docs, deployment (Docker)                                   | Done    |
+| M8   | Rehearse, polish, end-to-end test                           | Done    |
+| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs | This PR |
 
 ## Session log adapters
 
@@ -162,6 +163,45 @@ order) goes into the combo key `language|framework|failure|model` used for
 rarity. Language comes from edited file extensions, then build commands;
 framework needs two mentions. A preference pair is a correction or
 rejection that the agent then acts on.
+
+### Domains
+
+Every session also gets one `domain` label: what the agent was working on,
+independent of the harness that recorded it. The taxonomy is curated
+(`packages/enrich/src/domains.ts`): software engineering, data and
+querying, research, writing, design, medical and clinical evaluation,
+legal, finance, customer support, DevOps, science, education, web tasks,
+productivity, and `unknown`.
+
+Detection is rule-based and browser-safe. Each domain has a lexicon (with
+strong terms counted double), tool names and file extensions. Text is
+tokenised once; term hits are pooled across the whole trace with
+diminishing returns per term (so the session's subject repeated in every
+message can't carry a domain), and weighted by source: the user's
+messages 3×, agent text and tool input 1×, tool output 0.35×. Tools used
+and file types touched add structural evidence. Below 2.5 points of
+evidence the domain is `unknown`. Confidence combines the margin over the
+runner-up with the amount of evidence. The top three domains and their
+shares are kept as traits, so a session can be "70% data, 30% finance".
+
+Open-source uploads are labelled on the server (verified). For
+signals-only uploads the server cannot see the text, so the domain is the
+seller's browser's claim, bounded: a known id, confidence and shares
+clamped to 0..1, at most three domains; anything else becomes `unknown`.
+
+All label names come from one registry (`registry.ts`), which the web app
+and the search index read, so a new domain or label kind needs no catalog
+or search change. The search index stores label names as well as codes, so
+"clinical" finds a medical evaluation session.
+
+Domain is a catalog facet and filter, a demand criterion (searches,
+views and bounties on a domain raise only that domain's prices), a
+simulator flood target, and shown on the share review and trace pages.
+The synthetic generator has one pack per domain (task briefs, tools,
+checks, corrections, stacks) with a long-tail mix (coding 58%, data 12%,
+research 8%, support 6%, design 5%, medical 4%, …); a test checks the
+detector against the generator's ground truth (≥98% overall, ≥95% per
+domain on 1,500 sessions).
 
 ## Accounts, onboarding and sharing (M4)
 

@@ -15,6 +15,26 @@ export {
 } from "./labels";
 export { detectLanguage, detectFramework, filePathsOf, commandsOf } from "./detect";
 export {
+  DOMAINS,
+  DOMAIN_IDS,
+  DOMAIN_BY_ID,
+  detectDomains,
+  domainName,
+  type DomainDef,
+  type DomainId,
+  type DomainScore,
+  type DomainDetection,
+} from "./domains";
+export {
+  registerLabel,
+  labelDef,
+  labelName,
+  labelDescription,
+  labelsOfKind,
+  type LabelDef,
+  type LabelKindId,
+} from "./registry";
+export {
   enrichTrace,
   comboKeyOf,
   type Enrichment,

@@ -2,7 +2,14 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
-import { comboKeyOf, enrichTrace, type TraceTraits } from "@tm/enrich";
+import {
+  comboKeyOf,
+  DOMAIN_IDS,
+  enrichTrace,
+  type DomainId,
+  type DomainScore,
+  type TraceTraits,
+} from "@tm/enrich";
 import { median, splitSale, traitPolicyV1, type PriceQuote } from "@tm/pricing";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import { Trace, type Label, type Tier } from "@tm/schema";
@@ -112,8 +119,36 @@ export type ClientTraits = Partial<
     | "language"
     | "framework"
     | "redactionDensity"
+    | "domain"
+    | "domainConfidence"
+    | "domains"
   >
 >;
+
+const KNOWN_DOMAINS = new Set<string>(DOMAIN_IDS);
+const unit = (n: unknown) =>
+  typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+
+/**
+ * The domain a signals-only upload claims. The server can't see the text it
+ * was detected from, so it is kept as a claim: a known id, confidence and
+ * shares clamped to 0..1, at most three domains.
+ */
+function claimedDomain(
+  client: ClientTraits,
+): Pick<TraceTraits, "domain" | "domainConfidence" | "domains"> {
+  const domain: DomainId =
+    client.domain && KNOWN_DOMAINS.has(client.domain) ? client.domain : "unknown";
+  const domains: DomainScore[] = (Array.isArray(client.domains) ? client.domains : [])
+    .filter((d) => d && typeof d === "object" && KNOWN_DOMAINS.has(String(d.domain)))
+    .slice(0, 3)
+    .map((d) => ({ domain: d.domain, share: unit(d.share) }));
+  return {
+    domain,
+    domainConfidence: domain === "unknown" ? 0 : unit(client.domainConfidence),
+    domains,
+  };
+}
 
 /**
  * For signals-only uploads the server can't see text, so a few traits come
@@ -137,6 +172,7 @@ function mergeSignalsTraits(server: TraceTraits, client: ClientTraits): TraceTra
     language: client.language ?? server.language,
     framework: client.framework ?? server.framework,
     redactionDensity: Math.min(1, Math.max(0, client.redactionDensity ?? 0)),
+    ...claimedDomain(client),
   };
 }
 

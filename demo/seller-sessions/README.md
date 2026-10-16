@@ -1,7 +1,7 @@
 # Seller demo sessions
 
-Ten synthetic Claude Code sessions, each built to show off one dimension of
-the pricing engine when you share it from **Share sessions**. They are in
+Twelve synthetic Claude Code sessions, each built to show off one dimension of
+the pricing engine or the marketplace when you share it from **Share sessions**. They are in
 Claude Code's own `.jsonl` format, so they go through the real parser,
 scrubber and labeler, exactly like a seller's own sessions.
 
@@ -25,18 +25,20 @@ Base is $2.00 for open source and $0.25 for signals only. See
 
 Approximate open-source prices against a fresh `pnpm demo:reset` market.
 
-| File                     | Dimension                  | What to point at                                                                                                            | Factor                                               | Price            |
-| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------- |
-| `01-everyday-baseline`   | Baseline                   | Short, clean TypeScript/React work. The stack is crowded, so rarity pulls it down                                           | Rarity 0.5×                                          | ~$1.27           |
-| `02-failure-recovered`   | Failure                    | The agent re-runs a failing test four times (retry loop), then finds the real cause; tests pass                             | Failure 1.8×, quality 1.1×                           | ~$5.35           |
-| `03-preference-pairs`    | Failure + preference pairs | The agent tries to weaken the test twice (rejected) and is corrected twice. Each "no, do this instead" is a preference pair | Failure 2.2× (maximum)                               | ~$6.83           |
-| `04a-rarity-common`      | Rarity                     | A date-picker bug in TypeScript/React. The market already has many like it                                                  | Rarity 0.5×                                          | ~$2.44           |
-| `04b-rarity-rare`        | Rarity                     | The same story in Verilog. Everything else is identical, and the price doubles                                              | Rarity 1.0×                                          | ~$4.88           |
-| `05-richness-marathon`   | Richness                   | 100+ turns moving 22 Go handlers onto new middleware, no failures                                                           | Richness 2.0× (maximum)                              | ~$4.39           |
-| `06-freshness-old-model` | Freshness                  | Session 02's story, but 11 months old and on a superseded model                                                             | Freshness 0.28×                                      | ~$1.51           |
-| `07-quality-leaky`       | Quality                    | Keys, emails, IPs and a home path everywhere (watch the black bars), plus a log too long to keep whole                      | Quality 0.5× ("76% redacted, some output truncated") | ~$1.21           |
-| `08-demand-bounty`       | Demand                     | A Rust retry loop: nobody has listed one yet. Post a bounty for it (below) and watch the estimate double                    | Demand 1.0× → 2.0×                                   | ~$5.17 → ~$10.34 |
-| `09-everything`          | Everything at once         | Rare stack (Haskell), test tampering caught, five corrections, recovered, 90+ turns, fresh                                  | Failure 2.2×, richness 2.0×, quality 1.1×            | ~$9.73           |
+| File                     | Dimension                  | What to point at                                                                                                             | Factor                                               | Price            |
+| ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------- |
+| `01-everyday-baseline`   | Baseline                   | Short, clean TypeScript/React work. The stack is crowded, so rarity pulls it down                                            | Rarity 0.5×                                          | ~$1.27           |
+| `02-failure-recovered`   | Failure                    | The agent re-runs a failing test four times (retry loop), then finds the real cause; tests pass                              | Failure 1.8×, quality 1.1×                           | ~$5.35           |
+| `03-preference-pairs`    | Failure + preference pairs | The agent tries to weaken the test twice (rejected) and is corrected twice. Each "no, do this instead" is a preference pair  | Failure 2.2× (maximum)                               | ~$6.83           |
+| `04a-rarity-common`      | Rarity                     | A date-picker bug in TypeScript/React. The market already has many like it                                                   | Rarity 0.5×                                          | ~$2.44           |
+| `04b-rarity-rare`        | Rarity                     | The same story in Verilog. Everything else is identical, and the price doubles                                               | Rarity 1.0×                                          | ~$4.88           |
+| `05-richness-marathon`   | Richness                   | 100+ turns moving 22 Go handlers onto new middleware, no failures                                                            | Richness 2.0× (maximum)                              | ~$4.39           |
+| `06-freshness-old-model` | Freshness                  | Session 02's story, but 11 months old and on a superseded model                                                              | Freshness 0.28×                                      | ~$1.51           |
+| `07-quality-leaky`       | Quality                    | Keys, emails, IPs and a home path everywhere (watch the black bars), plus a log too long to keep whole                       | Quality 0.5× ("76% redacted, some output truncated") | ~$1.21           |
+| `08-demand-bounty`       | Demand                     | A Rust retry loop: nobody has listed one yet. Post a bounty for it (below) and watch the estimate double                     | Demand 1.0× → 2.0×                                   | ~$5.17 → ~$10.34 |
+| `09-everything`          | Everything at once         | Rare stack (Haskell), test tampering caught, five corrections, recovered, 90+ turns, fresh                                   | Failure 2.2×, richness 2.0×, quality 1.1×            | ~$9.73           |
+| `10-domain-medical`      | Domain                     | Grading a triage model's chest pain answers against a clinical rubric: no code. Labelled _Medical and clinical evaluation_   | Failure 1.9×, richness 1.7×                          | ~$6.44           |
+| `11-domain-data`         | Domain                     | A dbt revenue model with an inner join that drops guest orders, fixed and checked against the warehouse. _Data and querying_ | Failure 1.8×, richness 1.4×                          | ~$5.03           |
 
 Sessions start as **Signals only** on the review screen, the privacy-first
 default. The preview then shows what a signals-only buyer gets: counts, the
@@ -47,7 +49,7 @@ to **Open source**. The price rises 8×, because buyers get the content.
 ## A five-minute pricing walkthrough
 
 1. **Load them all.** Sign up as a seller, open **Share sessions**, choose
-   all ten files. Each one shows its estimate in the list on the left.
+   all twelve files. Each one shows its estimate in the list on the left.
 2. **Read a breakdown.** Click `09-everything` ("Fix the pricing engine's
    rounding…"). Each factor has a plain reason: "agent tampered with a
    failing test, then recovered; 5 preference pairs", "92 turns, 51 tool
@@ -68,6 +70,10 @@ to **Open source**. The price rises 8×, because buyers get the content.
 8. **License.** Share `09` as open source (tick the two boxes), then open it
    from **Browse traces**. The price card's Research / Evaluation / Training
    switch applies the license multiplier (1×, 1.5×, 2×).
+9. **Domains.** Open `10` and `11`: the review screen says what each
+   session was about (medical, 92% sure; data and querying, 88%). After
+   sharing, **Browse traces** → Domain filters to them, and the landing
+   page's _Browse by domain_ row links straight there.
 
 ## Notes
 

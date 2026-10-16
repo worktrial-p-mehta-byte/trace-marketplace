@@ -1,10 +1,25 @@
-export { STACKS, PATTERNS, MODELS, type Stack, type Pattern } from "./stacks";
+export {
+  STACKS,
+  PACKS,
+  PACK_BY_DOMAIN,
+  PATTERNS,
+  MODELS,
+  packOf,
+  type Stack,
+  type Pattern,
+  type DomainPack,
+  type SynthDomain,
+} from "./stacks";
 export {
   createRng,
   randomSpec,
+  domainOf,
   generateTrace,
   generateCatalog,
+  generateCatalogWithSpecs,
   generateFlood,
+  floodStacks,
+  type FloodWant,
   type Rng,
   type SynthSpec,
 } from "./generate";

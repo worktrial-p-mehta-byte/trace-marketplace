@@ -5,6 +5,8 @@ import type { TraceTraits } from "@tm/enrich";
  * trace when all of its set fields match (case-insensitive).
  */
 export interface DemandCriteria {
+  /** What the session was about (a domain id from @tm/enrich). */
+  domain?: string;
   language?: string;
   framework?: string;
   failure?: string;
@@ -17,12 +19,14 @@ export interface DemandSignalInput {
   createdAt: Date;
 }
 
-type Matchable = Pick<TraceTraits, "language" | "framework" | "failureCategory" | "model">;
+type Matchable = Pick<TraceTraits, "language" | "framework" | "failureCategory" | "model"> &
+  Partial<Pick<TraceTraits, "domain">>;
 
 const eq = (a: string | undefined, b: string | undefined) =>
   a !== undefined && b !== undefined && a.toLowerCase() === b.toLowerCase();
 
 export function matchesCriteria(t: Matchable, c: DemandCriteria): boolean {
+  if (c.domain && !eq(c.domain, t.domain)) return false;
   if (c.language && !eq(c.language, t.language)) return false;
   if (c.framework && !eq(c.framework, t.framework)) return false;
   if (c.failure && !eq(c.failure, t.failureCategory)) return false;
@@ -32,7 +36,7 @@ export function matchesCriteria(t: Matchable, c: DemandCriteria): boolean {
 
 /** True when a signal has no criteria at all (it would match everything). */
 export function isEmptyCriteria(c: DemandCriteria): boolean {
-  return !c.language && !c.framework && !c.failure && !c.model;
+  return !c.domain && !c.language && !c.framework && !c.failure && !c.model;
 }
 
 /**

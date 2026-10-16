@@ -34,6 +34,16 @@ where the limit lives and what would lift it.
 | Test tampering only detected for edits with old/new text                       | Whole-file rewrites or deletions of test files are missed                   | Diff-based detection                              |
 | Language and framework from fixed lists                                        | Niche stacks show as unknown, which lowers their rarity value               | Larger lists; repo manifest parsing               |
 
+## Domains — phase 2
+
+| Limitation                                                                                       | Impact                                                                     | Lifted by                                                              |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Domain detection uses English lexicons, tool names and file types                                | Non-English sessions and unfamiliar tools fall back to `unknown` or coding | A local LLM labeller behind the same interface (post-demo)             |
+| The detector's accuracy is measured against the synthetic generator, which shares its vocabulary | 100% on generated data overstates accuracy on real sessions                | A hand-labelled set of scrubbed real sessions                          |
+| Signals-only domains are the seller's browser's claim                                            | A seller could misreport a domain (bounded to a known id)                  | Authenticity tiers: consistency checks between the claim and the shape |
+| The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
+| Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
+
 ## Pricing — M3
 
 | Limitation                                                                                                        | Impact                                                                  | Lifted by                                                                              |

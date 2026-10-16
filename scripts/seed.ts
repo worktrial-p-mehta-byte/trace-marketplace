@@ -100,6 +100,10 @@ async function main() {
     { language: "TypeScript", framework: "React" },
     { language: "Terraform" },
     { failure: "user_correction" },
+    { domain: "medical" },
+    { domain: "data_querying", failure: "tool_error" },
+    { domain: "research" },
+    { domain: "customer_support", failure: "user_correction" },
   ];
 
   let i = 0;

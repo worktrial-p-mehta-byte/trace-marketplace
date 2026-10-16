@@ -29,7 +29,7 @@ export const AssetKind = z.enum([
 ]);
 export type AssetKind = z.infer<typeof AssetKind>;
 
-export const LabelKind = z.enum(["failure", "outcome", "signal"]);
+export const LabelKind = z.enum(["failure", "outcome", "signal", "domain"]);
 export const LabelSource = z.enum(["heuristic", "model", "human"]);
 
 export const Label = z.object({

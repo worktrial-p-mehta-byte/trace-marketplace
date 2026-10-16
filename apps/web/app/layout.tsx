@@ -6,7 +6,7 @@ import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
   title: { default: "Trace Marketplace", template: "%s · Trace Marketplace" },
-  description: "Sell the sessions your coding agent already logs. Scrubbed on your machine.",
+  description: "Sell the sessions your AI agent already logs. Scrubbed on your machine.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

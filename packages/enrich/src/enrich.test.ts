@@ -6,6 +6,7 @@ import { scrubTrace } from "@tm/scrub";
 import { Trace, TRACE_SCHEMA_VERSION, type TraceEvent } from "@tm/schema";
 import {
   analyzeTrace,
+  detectDomains,
   detectFramework,
   detectLanguage,
   enrichTrace,
@@ -53,8 +54,18 @@ describe("enrichTrace on the synthetic Claude Code session (parse → scrub → 
   });
 
   it("labels the outcome and signals", () => {
-    const rest = labels.filter((l) => l.kind !== "failure").map((l) => l.code);
+    const rest = labels
+      .filter((l) => l.kind !== "failure" && l.kind !== "domain")
+      .map((l) => l.code);
     expect(rest).toEqual(["tests_passed_at_end", "recovered", "context_compaction"]);
+  });
+
+  it("detects the domain and records it as a label with evidence", () => {
+    expect(traits.domain).toBe("software_engineering");
+    expect(traits.domainConfidence).toBeGreaterThan(0.5);
+    const domain = labels.find((l) => l.kind === "domain")!;
+    expect(domain).toMatchObject({ code: "software_engineering", source: "heuristic" });
+    expect(domain.evidence.length).toBeGreaterThan(0);
   });
 
   it("extracts pricing traits", () => {
@@ -295,5 +306,82 @@ describe("test tampering in other test styles", () => {
     ]) {
       expect(tampered(before), before).toBe(false);
     }
+  });
+});
+
+describe("detectDomains", () => {
+  const session = (
+    user: string,
+    tool: { name: string; input: Record<string, unknown>; out: string },
+  ) =>
+    Trace.parse({
+      schemaVersion: TRACE_SCHEMA_VERSION,
+      id: "d",
+      startedAt: "2026-10-10T09:00:00Z",
+      endedAt: "2026-10-10T09:05:00Z",
+      provenance: {
+        source: "synthetic",
+        harness: { name: "claude-code" },
+        model: { id: "m" },
+        capturedAt: "2026-10-10T09:05:00Z",
+      },
+      events: [
+        { seq: 0, type: "user_message", text: user },
+        { seq: 1, type: "assistant_message", text: "On it." },
+        { seq: 2, type: "tool_call", callId: "c", tool: tool.name, input: tool.input },
+        { seq: 3, type: "tool_result", callId: "c", output: tool.out, isError: false },
+        { seq: 4, type: "assistant_message", text: "Done." },
+      ],
+    });
+
+  it("tells a medical evaluation from a coding session run in the same harness", () => {
+    const medical = detectDomains(
+      session(
+        "Review these case notes against the rubric: does the differential diagnosis consider the patient's comorbidity and the contraindication for the prescribed medication?",
+        {
+          name: "Read",
+          input: { file_path: "cases/patient_12.md" },
+          out: "Patient presents with chest pain; vitals stable; prognosis guarded.",
+        },
+      ),
+    );
+    expect(medical.primary).toBe("medical");
+    expect(medical.confidence).toBeGreaterThan(0.6);
+    expect(medical.evidence).toContain(0);
+
+    const coding = detectDomains(
+      session(
+        "The failing test in the parser module throws a null pointer; refactor the handler and run the unit tests.",
+        {
+          name: "Edit",
+          input: { file_path: "src/parser.ts", old_string: "a", new_string: "b" },
+          out: "updated",
+        },
+      ),
+    );
+    expect(coding.primary).toBe("software_engineering");
+  });
+
+  it("returns unknown with low confidence when there is nothing to go on", () => {
+    const d = detectDomains(session("hi", { name: "Noop", input: {}, out: "" }));
+    expect(d.primary).toBe("unknown");
+    expect(d.confidence).toBeLessThan(0.3);
+  });
+
+  it("reports a mixed session as a distribution", () => {
+    const d = detectDomains(
+      session(
+        "Add a SQL query with a group by and order by to the dashboard endpoint, then fix the failing unit test for the handler.",
+        {
+          name: "Edit",
+          input: { file_path: "src/report.sql", old_string: "a", new_string: "b" },
+          out: "updated",
+        },
+      ),
+    );
+    const ids = d.distribution.map((x) => x.domain);
+    expect(ids).toContain("data_querying");
+    expect(ids).toContain("software_engineering");
+    expect(d.distribution.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1, 1);
   });
 });

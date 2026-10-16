@@ -3,8 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { browseCatalog, ensureSearchIndex, openBounties, watchList } from "@tm/core";
 import { PriceChart } from "@/components/PriceChart";
-import { PATTERNS, STACKS } from "@tm/synth";
-import { FAILURE_NAMES, money, reasonText } from "@/lib/labels";
+import { PACKS, PATTERNS, STACKS } from "@tm/synth";
+import { DOMAIN_NAMES, FAILURE_NAMES, money, reasonText } from "@/lib/labels";
 import { getBlobs, getConfig, getCurrentUser, getDb, getSearch, refreshPrices } from "@/lib/server";
 import { floodAction, postBountyAction, resetAction } from "./actions";
 
@@ -58,12 +58,29 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
   // Languages already in the catalog first, then every language the
   // simulator can generate, so an empty catalog can still be given supply.
   const stacks = [
-    ...new Set([...all.facets.language.map((l) => l.value), ...STACKS.map((s) => s.language)]),
+    ...new Set([
+      ...all.facets.language.map((l) => l.value),
+      ...STACKS.map((s) => s.language).filter((l): l is string => Boolean(l)),
+    ]),
+  ];
+  // Domains the simulator can generate, catalog order (most listings first).
+  const generated = new Set(PACKS.map((d) => d.domain));
+  const domains = [
+    ...new Set([
+      ...all.facets.domain.map((d) => d.value).filter((d) => generated.has(d as never)),
+      ...PACKS.map((d) => d.domain),
+    ]),
   ];
   const [language, framework] = (p.language ?? "").split("/");
   const failure = p.failure || undefined;
-  const criteria = { language: language || undefined, framework: framework || undefined, failure };
-  const hasSelection = Boolean(criteria.language || criteria.failure);
+  const domain = p.domain && p.domain in DOMAIN_NAMES ? p.domain : undefined;
+  const criteria = {
+    domain,
+    language: language || undefined,
+    framework: framework || undefined,
+    failure,
+  };
+  const hasSelection = Boolean(criteria.domain || criteria.language || criteria.failure);
   const watched = hasSelection ? watchList(getDb(), config, criteria, 4) : [];
   const yMax = Math.max(
     0,
@@ -85,6 +102,17 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
         action="/market"
         className="mt-8 flex flex-wrap items-end gap-3 border-b border-rule pb-5"
       >
+        <label className="block">
+          <span className="block text-sm font-semibold">Domain</span>
+          <select name="domain" defaultValue={domain ?? ""} className="field mt-1.5 !w-56">
+            <option value="">Any domain</option>
+            {domains.map((d) => (
+              <option key={d} value={d}>
+                {DOMAIN_NAMES[d] ?? d}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block">
           <span className="block text-sm font-semibold">Language</span>
           <select name="language" defaultValue={p.language ?? ""} className="field mt-1.5 !w-56">
@@ -110,16 +138,17 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
         <button className="btn-quiet">Show these traces</button>
         <div className="ml-auto flex gap-2 text-sm">
           {[
-            ["Rust", "user_correction"],
-            ["Python", "retry_loop"],
-            ["TypeScript", "test_tampering"],
-          ].map(([l, f]) => (
+            ["language", "Rust", "tool_rejected"],
+            ["language", "Python", "retry_loop"],
+            ["domain", "medical", "user_correction"],
+            ["domain", "data_querying", "retry_loop"],
+          ].map(([k, v, f]) => (
             <Link
-              key={`${l}${f}`}
-              href={`/market?language=${l}&failure=${f}`}
+              key={`${v}${f}`}
+              href={`/market?${k}=${v}&failure=${f}`}
               className="rounded px-2 py-1 text-ink-2 hover:bg-surface hover:text-ink"
             >
-              {l} + {FAILURE_NAMES[f!]!.toLowerCase()}
+              {k === "domain" ? DOMAIN_NAMES[v!] : v} + {FAILURE_NAMES[f!]!.toLowerCase()}
             </Link>
           ))}
         </div>
@@ -130,6 +159,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
 
         <div className="grid gap-6 md:grid-cols-2">
           <form action={postBountyAction} className="rounded-lg border border-rule bg-surface p-5">
+            <input type="hidden" name="domain" value={domain ?? ""} />
             <input type="hidden" name="language" value={p.language ?? ""} />
             <input type="hidden" name="failure" value={p.failure ?? ""} />
             <h2 className="text-lg font-semibold">Post a bounty</h2>
@@ -166,6 +196,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
           </form>
 
           <form action={floodAction} className="rounded-lg border border-rule bg-surface p-5">
+            <input type="hidden" name="domain" value={domain ?? ""} />
             <input type="hidden" name="language" value={p.language ?? ""} />
             <input type="hidden" name="failure" value={p.failure ?? ""} />
             <h2 className="text-lg font-semibold">Add supply</h2>
@@ -184,7 +215,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
                 className="field mt-1.5 !w-28"
               />
             </label>
-            <button className="btn mt-4" disabled={!criteria.language}>
+            <button className="btn mt-4" disabled={!criteria.domain && !criteria.language}>
               Add sessions
             </button>
           </form>
@@ -196,6 +227,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
               {hasSelection ? "Most valuable matching traces" : "Choose a kind of trace to follow"}
             </h2>
             <form action={resetAction}>
+              <input type="hidden" name="domain" value={domain ?? ""} />
               <input type="hidden" name="language" value={p.language ?? ""} />
               <input type="hidden" name="failure" value={p.failure ?? ""} />
               <button className="btn-quiet text-sm">Reset simulator</button>
@@ -203,7 +235,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
           </div>
           {!hasSelection ? (
             <p className="mt-3 text-ink-2">
-              Pick a language or a failure type above, or try one of the shortcuts.
+              Pick a domain, a language or a failure type above, or try one of the shortcuts.
             </p>
           ) : watched.length === 0 ? (
             <p className="mt-3 text-ink-2">No traces match yet. Add supply to create some.</p>
