@@ -132,6 +132,30 @@ class LevelCounts {
     const sumSq = base.sumSq + (n * n - c * c);
     return { count: Math.max(1, n), typical: sum > 0 ? sumSq / sum : 1 };
   }
+  /**
+   * This key's cohort once `pending` not-yet-listed traces join (this trace
+   * and its upload siblings, each with its own key and group). Every pending
+   * trace moves the typical size, even one in another cohort; only those
+   * with this key add to this cohort's count. With `group`, only pending
+   * traces in that group count, as for the stored sums.
+   */
+  cohortWith(key: string, pending: { key: string; group: string }[], group?: string): Cohort {
+    const joining = new Map<string, number>();
+    for (const p of pending) {
+      if (group !== undefined && p.group !== group) continue;
+      joining.set(p.key, (joining.get(p.key) ?? 0) + 1);
+    }
+    const base = group === undefined ? this : (this.groups.get(group) ?? { sum: 0, sumSq: 0 });
+    let sum = base.sum;
+    let sumSq = base.sumSq;
+    for (const [k, d] of joining) {
+      const c = this.count(k);
+      sum += d;
+      sumSq += (c + d) * (c + d) - c * c;
+    }
+    const n = this.count(key) + (joining.get(key) ?? 0);
+    return { count: Math.max(1, n), typical: sum > 0 ? sumSq / sum : 1 };
+  }
 }
 
 /** Demand factor from the newest snapshot at least `changeWindowHours` old. */
@@ -253,8 +277,13 @@ export function buildMarket(db: Db, deps: PricingDeps) {
     const extraAt = (l: Level) =>
       o.listed ? 0 : 1 + siblingKeys.filter((k) => k[l] === keys[l]).length;
     // The model's scarcity is judged against other models in the same domain.
-    const cohort = (l: Level) =>
-      levels[l].cohort(keys[l], extraAt(l), l === "model" ? keys.domain : undefined);
+    const groupOf = (l: Level, k: Record<Level, string>) => (l === "model" ? k.domain : "");
+    const cohort = (l: Level) => {
+      const group = l === "model" ? keys.domain : undefined;
+      if (o.listed) return levels[l].cohort(keys[l], 0, group);
+      const pending = [keys, ...siblingKeys].map((k) => ({ key: k[l], group: groupOf(l, k) }));
+      return levels[l].cohortWith(keys[l], pending, group);
+    };
     const sameShape = traits.shapeKey
       ? siblings.filter((t) => t.shapeKey === traits.shapeKey).length
       : 0;

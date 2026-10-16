@@ -109,6 +109,21 @@ describe("Pricing V2 in the market", () => {
     );
   });
 
+  it("estimates a mixed batch at the price each lists at", async () => {
+    const [legal] = generateFlood(81, 1, NOW, { domain: "legal", pattern: "tool_error" });
+    const [rust] = generateFlood(82, 1, NOW, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+    });
+    const l = enrichTrace(legal!).traits;
+    const r = enrichTrace(rust!).traits;
+    const estimate = estimatePrice(db, deps, l, 0, { sellerId, pendingSiblings: [r] });
+    const listed = await shareTrace(db, deps, { sellerId, trace: legal!, tier: 0 }, SYNTH);
+    await shareTrace(db, deps, { sellerId, trace: rust!, tier: 0 }, SYNTH);
+    expect(listingOf(listed.traceId).currentPriceCents).toBe(estimate.priceCents);
+  });
+
   it("counts batch siblings only in the cohorts they share", () => {
     const [legal] = generateFlood(78, 1, NOW, { domain: "legal", pattern: "tool_error" });
     const [rust] = generateFlood(79, 1, NOW, {
