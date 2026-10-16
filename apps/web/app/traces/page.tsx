@@ -6,6 +6,7 @@ import {
   criteriaOf,
   describe as describeQuery,
   ensureSearchIndex,
+  intentWords,
   listSavedSearches,
   recordBuyerInterest,
   type BrowseQuery,
@@ -64,8 +65,9 @@ function toQuery(p: Params): BrowseQuery {
     tier: p.tier === "0" ? 0 : p.tier === "1" ? 1 : undefined,
     source: p.source as BrowseQuery["source"],
     sort: p.sort as BrowseQuery["sort"],
-    // Sessions of the same shape fold into one result unless asked to show them.
-    group: p.similar !== "show",
+    // In a search, sessions of the same shape fold into one result unless
+    // asked to show them; browsing lists every listing.
+    group: Boolean(p.q) && p.similar !== "show",
     offset: Math.max(0, Number(p.page ?? 1) - 1) * PAGE,
     limit: PAGE,
   };
@@ -96,13 +98,15 @@ function chipName(c: IntentChip): string {
   return nameFor(c.key, c.value);
 }
 
-/** The search with one recognised phrase taken out: removing a chip. */
+/**
+ * The search with one recognised phrase taken out: removing a chip. Uses the
+ * parser's own tokenisation, so "open-source" or "medical." are found.
+ */
 function without(p: Params, phrase: string): string {
-  const words = (p.q ?? "").split(/\s+/);
-  const drop = phrase.split(" ");
-  const lower = words.map((w) => w.toLowerCase().replace(/[^\p{L}\p{N}+#.-]/gu, ""));
+  const words = intentWords(p.q ?? "");
+  const drop = intentWords(phrase);
   for (let i = 0; i + drop.length <= words.length; i++) {
-    if (drop.every((d, k) => lower[i + k] === d)) {
+    if (drop.every((d, k) => words[i + k] === d)) {
       words.splice(i, drop.length);
       break;
     }
@@ -398,7 +402,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               {saved.length > 0 && (
                 <nav aria-label="Saved searches" className="flex flex-wrap items-center gap-1.5">
                   <span className="text-ink-3">Saved:</span>
-                  {saved.slice(0, 6).map((sv) => (
+                  {saved.map((sv) => (
                     <span
                       key={sv.id}
                       className="inline-flex items-center rounded border border-rule"
@@ -415,6 +419,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                             failure: sv.query.failure,
                             outcome: sv.query.outcome,
                             tier: sv.query.tier === undefined ? undefined : String(sv.query.tier),
+                            model: sv.query.model,
+                            source: sv.query.source,
                           },
                         )}
                         className="px-2 py-0.5 text-ink-2 hover:text-ink"

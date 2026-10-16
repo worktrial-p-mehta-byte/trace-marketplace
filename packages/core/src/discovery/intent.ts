@@ -199,6 +199,9 @@ interface Alias {
   tokens: string[];
 }
 
+/** The parser's tokenisation (lower case, split on spaces and hyphens, edge dots trimmed). */
+export const intentWords = (s: string) => words(s);
+
 const words = (s: string) =>
   s
     .toLowerCase()

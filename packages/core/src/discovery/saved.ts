@@ -10,8 +10,20 @@ import { recordDemandSignal, runPricingConsumer } from "../pricing";
 /** The parts of a catalog query worth saving (no paging or sorting). */
 export type SavedQuery = Pick<
   BrowseQuery,
-  "text" | "domain" | "authenticity" | "language" | "framework" | "failure" | "outcome" | "tier"
+  | "text"
+  | "domain"
+  | "authenticity"
+  | "language"
+  | "framework"
+  | "failure"
+  | "outcome"
+  | "tier"
+  | "model"
+  | "source"
 >;
+
+/** Most saved searches a buyer team keeps. */
+export const MAX_SAVED_SEARCHES = 20;
 
 export interface SavedSearch {
   id: string;
@@ -31,6 +43,8 @@ const KEYS: (keyof SavedQuery)[] = [
   "failure",
   "outcome",
   "tier",
+  "model",
+  "source",
 ];
 
 function clean(q: SavedQuery): SavedQuery {
@@ -56,10 +70,15 @@ export function saveSearch(
 ): SavedSearch {
   if (!user.buyerOrgId) throw new SavedSearchError("Only buyer accounts can save searches.");
   const query = clean(input.query);
-  const criteria = criteriaOf(query);
-  if (!query.text && isEmptyCriteria(criteria)) {
+  if (Object.keys(query).length === 0) {
     throw new SavedSearchError("Search for something before saving it.");
   }
+  if (listSavedSearches(db, user.buyerOrgId).length >= MAX_SAVED_SEARCHES) {
+    throw new SavedSearchError(
+      `You can keep ${MAX_SAVED_SEARCHES} saved searches. Delete one to save another.`,
+    );
+  }
+  const criteria = criteriaOf(query);
   const id = newId("col");
   const now = new Date();
   const name = (input.name?.trim() || describe(query)).slice(0, 120);
@@ -118,6 +137,8 @@ export function describe(q: SavedQuery): string {
     q.outcome?.replace(/_/g, " "),
     q.authenticity,
     q.tier === undefined ? undefined : q.tier === 1 ? "signals only" : "open source",
+    q.model,
+    q.source,
     q.text ? `“${q.text}”` : undefined,
   ].filter(Boolean);
   return parts.join(" · ") || "All traces";

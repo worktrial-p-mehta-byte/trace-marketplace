@@ -4,7 +4,18 @@ import { redirect } from "next/navigation";
 import { deleteSavedSearch, saveSearch, SavedSearchError, type SavedQuery } from "@tm/core";
 import { getBus, getConfig, getCurrentUser, getDb } from "@/lib/server";
 
-const KEYS = ["q", "domain", "authenticity", "language", "framework", "failure", "outcome", "tier"];
+const KEYS = [
+  "q",
+  "domain",
+  "authenticity",
+  "language",
+  "framework",
+  "failure",
+  "outcome",
+  "tier",
+  "model",
+  "source",
+];
 
 function backTo(form: FormData, extra: Record<string, string>) {
   const q = new URLSearchParams();
@@ -29,6 +40,8 @@ export async function saveSearchAction(form: FormData) {
     failure: get("failure"),
     outcome: get("outcome") as SavedQuery["outcome"],
     tier: get("tier") === "1" ? 1 : get("tier") === "0" ? 0 : undefined,
+    model: get("model"),
+    source: get("source") as SavedQuery["source"],
   };
   try {
     saveSearch(getDb(), { config: getConfig(), bus: getBus() }, user, { query });

@@ -11,7 +11,9 @@ import {
   deleteSavedSearch,
   describe as describeQuery,
   ensureAccount,
+  intentWords,
   listSavedSearches,
+  MAX_SAVED_SEARCHES,
   parseIntent,
   rebuildSearchIndex,
   repriceAll,
@@ -196,5 +198,39 @@ describe("saved searches", () => {
     expect(() => saveSearch(db, deps, buyer, { query: {} })).toThrow(SavedSearchError);
     const s = saveSearch(db, deps, buyer, { query: { domain: "legal" } });
     expect(deleteSavedSearch(db, "org_other", s.id)).toBe(false);
+  });
+
+  it("saves facet-only searches that carry no demand, with model and source", () => {
+    const before = db.select().from(schema.demandSignals).all().length;
+    const s = saveSearch(db, deps, buyer, {
+      query: { authenticity: "consistent", tier: 1, model: "claude-opus-5-5", source: "real" },
+    });
+    expect(s.query).toEqual({
+      authenticity: "consistent",
+      tier: 1,
+      model: "claude-opus-5-5",
+      source: "real",
+    });
+    expect(s.name).toContain("claude-opus-5-5");
+    // A model is demand; the rest isn't, but the search is still saved.
+    expect(db.select().from(schema.demandSignals).all().length).toBe(before + 1);
+    const t = saveSearch(db, deps, buyer, { query: { outcome: "recovered" } });
+    expect(t.id).toBeDefined();
+  });
+
+  it("keeps at most the configured number of saved searches", () => {
+    for (let i = 0; i < MAX_SAVED_SEARCHES; i++)
+      saveSearch(db, deps, buyer, { query: { text: `search ${i}` } });
+    expect(() => saveSearch(db, deps, buyer, { query: { text: "one more" } })).toThrow(
+      /Delete one/,
+    );
+  });
+});
+
+describe("intentWords", () => {
+  it("tokenises like the parser, so a chip's words can be taken out", () => {
+    expect(intentWords("Open-source, medical. traces")).toEqual(
+      ["open", "source,", "medical", "traces"].map((w) => w.replace(",", "")),
+    );
   });
 });
