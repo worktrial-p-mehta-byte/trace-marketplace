@@ -84,7 +84,12 @@ export async function floodAction(form: FormData) {
     if (err instanceof FloodError) back(form, { error: err.message });
     throw err;
   }
-  back(form, { did: "flood", r: summary(r.moves), added: String(r.added) });
+  back(form, {
+    did: "flood",
+    r: summary(r.moves),
+    added: String(r.added),
+    bought: String(r.bought),
+  });
 }
 
 export async function resetAction(form: FormData) {

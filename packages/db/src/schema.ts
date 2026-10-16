@@ -201,7 +201,9 @@ export const demandSignals = sqliteTable(
   "demand_signals",
   {
     id: id(),
-    kind: text("kind", { enum: ["search", "view", "save", "bounty", "purchase"] }).notNull(),
+    kind: text("kind", {
+      enum: ["search", "view", "save", "bounty", "purchase", "campaign"],
+    }).notNull(),
     buyerOrgId: text("buyer_org_id").references(() => buyerOrgs.id),
     /** Matching criteria, e.g. { language, framework, failure }. */
     criteria: text("criteria", { mode: "json" }).notNull(),
@@ -345,6 +347,77 @@ export const ledgerEntries = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index("ledger_entries_account_idx").on(t.account)],
+);
+
+// ---------------------------------------------------------------- campaigns
+
+/**
+ * A standing bid: a buyer team buys, automatically, every new listing that
+ * matches its criteria at or under its maximum price, until the quantity or
+ * budget runs out or it expires. The budget is held in escrow.
+ */
+export const campaigns = sqliteTable(
+  "campaigns",
+  {
+    id: id(),
+    buyerOrgId: text("buyer_org_id")
+      .notNull()
+      .references(() => buyerOrgs.id),
+    title: text("title").notNull(),
+    /** DemandCriteria plus optional behaviours/authenticity, as the buyer described them. */
+    criteria: text("criteria", { mode: "json" }).notNull(),
+    license: text("license", { enum: ["research", "eval", "training"] }).notNull(),
+    maxPriceCents: integer("max_price_cents").notNull(),
+    quantity: integer("quantity").notNull(),
+    budgetCents: integer("budget_cents").notNull(),
+    spentCents: integer("spent_cents").notNull().default(0),
+    filled: integer("filled").notNull().default(0),
+    status: text("status", { enum: ["open", "filled", "expired", "closed"] }).notNull(),
+    /** The traces the campaign has bought, as a collection (the dataset it assembles). */
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("campaigns_status_idx").on(t.status)],
+);
+
+export const campaignFills = sqliteTable(
+  "campaign_fills",
+  {
+    id: id(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id),
+    listingId: text("listing_id")
+      .notNull()
+      .references(() => listings.id),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id),
+    priceCents: integer("price_cents").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("campaign_fills_unique").on(t.campaignId, t.listingId)],
+);
+
+/** In-app notifications (sellers hear about sales, campaigns and demand). */
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    href: text("href"),
+    readAt: integer("read_at", { mode: "timestamp_ms" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );
 
 // ---------------------------------------------------------------- bounties

@@ -19,6 +19,7 @@ import { TERMS_VERSION } from "../auth";
 import { EventTypes, type EventBus } from "../events";
 import { isTierSupported } from "../policy";
 import type { BlobStore, SearchIndex } from "../ports";
+import { runCampaignConsumer } from "../campaigns";
 import { runSearchConsumer } from "../search";
 import { buildMarket, runPricingConsumer } from "../pricing";
 
@@ -208,6 +209,8 @@ export interface ShareResult {
   labels: string[];
   /** True when the upload succeeded but pricing hasn't run yet; it will on the next consumer run. */
   pricePending?: boolean;
+  /** Campaigns that bought the trace the moment it was listed. */
+  campaignFills?: number;
 }
 
 /**
@@ -390,6 +393,7 @@ export async function shareTrace(
   // failure there must not turn a successful share into an error the seller
   // can't retry (a retry would hit the duplicate check). The events above
   // stay in the outbox, so the next consumer run picks them up.
+  let campaignFills = 0;
   if (!internal.deferMarket) {
     try {
       runPricingConsumer(db, deps.bus, { config: deps.config, now });
@@ -400,6 +404,11 @@ export async function shareTrace(
       if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
     } catch (err) {
       console.error("Search indexing after share failed; will retry on the next run", err);
+    }
+    try {
+      campaignFills = runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+    } catch (err) {
+      console.error("Campaign clearing after share failed; will retry on the next run", err);
     }
   }
 
@@ -413,6 +422,7 @@ export async function shareTrace(
     sellerCents: splitSale(priceCents, sellerShareFor(deps.config, traits.domain)).seller,
     labels: labels.map((l) => l.code),
     ...(listed === null && !internal.deferMarket ? { pricePending: true } : {}),
+    ...(campaignFills ? { campaignFills } : {}),
   };
 }
 

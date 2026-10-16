@@ -8,6 +8,7 @@ import { acceptTerms, createUser, TERMS_VERSION, type PublicUser } from "../auth
 import { DuplicateShareError, shareTrace, type CatalogDeps } from "../catalog";
 import { EventTypes, type EventBus } from "../events";
 import { buildMarket, priceHistory, recordDemandSignal, runPricingConsumer } from "../pricing";
+import { runCampaignConsumer } from "../campaigns";
 import { runSearchConsumer } from "../search";
 
 /** The account that owns supply added by the simulator, so it can be removed again. */
@@ -193,7 +194,9 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
   }
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
   if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
-  return { added, moves: moves(before, pricesMatching(db, deps.config, criteria)) };
+  // Open campaigns buy matching new supply, as they would any seller's.
+  const bought = runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+  return { added, bought, moves: moves(before, pricesMatching(db, deps.config, criteria)) };
 }
 
 /**

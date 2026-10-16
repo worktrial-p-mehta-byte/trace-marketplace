@@ -21,6 +21,8 @@ export interface ShareOutcome {
   sellerCents: number;
   labels: string[];
   pricePending?: boolean;
+  /** Campaigns that bought the trace the moment it was listed. */
+  campaignFills?: number;
 }
 
 export interface Item {
