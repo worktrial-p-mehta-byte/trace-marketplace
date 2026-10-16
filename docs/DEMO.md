@@ -1,65 +1,71 @@
-# Demo script (about 4 minutes)
+# Demo script (about 6 minutes)
 
-The story: a developer shares a real agent session in under a minute without
-leaking anything; a buyer finds the rare failure they need; and the market
-prices it by what makes it rare.
+The story: a domain expert shares agent sessions without leaking anything;
+the marketplace knows what each one is about, whether it's authentic, and
+what it is worth; a lab finds exactly what it needs by describing it, buys
+it, and leaves a standing bid that buys the next one the moment it's
+shared; and sellers see what buyers want.
 
 ## Before the demo (5 minutes)
 
 ```bash
-pnpm demo:reset          # fresh database with the 200-trace synthetic market
+pnpm demo:reset          # fresh database: 200-trace market, an open campaign, a few past sales
+pnpm demo:sessions       # writes the thirteen seller sessions to demo/seller-sessions/
 pnpm build && pnpm start # production mode: every page is fast on first click
 ```
 
-- **A session file to share.** Copy a few of your Claude Code sessions
-  somewhere visible:
-  `mkdir -p ~/Desktop/agent-sessions && cp ~/.claude/projects/*/*.jsonl ~/Desktop/agent-sessions/`.
-  A session from the [failure lab](../demo/failure-lab) is best, because it
-  shows a real failure. If you have none to hand, use
-  [`fixtures/claude-code/synthetic-session.jsonl`](../fixtures/claude-code/synthetic-session.jsonl):
-  it is synthetic and shows test tampering, a correction, a rejected action
-  and an interrupt. It has nothing secret in it, so to show the scrubber at
-  work type a word from it (e.g. `parseDueDate`) under **Also hide these
-  words** on the review screen.
 - **Two browser windows.** One normal window for the seller (you will sign
   up live) and one private window signed in as the buyer
   (`buyer@example.com` / `demo-password`).
-- Close other tabs; zoom the browser to 110% for a projector.
+- In a third tab, optionally sign in as the demo seller
+  (`seller@example.com` / `demo-password`): it follows Medical and Data and
+  querying, so it is told about campaigns there.
+- Close other tabs; zoom to 110% for a projector.
 
-The whole script also runs as an automated test (`pnpm build && pnpm e2e`,
-[`e2e/demo.spec.ts`](../e2e/demo.spec.ts)), in CI on every pull request, so
-the steps below stay true.
+What the seed sets up: the buyer team has its demo credits, three past
+purchases, and an open campaign, **"Clinical evaluations with corrections"**
+(up to $25 each, 6 wanted, 2 bought from the seeded market).
 
-To show the pricing engine in depth, use the twelve seller sessions from
-`pnpm demo:sessions`; [demo/seller-sessions](../demo/seller-sessions/README.md)
-has a five-minute pricing walkthrough.
+Every step below also runs as an automated test (`pnpm build && pnpm e2e`;
+specs in [`e2e/`](../e2e)), in CI on every pull request.
 
 ## Script
 
-| Time | Step                  | What to do                                                                                                                                                                                           | What to say                                                                                                                                                     |
-| ---- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00 | **Land**              | Open `http://localhost:3000`                                                                                                                                                                         | "Agents already log every session. The rare ones, where the agent got stuck or cheated, are exactly what labs want to train and evaluate on."                   |
-| 0:20 | **Sign up**           | **Create account** → any email and password → **Accept and continue** on the data terms                                                                                                              | "Consent comes first, and it's recorded, per session."                                                                                                          |
-| 0:40 | **Pick sessions**     | You land on **Share sessions** → **Choose files** → pick your session file(s)                                                                                                                        | "Parsing and scrubbing happen here, in the browser. Nothing has been uploaded yet."                                                                             |
-| 1:00 | **Review**            | Point at **What will be shared** (the black bars are removals), the detected failure, and **Estimated price** with its reasons. Toggle **Open source** / **Signals only** and watch the price change | "Every redaction is marked with what was removed. Signals only shares the structure without any content, for work you can't open."                              |
-| 1:30 | **Share**             | Tick the consent box (and **I set this session up on purpose…** for a failure-lab session) → **Share 1 session**                                                                                     | "Only the scrubbed version is uploaded. The server scrubs it again rather than trusting the browser."                                                           |
-| 1:50 | **Browse as a buyer** | Private window → **Browse traces** → filter **What went wrong** → _Test tampering_; then search `retry`                                                                                              | "Buyers filter by failure, outcome, stack and model, and by whether a trace is real, staged or synthetic."                                                      |
-| 2:20 | **Open a trace**      | Click a result → click a failure label to jump to the event → **Why this price** → switch the license                                                                                                | "Each label links to the exact events. The price explains itself: rarity, failure value, richness, freshness, demand."                                          |
-| 2:50 | **Move the market**   | **Market simulator** → shortcut _Rust + user rejected an action_ (or _Medical and clinical evaluation + user corrected it_) → **Post bounty** → **Add sessions** → **Reset simulator**               | "Two traces of this kind exist. A bounty pushes its price up about 20%. Twenty-five more like it and it's no longer rare: down about half. Reset puts it back." |
-| 3:30 | **Withdraw**          | Seller window → **My traces** → **Withdraw** on the shared session                                                                                                                                   | "Sellers can stop selling at any time. The listing leaves the catalog and the consent record keeps the date."                                                   |
-| 3:50 | **Close**             | Back to the landing page                                                                                                                                                                             | "One repo, runs locally with no cloud accounts; production swaps in Postgres, S3, a queue and Stripe behind the same interfaces."                               |
+| Time | Beat                    | What to do                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | What to say                                                                                                                                                                                                   |
+| ---- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0:00 | **Land**                | Open `http://localhost:3000`. Point at **Browse by domain**.                                                                                                                                                                                                                                                                                                                                                                                                                      | "Agents log every session, and not only for code: clinical evaluations, SQL, research, support. Labs want the rare ones from every domain."                                                                   |
+| 0:20 | **1. Share**            | **Create account** (seller) → accept the terms → **Choose files** → pick `10-domain-medical`, `11-domain-data`, `12-authenticity-suspect` and `09-everything` from `demo/seller-sessions/`.                                                                                                                                                                                                                                                                                       | "Parsing, scrubbing and labelling happen here in the browser. Nothing is uploaded yet."                                                                                                                       |
+| 0:50 | **Review**              | Click `10`: **Domain: Medical and clinical evaluation (92% sure)**, **Authenticity: Consistent**, the estimate with its **likely range**, and the reasons: rarity for a scarce domain (counted for less while it is the seller's own claim, signals only) and demand 2× from the open campaign. Click `12`: **Authenticity: Flagged** ("1 tool result has no call", "every step is the same length apart"), priced 0.7×. Toggle `09` to **Open source** and watch the price rise. | "It knows what the session was about, checks the log is genuine, and prices it: a clinical evaluation is scarce here, so it's worth more than a common coding fix. A spliced log is flagged and priced down." |
+| 1:40 | **Share**               | **Share 4 sessions**.                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `10` shows **Bought by 1 campaign already**: "A lab had a standing bid for exactly this. It sold the moment it was listed."                                                                                   |
+| 2:00 | **2. Discover**         | Buyer window → **Browse traces** → type `medical evaluations where the agent was corrected and recovered` → **Search**.                                                                                                                                                                                                                                                                                                                                                           | "Buyers describe what they need. It's read into filters, shown as chips they can remove, and every result says why it matched, with the events that prove it."                                                |
+| 2:40 | **Inspect**             | Open a result: **What it was about**, **Authenticity** (each check), **What happened** (labels link to events), **Why this price** (domain niche, likely range). Switch the licence.                                                                                                                                                                                                                                                                                              | "The price explains itself: failure evidence, domain rarity and niche, demand, near-duplicates, authenticity, freshness."                                                                                     |
+| 3:20 | **3. Buy**              | **Buy evaluation** → checkout (price held for 15 minutes) → **Pay with credits** → receipt → **Download**.                                                                                                                                                                                                                                                                                                                                                                        | "Local checkout: demo credits are the only simulated step. One balanced ledger posting pays the seller 70% and the platform its fee; the licence unlocks the download."                                       |
+| 3:50 | **4. Campaign**         | **Campaigns**: "Clinical evaluations with corrections" now shows **3 of 6 bought**, including the session shared a minute ago.                                                                                                                                                                                                                                                                                                                                                    | "A standing bid with escrow. It buys every matching trace at its list price, now and as supply arrives, and refunds the rest when it ends."                                                                   |
+| 4:20 | **5. What buyers want** | Seller window → **Trends**: the most wanted segments, the domain table (demand vs supply, typical price, campaigns), **Follow** a domain.                                                                                                                                                                                                                                                                                                                                         | "Sellers see where demand outruns supply, so domain experts spend their time where it pays, and they hear when a lab starts a campaign in their domain."                                                      |
+| 5:00 | **6. Get paid**         | Bell → "Sold: … through the campaign …". **My traces**: licences sold and earnings.                                                                                                                                                                                                                                                                                                                                                                                               | "Every sale is a notification and a ledger entry. Sellers can withdraw a session at any time."                                                                                                                |
+| 5:30 | **Market (optional)**   | **Market simulator** → shortcut _Medical and clinical evaluation + user corrected it_ → **Post bounty** → **Add sessions** → **Reset simulator**.                                                                                                                                                                                                                                                                                                                                 | "Demand pushes prices up, supply brings them down, and V2 prices by domain, so the move is concentrated where the market is thin."                                                                            |
+| 6:00 | **Close**               | Landing page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | "Runs locally with no network calls; production swaps in Postgres, S3, a queue and Stripe behind the same interfaces."                                                                                        |
+
+## Showing the pricing engine in depth
+
+`pnpm pricing:shadow` prints v1 and V2 prices by domain on the live
+database and both policies through the wind tunnel (a modelled buyer
+population). The thirteen seller sessions and a pricing walkthrough are in
+[demo/seller-sessions](../demo/seller-sessions/README.md). A new buyer
+account goes through the four onboarding questions and gets a **Picked for
+you** row.
 
 ## If something goes wrong
 
-| Problem                                          | Fix                                                                                                                           |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| "didn't contain a Claude Code session"           | The file isn't a Claude Code `.jsonl` (or is empty). Use the fixture file above.                                              |
-| "You have already shared this session"           | It was shared earlier in this database. Pick another file, or withdraw it in **My traces** first.                             |
-| A market action shows "No matching prices moved" | Pick a language or failure that has traces (the shortcuts always do).                                                         |
-| Prices look different from this script           | Prices depend on the time since seeding; the direction of each move is what matters. Run `pnpm demo:reset` for a fresh start. |
-| Sign-in doesn't stick in production mode         | Use `http://localhost:3000`, not an IP address (cookies are HTTPS-only in production; see [DEPLOYING.md](DEPLOYING.md)).      |
+| Problem                                          | Fix                                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| "didn't contain a Claude Code session"           | The file isn't a Claude Code `.jsonl`. Use the files from `pnpm demo:sessions`.                                          |
+| "You have already shared this session"           | It was shared earlier in this database. Run `pnpm demo:sessions` again for fresh ids, or `pnpm demo:reset`.              |
+| Session 10 isn't bought by the campaign          | The campaign filled or ended (it wants 6). `pnpm demo:reset` restores it.                                                |
+| A market action shows "No matching prices moved" | Pick a domain or language with traces (the shortcuts always have some).                                                  |
+| Prices differ from this script                   | Prices depend on time since seeding and on demand; the direction of each move is what matters.                           |
+| Sign-in doesn't stick in production mode         | Use `http://localhost:3000`, not an IP address (cookies are HTTPS-only in production; see [DEPLOYING.md](DEPLOYING.md)). |
 
 ## After the demo
 
-`pnpm demo:reset` puts everything back, including your new account and the
-shared session.
+`pnpm demo:reset` puts everything back: accounts, shares, orders, campaigns.

@@ -130,7 +130,7 @@ test.describe.serial("demo flow", () => {
     await signIn(page, BUYER);
     await page.goto("/traces");
     await page.getByLabel("Search traces").fill("data warehouse sessions with retry loops");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     const readAs = page.getByLabel("Read as");
     await expect(readAs.getByRole("link", { name: /Data and querying/ })).toBeVisible();
     await expect(readAs.getByRole("link", { name: /Retry loop/ })).toBeVisible();
