@@ -38,9 +38,11 @@ Approximate open-source prices against a fresh `pnpm demo:reset` market.
 | `08-demand-bounty`       | Demand                     | A Rust retry loop: nobody has listed one yet. Post a bounty for it (below) and watch the estimate double                    | Demand 1.0× → 2.0×                                   | ~$5.17 → ~$10.34 |
 | `09-everything`          | Everything at once         | Rare stack (Haskell), test tampering caught, five corrections, recovered, 90+ turns, fresh                                  | Failure 2.2×, richness 2.0×, quality 1.1×            | ~$9.73           |
 
-Sessions start as **Signals only** on the review screen. Switch one to
-**Open source** to show the base price change: 8× more, because buyers get
-the content.
+Sessions start as **Signals only** on the review screen, the privacy-first
+default. The preview then shows what a signals-only buyer gets: counts, the
+tools used, and the session as a row of steps with failures in red, but no
+text. To show the content (and the scrubber's black bars), switch a session
+to **Open source**. The price rises 8×, because buyers get the content.
 
 ## A five-minute pricing walkthrough
 
