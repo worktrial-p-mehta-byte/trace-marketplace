@@ -81,9 +81,22 @@ describe("database migrations", () => {
     }
   });
 
-  it("finds the migrations folder from the package or the repo layout", () => {
+  it("finds the migrations folder from the package, TM_ROOT or the repo layout", () => {
     expect(findMigrationsDir()).toBeDefined();
     expect(findMigrationsDir("/nonexistent")).toBe(MIGRATIONS_DIR);
+    const before = process.env.TM_ROOT;
+    try {
+      // As in a bundled server started elsewhere: the package path is gone.
+      process.env.TM_ROOT = join(MIGRATIONS_DIR, "..", "..", "..");
+      expect(findMigrationsDir("/", "/gone")).toBe(
+        join(process.env.TM_ROOT, "packages/db/drizzle"),
+      );
+      delete process.env.TM_ROOT;
+      expect(findMigrationsDir("/", "/gone")).toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.TM_ROOT;
+      else process.env.TM_ROOT = before;
+    }
   });
 
   it("are idempotent", () => {

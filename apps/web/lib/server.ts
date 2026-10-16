@@ -40,7 +40,11 @@ export function getDb(): Db {
 /** Migrations this database hasn't applied (empty when the folder can't be found). */
 export function databasePending(db: Db): string[] {
   const dir = findMigrationsDir();
-  return dir ? pendingMigrations(db, dir) : [];
+  if (!dir) {
+    console.warn("[db] can't find the migrations folder to check the schema; set TM_ROOT");
+    return [];
+  }
+  return pendingMigrations(db, dir);
 }
 
 export function getBus(): EventBus {

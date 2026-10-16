@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { findRepoRoot } from "@tm/config/server";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
@@ -25,12 +26,17 @@ export function runMigrations(db: Db): void {
 
 /**
  * The migrations folder, or undefined when it can't be found. Bundled code
- * (the Next server) doesn't sit next to the package, so the repo layout is
- * tried from the working directory too.
+ * (the Next server) doesn't sit next to the package, so the repo root (from
+ * TM_ROOT, or found from the working directory, as the config does) and the
+ * repo layout from the working directory are tried too.
  */
-export function findMigrationsDir(cwd = process.cwd()): string | undefined {
+export function findMigrationsDir(
+  cwd = process.cwd(),
+  packageDir: string = MIGRATIONS_DIR,
+): string | undefined {
   const candidates = [
-    MIGRATIONS_DIR,
+    packageDir,
+    join(findRepoRoot(cwd), "packages", "db", "drizzle"),
     resolve(cwd, "packages/db/drizzle"),
     resolve(cwd, "../../packages/db/drizzle"),
   ];
