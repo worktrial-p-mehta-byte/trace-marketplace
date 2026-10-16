@@ -602,11 +602,15 @@ export function placeOrder(
     }
   });
 
-  // The order is paid and committed. What follows (the event, purchase
-  // demand, repricing) must not turn a successful payment into an error for
-  // the buyer; if it fails, the next pricing run catches up.
+  // The order is paid and committed. What follows must not turn a
+  // successful payment into an error for the buyer, and each step runs on
+  // its own, so a failed event never costs the purchase its demand signal.
   try {
     deps.bus.emit(EventTypes.OrderPaid, { orderId, lines: lines.length, totalCents: total });
+  } catch (err) {
+    console.error(`[checkout] order ${orderId} is paid; its event failed`, err);
+  }
+  try {
     recordPurchases(
       db,
       deps,
@@ -615,7 +619,7 @@ export function placeOrder(
       now,
     );
   } catch (err) {
-    console.error(`[checkout] order ${orderId} is paid; follow-up work failed`, err);
+    console.error(`[checkout] order ${orderId} is paid; recording its demand failed`, err);
   }
   return { orderId, totalCents: total, lines: lines.length, skipped };
 }

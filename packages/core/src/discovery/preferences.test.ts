@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { loadConfig } from "@tm/config";
 import { openDb, runMigrations, schema, type Db } from "@tm/db";
 import { generateCatalog, generateFlood } from "@tm/synth";
@@ -133,6 +134,18 @@ describe("buyer preferences", () => {
       20,
     );
     expect(picks).toEqual([]);
+  });
+
+  it("only picks listings offered under the team's licence", async () => {
+    const p = setBuyerPreferences(db, deps, buyer, { domains: ["medical"], license: "training" });
+    const before = await recommendFor(db, deps, p, 50);
+    expect(before.length).toBeGreaterThan(0);
+    db.update(schema.listings)
+      .set({ allowedLicenses: ["research"] })
+      .where(eq(schema.listings.id, before[0]!.listingId))
+      .run();
+    const after = await recommendFor(db, deps, p, 50);
+    expect(after.map((i) => i.listingId)).not.toContain(before[0]!.listingId);
   });
 
   it("never picks the team's own members' listings", async () => {

@@ -213,8 +213,18 @@ describe("cart, quote and order", () => {
         },
       },
     };
+    const demandBefore = db.select().from(schema.demandSignals).all().length;
     const r = placeOrder(db, flaky, buyer, q.id);
     expect(r.lines).toBe(1);
+    // The failed event doesn't cost the purchase its demand signal.
+    expect(
+      db
+        .select()
+        .from(schema.demandSignals)
+        .all()
+        .filter((d) => d.kind === "purchase").length,
+    ).toBeGreaterThan(0);
+    expect(db.select().from(schema.demandSignals).all().length).toBeGreaterThan(demandBefore);
     expect(licensesHeld(db, buyer.buyerOrgId!, listings[8]!)).toContain("research");
     expect(ledgerSums().every((sum) => sum === 0)).toBe(true);
   });

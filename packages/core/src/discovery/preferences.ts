@@ -121,6 +121,16 @@ export async function recommendFor(
   // than research), for both the budget and what the picks show.
   const market = buildMarket(db, { config: deps.config, now: deps.now });
   const rows = new Map(market.active.map((a) => [a.listingId, a]));
+  // Only what the team can actually buy under its licence.
+  const offered = new Set(
+    db
+      .select({ id: schema.listings.id, allowed: schema.listings.allowedLicenses })
+      .from(schema.listings)
+      .where(eq(schema.listings.status, "active"))
+      .all()
+      .filter((r) => r.allowed.includes(prefs.license))
+      .map((r) => r.id),
+  );
   const pool: CatalogItem[] = [];
   for (const domain of prefs.domains) {
     // The whole domain: ranking happens below, after the budget, so a cheap
@@ -132,7 +142,7 @@ export async function recommendFor(
     });
     for (const i of r.items) {
       const row = rows.get(i.listingId);
-      if (!row || members.has(row.sellerId)) continue;
+      if (!row || members.has(row.sellerId) || !offered.has(i.listingId)) continue;
       const priceCents = market.quote(row, prefs.license).priceCents;
       if (prefs.maxPriceCents && priceCents > prefs.maxPriceCents) continue;
       pool.push({ ...i, priceCents });
