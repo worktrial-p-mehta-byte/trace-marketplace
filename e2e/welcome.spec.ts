@@ -31,7 +31,16 @@ test("a new buyer says what they need and gets traces picked for them", async ({
   const row = page.getByRole("region", { name: "Picked for you" });
   await expect(row.locator("a").first()).toBeVisible();
   await row.locator("a[href^='/traces/']").first().click();
-  await expect(
-    page.getByRole("region", { name: "Price" }).getByRole("radio", { name: "Evaluation" }),
-  ).toHaveAttribute("aria-checked", "true");
+  const card = page.getByRole("region", { name: "Price" });
+  await expect(card.getByRole("radio", { name: "Evaluation" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  // Adding to the cart keeps the licence the buyer was looking at.
+  await card.getByRole("button", { name: "Add to cart" }).click();
+  await page.getByRole("status").getByRole("link", { name: "cart" }).click();
+  await expect(page.getByRole("button", { name: /Evaluation/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });

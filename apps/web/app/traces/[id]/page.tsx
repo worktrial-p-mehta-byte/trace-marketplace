@@ -327,7 +327,10 @@ export default async function TracePage({
               className="rounded-md border border-moss/40 bg-moss/5 px-3 py-2 text-sm"
             >
               Added to your{" "}
-              <Link href="/cart" className="font-semibold text-cobalt">
+              <Link
+                href={`/cart?license=${p.license ?? "research"}`}
+                className="font-semibold text-cobalt"
+              >
                 cart
               </Link>
               .

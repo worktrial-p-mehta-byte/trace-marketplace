@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getBuyerPreferences, recommendFor, suggestedCampaign } from "@tm/core";
+import { canSell, getBuyerPreferences, recommendFor, suggestedCampaign } from "@tm/core";
 import { DOMAIN_NAMES, FAILURE_DESCRIPTIONS, FAILURE_NAMES, money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 import { savePreferencesAction } from "./actions";
@@ -94,6 +94,11 @@ export default async function WelcomePage({
           <Link href="/traces" className="btn-quiet mt-3 ml-2">
             Browse everything
           </Link>
+          {canSell(user) && (
+            <Link href="/share" className="btn-quiet mt-3 ml-2">
+              Share your sessions
+            </Link>
+          )}
         </div>
       </main>
     );

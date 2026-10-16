@@ -42,7 +42,8 @@ export async function addToCartAction(form: FormData) {
   } catch (err) {
     fail(`/traces/${listingId}`, err);
   }
-  redirect(`/traces/${listingId}?added=1`);
+  // Carry the licence the buyer was looking at, so the cart opens on it.
+  redirect(`/traces/${listingId}?added=1&license=${licenseOf(form)}`);
 }
 
 /** Buy one trace now: quote just this listing under the chosen licence. */

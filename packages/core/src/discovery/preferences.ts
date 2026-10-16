@@ -118,7 +118,10 @@ export async function recommendFor(
       tier: prefs.contentNeeded ? 0 : undefined,
       limit: 500,
     });
-    pool.push(...r.items);
+    // Within budget: the research price is the least a licence costs.
+    pool.push(
+      ...r.items.filter((i) => !prefs.maxPriceCents || i.priceCents <= prefs.maxPriceCents),
+    );
   }
   const want = new Set(prefs.failures);
   const score = (i: CatalogItem) =>
@@ -126,7 +129,6 @@ export async function recommendFor(
     (i.outcomes.includes("recovered") ? 1 : 0) +
     (i.outcomes.includes("tests_passed") ? 0.5 : 0) +
     (i.authenticity === "consistent" ? 0.5 : i.authenticity === "flagged" ? -3 : 0) +
-    (prefs.maxPriceCents && i.priceCents > prefs.maxPriceCents ? -2 : 0) +
     Math.min(1, i.rarity / 2);
   const seen = new Map<string, number>();
   return pool

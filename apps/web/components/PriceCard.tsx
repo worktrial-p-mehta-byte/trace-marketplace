@@ -84,6 +84,7 @@ export function PriceCard({
           </form>
           <form action={addToCartAction}>
             <input type="hidden" name="listingId" value={listingId} />
+            <input type="hidden" name="license" value={license} />
             <button className="btn-quiet w-full">Add to cart</button>
           </form>
         </div>

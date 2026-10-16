@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ensureWelcomeCredits, viewCart } from "@tm/core";
+import { ensureWelcomeCredits, getBuyerPreferences, viewCart } from "@tm/core";
 import type { LicenseScope } from "@tm/schema";
 import { money } from "@/lib/labels";
 import { getBus, getConfig, getCurrentUser, getDb, refreshPrices } from "@/lib/server";
@@ -37,9 +37,9 @@ export default async function CartPage({
   const config = getConfig();
   ensureWelcomeCredits(getDb(), config, user.buyerOrgId);
   refreshPrices();
-  const license = (
-    LICENSES.some(([k]) => k === p.license) ? p.license : "research"
-  ) as LicenseScope;
+  // The licence in the link, else the one the buyer said they need.
+  const preferred = getBuyerPreferences(getDb(), user.buyerOrgId)?.license ?? "research";
+  const license = (LICENSES.some(([k]) => k === p.license) ? p.license : preferred) as LicenseScope;
   const cart = viewCart(getDb(), { config, bus: getBus() }, user, license);
   const buyable = cart.lines.filter((l) => !l.excluded);
 

@@ -102,6 +102,21 @@ describe("buyer preferences", () => {
     for (const n of shapes.values()) expect(n).toBeLessThanOrEqual(2);
   });
 
+  it("keeps picks within the stated budget", async () => {
+    const open = { domains: ["medical"], failures: ["user_correction"] };
+    const all = await recommendFor(db, deps, setBuyerPreferences(db, deps, buyer, open), 20);
+    const budgetCents = Math.round(Math.min(...all.map((i) => i.priceCents)) * 1.2);
+    const picks = await recommendFor(
+      db,
+      deps,
+      setBuyerPreferences(db, deps, buyer, { ...open, maxPriceCents: budgetCents }),
+      20,
+    );
+    expect(picks.length).toBeGreaterThan(0);
+    expect(picks.length).toBeLessThan(all.length);
+    for (const i of picks) expect(i.priceCents).toBeLessThanOrEqual(budgetCents);
+  });
+
   it("suggests a campaign the campaign form understands", () => {
     expect(
       suggestedCampaign({
