@@ -605,7 +605,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
               className={`mt-4 grid gap-4 ${showOriginal && active.tier === 0 ? "xl:grid-cols-2" : ""}`}
             >
               {active.tier === 1 ? (
-                <SignalsView trace={outgoing(active)} />
+                <SignalsView trace={outgoing(active)} labels={active.enrich.labels} />
               ) : (
                 <Timeline trace={outgoing(active)} />
               )}

@@ -1,4 +1,12 @@
-import type { Trace, TraceEvent } from "@tm/schema";
+"use client";
+
+import { useState } from "react";
+import type { Label, Trace, TraceEvent } from "@tm/schema";
+
+type LabelEvidence = Pick<Label, "code" | "evidence">;
+
+/** Steps rendered at first and per "Show more": a 15 MB upload can hold tens of thousands. */
+const PAGE = 400;
 
 type Call = Extract<TraceEvent, { type: "tool_call" }>;
 type Result = Extract<TraceEvent, { type: "tool_result" }>;
@@ -14,9 +22,14 @@ type Step =
       tool: string;
       status: "ok" | "error" | "rejected" | "none";
     }
-  | { kind: "system"; seq: number; label: string };
+  | { kind: "system"; seq: number; label: string; error: boolean };
 
-function stepsOf(trace: Trace): Step[] {
+/**
+ * `harnessErrors`: harness notices the labeler judged to be errors (the
+ * `harness_error` label's evidence). The text is gone in a signals-only
+ * trace, so this view can't tell an error from a benign notice by itself.
+ */
+function stepsOf(trace: Trace, harnessErrors: Set<number>): Step[] {
   const results = new Map<string, Result>();
   for (const e of trace.events) if (e.type === "tool_result") results.set(e.callId, e);
   const steps: Step[] = [];
@@ -36,9 +49,16 @@ function stepsOf(trace: Trace): Step[] {
       }
       case "system":
         if (e.kind === "compaction")
-          steps.push({ kind: "system", seq: e.seq, label: "context compacted" });
-        else if (e.kind === "harness_message")
-          steps.push({ kind: "system", seq: e.seq, label: "API error" });
+          steps.push({ kind: "system", seq: e.seq, label: "context compacted", error: false });
+        else if (e.kind === "harness_message") {
+          const error = harnessErrors.has(e.seq);
+          steps.push({
+            kind: "system",
+            seq: e.seq,
+            label: error ? "API error" : "harness notice",
+            error,
+          });
+        }
         break;
     }
   }
@@ -58,16 +78,29 @@ function minutes(trace: Trace): string {
  */
 export function SignalsView({
   trace,
+  labels = [],
   highlight,
   counts = true,
 }: {
   trace: Trace;
+  /** The trace's labels; harness_error evidence marks which harness notices were errors. */
+  labels?: LabelEvidence[];
   highlight?: number[];
   /** Show the counts row (off where the page already shows the same numbers). */
   counts?: boolean;
 }) {
   const marked = new Set(highlight ?? []);
-  const steps = stepsOf(trace);
+  const harnessErrors = new Set(
+    labels.filter((l) => l.code === "harness_error").flatMap((l) => l.evidence),
+  );
+  const steps = stepsOf(trace, harnessErrors);
+  // Render at least through the last highlighted step, so every evidence link has a target.
+  const lastMarked = steps.findLastIndex(
+    (s) =>
+      marked.has(s.seq) ||
+      (s.kind === "tool" && s.resultSeq !== undefined && marked.has(s.resultSeq)),
+  );
+  const [shown, setShown] = useState(Math.max(PAGE, lastMarked + 1));
   const tools = new Map<string, number>();
   let errors = 0;
   let rejected = 0;
@@ -117,7 +150,7 @@ export function SignalsView({
       <div>
         <p className="text-xs font-semibold text-ink-3">The session, step by step</p>
         <ol className="mt-2 flex flex-wrap gap-1.5" aria-label="Session steps">
-          {steps.map((s) => {
+          {steps.slice(0, shown).map((s) => {
             const on =
               marked.has(s.seq) ||
               (s.kind === "tool" && s.resultSeq !== undefined && marked.has(s.resultSeq));
@@ -150,8 +183,14 @@ export function SignalsView({
               else cls = "border-ink/20 bg-surface text-ink font-mono";
             } else {
               text = s.label;
-              title = s.label;
-              cls = "border-dashed border-rule text-ink-3";
+              title = s.error
+                ? "The harness reported an error"
+                : s.label === "harness notice"
+                  ? "A notice from the harness"
+                  : s.label;
+              cls = s.error
+                ? "border-dashed border-brick bg-brick/10 text-brick"
+                : "border-dashed border-rule text-ink-3";
             }
             return (
               <li
@@ -168,6 +207,15 @@ export function SignalsView({
             );
           })}
         </ol>
+        {steps.length > shown && (
+          <button
+            type="button"
+            className="btn-quiet mt-3 text-sm"
+            onClick={() => setShown((n) => n + PAGE)}
+          >
+            Show {Math.min(PAGE, steps.length - shown)} more of {steps.length - shown} remaining
+          </button>
+        )}
         <p className="mt-3 text-xs text-ink-3">
           Red steps failed, were rejected or were interrupted. Message text, commands, file names
           and tool output are not included.

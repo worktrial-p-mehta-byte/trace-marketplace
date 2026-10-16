@@ -164,17 +164,29 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
                 )}
               </p>
             )}
+            {d.contentVisible && d.tier === 1 && (
+              <p className="mt-2 rounded-md border border-rule bg-surface p-3 text-sm text-ink-2">
+                You shared this session as signals only, so its text and code were never stored.
+                This is what buyers see.
+              </p>
+            )}
             {d.trace && (
               <div className="mt-3 rounded-lg border border-rule bg-surface p-4">
                 {/* Render at least through the last evidence event, so every evidence link has a target. */}
-                {d.contentVisible ? (
+                {/* Signals-only traces were stripped before storage: even the owner gets the structural view. */}
+                {d.contentVisible && d.tier !== 1 ? (
                   <Timeline
                     trace={d.trace}
                     highlight={evidence}
                     initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
                   />
                 ) : (
-                  <SignalsView trace={d.trace} highlight={evidence} counts={false} />
+                  <SignalsView
+                    trace={d.trace}
+                    labels={d.labels}
+                    highlight={evidence}
+                    counts={false}
+                  />
                 )}
               </div>
             )}

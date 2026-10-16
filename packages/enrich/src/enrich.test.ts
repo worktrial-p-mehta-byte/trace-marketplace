@@ -230,7 +230,11 @@ describe("test tampering in other test styles", () => {
           type: "tool_call",
           callId: "c1",
           tool: "Edit",
-          input: { file_path: "test/LedgerSpec.hs", old_string: "balance l `shouldBe` 0", new_string: "" },
+          input: {
+            file_path: "test/LedgerSpec.hs",
+            old_string: "balance l `shouldBe` 0",
+            new_string: "",
+          },
         },
         { seq: 2, type: "tool_result", callId: "c1", output: "updated", isError: false },
       ],
@@ -293,4 +297,3 @@ describe("test tampering in other test styles", () => {
     }
   });
 });
-
