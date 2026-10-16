@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { openDb, runMigrations } from "./client";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import {
+  findMigrationsDir,
+  MIGRATIONS_DIR,
+  openDb,
+  pendingMigrations,
+  runMigrations,
+} from "./client";
 
 const EXPECTED_TABLES = [
   "assets",
@@ -45,6 +55,48 @@ describe("database migrations", () => {
       .all() as { name: string }[];
     expect(rows.map((r) => r.name)).toEqual(EXPECTED_TABLES);
     db.$client.close();
+  });
+
+  it("report what an older database is missing, and nothing once migrated", () => {
+    // A database migrated before the last two migrations existed.
+    const old = mkdtempSync(join(tmpdir(), "tm-migrations-"));
+    try {
+      cpSync(MIGRATIONS_DIR, old, { recursive: true });
+      const journalPath = join(old, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalPath, "utf8")) as {
+        entries: { tag: string }[];
+      };
+      const all = journal.entries.map((e) => e.tag);
+      journal.entries = journal.entries.slice(0, -2);
+      writeFileSync(journalPath, JSON.stringify(journal));
+      const db = openDb(":memory:");
+      expect(pendingMigrations(db)).toEqual(all);
+      migrate(db, { migrationsFolder: old });
+      expect(pendingMigrations(db)).toEqual(all.slice(-2));
+      runMigrations(db);
+      expect(pendingMigrations(db)).toEqual([]);
+      db.$client.close();
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+    }
+  });
+
+  it("finds the migrations folder from the package, TM_ROOT or the repo layout", () => {
+    expect(findMigrationsDir()).toBeDefined();
+    expect(findMigrationsDir("/nonexistent")).toBe(MIGRATIONS_DIR);
+    const before = process.env.TM_ROOT;
+    try {
+      // As in a bundled server started elsewhere: the package path is gone.
+      process.env.TM_ROOT = join(MIGRATIONS_DIR, "..", "..", "..");
+      expect(findMigrationsDir("/", "/gone")).toBe(
+        join(process.env.TM_ROOT, "packages/db/drizzle"),
+      );
+      delete process.env.TM_ROOT;
+      expect(findMigrationsDir("/", "/gone")).toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.TM_ROOT;
+      else process.env.TM_ROOT = before;
+    }
   });
 
   it("are idempotent", () => {

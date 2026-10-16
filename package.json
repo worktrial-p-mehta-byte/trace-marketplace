@@ -9,9 +9,9 @@
   },
   "scripts": {
     "bootstrap": "pnpm install && pnpm db:migrate && pnpm search:rebuild",
-    "dev": "pnpm --filter @tm/web dev",
+    "dev": "pnpm db:migrate && pnpm --filter @tm/web dev",
     "build": "pnpm --filter @tm/web build",
-    "start": "pnpm --filter @tm/web start",
+    "start": "pnpm db:migrate && pnpm --filter @tm/web start",
     "db:generate": "pnpm --filter @tm/db generate",
     "db:migrate": "pnpm --filter @tm/db migrate",
     "db:reset": "tsx scripts/reset-db.ts && pnpm db:migrate && pnpm search:rebuild",

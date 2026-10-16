@@ -1,6 +1,6 @@
 import "server-only";
 import { TRACE_SCHEMA_VERSION } from "@tm/schema";
-import { getConfig, getDb, type SystemStatus } from "./server";
+import { databasePending, getConfig, getDb, type SystemStatus } from "./server";
 
 export function getSystemStatus(): SystemStatus {
   const config = getConfig();
@@ -12,7 +12,12 @@ export function getSystemStatus(): SystemStatus {
       )
       .get() as { n: number };
     database = { ok: row.n > 0, path: config.database.path, tables: row.n };
+    const pending = databasePending(getDb());
     if (row.n === 0) database.error = "No tables yet. Run: pnpm db:migrate";
+    else if (pending.length) {
+      database.ok = false;
+      database.error = `Missing migrations ${pending.join(", ")}. Run: pnpm db:migrate`;
+    }
   } catch (err) {
     console.error("[status] database check failed", err);
     database.error = err instanceof Error ? err.message : String(err);
