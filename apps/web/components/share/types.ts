@@ -8,6 +8,10 @@ export interface Quote {
   sellerCents: number;
   summary: string;
   drivers: PriceDriver[];
+  /** The seller's share for this session (it can differ by domain). */
+  sellerShare?: number;
+  /** Where the price is likely to settle. */
+  band?: { lowCents: number; highCents: number };
 }
 
 export interface ShareOutcome {

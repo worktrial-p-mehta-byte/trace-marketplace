@@ -78,7 +78,7 @@ describe("internal ingest", () => {
 });
 
 describe("postBounty", () => {
-  it("raises the prices of matching listings only, and records the bounty", () => {
+  it("raises the prices of matching listings, others barely, and records the bounty", () => {
     const others = watchList(db, deps.config, { language: "TypeScript" }, 50);
     const r = postBounty(db, deps, {
       buyerOrgId,
@@ -90,14 +90,17 @@ describe("postBounty", () => {
     });
     expect(r.weight).toBeCloseTo(4); // $200 × 0.02
     expect(r.moves).toHaveLength(2);
-    for (const m of r.moves) expect(m.after).toBeGreaterThan(m.before);
+    const least = Math.min(...r.moves.map((m) => m.after / m.before));
+    expect(least).toBeGreaterThan(1.2);
     for (const o of others) {
       const now = db
         .select()
         .from(schema.listings)
         .where(eq(schema.listings.id, o.listingId))
         .get()!;
-      expect(now.currentPriceCents).toBe(o.priceCents);
+      // Unmatched listings only move through their domain's share of demand
+      // (the niche factor): a few percent, far less than the matched ones.
+      expect(Math.abs(now.currentPriceCents! / o.priceCents - 1)).toBeLessThan(0.06);
     }
     expect(openBounties(db)).toHaveLength(1);
   });
@@ -168,7 +171,11 @@ describe("floodSupply by domain", () => {
       { domain: "medical", failure: "user_correction" },
     );
     expect(listed.total).toBeGreaterThanOrEqual(6);
-    expect(watchList(db, deps.config, rust).map((w) => w.priceCents)).toEqual(rustBefore);
+    // Other domains only feel it through the market's shape (typical cohort
+    // sizes, domain shares): a few percent at most.
+    watchList(db, deps.config, rust).forEach((w, i) =>
+      expect(Math.abs(w.priceCents / rustBefore[i]! - 1)).toBeLessThan(0.03),
+    );
   });
 
   it("refuses a flood with no domain or language, or an impossible pair", async () => {

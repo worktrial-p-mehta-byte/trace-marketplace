@@ -57,6 +57,9 @@ function traits(over: Partial<TraceTraits>): TraceTraits {
     domain: "software_engineering",
     domainConfidence: 0.9,
     domains: [{ domain: "software_engineering", share: 1 }],
+    distinctTools: 2,
+    repeatRatio: 0,
+    shapeKey: "", // no fingerprint: not a near-duplicate of anything
     ...over,
   };
 }
@@ -411,7 +414,8 @@ describe("domains", () => {
       true,
     );
     expect(await price(med)).toBeGreaterThan(medBefore);
-    expect(await price(rustLoop)).toBe(rustBefore);
+    // Coding's share of demand fell, so its niche factor can only fall.
+    expect(await price(rustLoop)).toBeLessThanOrEqual(rustBefore);
   });
 });
 
@@ -446,7 +450,10 @@ describe("getListingDetail and the content policy", () => {
     const d = (await getListingDetail(db, { config, blobs }, rustLoop, buyer))!;
     expect(d.contentVisible).toBe(true);
     expect(JSON.stringify(d.trace)).toContain("semaphore");
-    expect(d.quotes!.training.priceCents).toBe(d.quotes!.research.priceCents * 2);
+    // Each license is rounded to the cent on its own.
+    expect(
+      Math.abs(d.quotes!.training.priceCents - d.quotes!.research.priceCents * 2),
+    ).toBeLessThanOrEqual(1);
     expect(d.sellerAlias).toMatch(/^Seller [0-9a-f]{6}$/);
     expect(d.isOwner).toBe(false);
   });

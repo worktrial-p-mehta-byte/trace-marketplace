@@ -28,7 +28,8 @@
     "reprice": "tsx scripts/reprice.ts",
     "seed": "tsx scripts/seed.ts",
     "demo:reset": "pnpm db:reset && pnpm seed",
-    "demo:sessions": "tsx scripts/demo-sessions.ts"
+    "demo:sessions": "tsx scripts/demo-sessions.ts",
+    "pricing:shadow": "tsx scripts/pricing-shadow.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -9,6 +9,7 @@ import type { MarketplaceConfig } from "./schema";
 export const DEFAULT_CONFIG: MarketplaceConfig = {
   revenue: {
     sellerShare: 0.7,
+    sellerShareByDomain: {},
   },
   pricing: {
     basePrice: { tier0: 2.0, tier1: 0.25 },
@@ -61,6 +62,38 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       ],
     },
     license: { research: 1.0, eval: 1.5, training: 2.0 },
+    policy: "trait-v2",
+    v2: {
+      rarity: {
+        alpha: 2,
+        weights: { domain: 0.5, failure: 0.3, stack: 0.2 },
+        minParentCohort: 5,
+        modelSpread: 0.1,
+        min: 0.6,
+        max: 2.5,
+      },
+      niche: { exponent: 0.35, priorWeight: 20, min: 0.85, max: 1.6, strategicWeights: {} },
+      richness: {
+        coef: 0.4,
+        turnsScale: 20,
+        repeatPenalty: 0.8,
+        perTool: 0.04,
+        maxToolBonus: 0.16,
+        max: 2,
+      },
+      failure: {
+        none: 1.0,
+        attempted: 1.35,
+        inferred: 1.6,
+        verified: 1.9,
+        perPreferencePair: 0.08,
+        maxPreferenceBonus: 0.32,
+      },
+      duplicates: { step: 0.5, floor: 0.4 },
+      demand: { halfLifeDays: 7, repeatWeight: 0.5 },
+      bounty: { anchorShare: 0.6, maxLift: 1.5 },
+      band: { base: 0.08, domainUncertainty: 0.12, thinCohort: 0.08, claimed: 0.05, max: 0.35 },
+    },
     quoteLockMinutes: 15,
     /** Prices depend on time (freshness, demand window): refresh them at least this often. */
     refreshIntervalMinutes: 60,

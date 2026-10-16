@@ -6,7 +6,7 @@ import { detectAdapter } from "@tm/adapters";
 import { enrichTrace } from "@tm/enrich";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
-import { DOMAIN_NAMES } from "@/lib/labels";
+import { DOMAIN_NAMES, FACTOR_NAMES } from "@/lib/labels";
 import { redactionLabel } from "../Redacted";
 import { SignalsView } from "./SignalsView";
 import { Timeline } from "./Timeline";
@@ -564,15 +564,24 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
                       <p className="mt-1 text-3xl font-bold">
                         <span className="price">{money(active.quote.priceCents)}</span>
                       </p>
+                      {active.quote.band && (
+                        <p className="text-sm text-ink-3">
+                          Likely range {money(active.quote.band.lowCents)}–
+                          {money(active.quote.band.highCents)} as the market moves
+                        </p>
+                      )}
                       <p className="mt-1 text-sm text-ink-2">
                         You earn {money(active.quote.sellerCents)} per sale (
-                        {Math.round(sellerShare * 100)}%). {active.quote.summary}
+                        {Math.round((active.quote.sellerShare ?? sellerShare) * 100)}%).{" "}
+                        {active.quote.summary}
                       </p>
                       <table className="mt-3 w-full text-sm">
                         <tbody>
                           {active.quote.drivers.map((d) => (
                             <tr key={d.factor} className="border-t border-rule/70 align-top">
-                              <td className="py-1.5 pr-3 capitalize text-ink-2">{d.factor}</td>
+                              <td className="py-1.5 pr-3 text-ink-2">
+                                {FACTOR_NAMES[d.factor] ?? d.factor}
+                              </td>
                               <td
                                 className={`py-1.5 pr-3 font-semibold ${
                                   d.direction === "up"

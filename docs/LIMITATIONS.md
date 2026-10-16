@@ -44,7 +44,18 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
-## Pricing — M3
+## Pricing V2 — phase 2
+
+| Limitation                                                                                                                          | Impact                                                                                                          | Lifted by                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Weights are still hand-set; the wind tunnel's buyer model shares V2's assumptions (labs value evidence and scarce domains)          | The wind tunnel shows V2 is consistent with the goal, not that real buyers behave this way                      | Real sales data; learned pricing behind the same interface (post-demo)             |
+| The niche factor reads demand shares across domains, so demand for one domain lowers the others' niche slightly                     | A bounty in coding moves other coding listings up a few percent, and other domains down a little                | Intended: domain demand is relative. Per-domain absolute demand once volume allows |
+| In a small catalog the stack level rarely counts (it needs ≥5 listings with the same domain and failure) and stack cohorts are tiny | A rare stack inside a crowded domain adds only a little (04a vs 04b)                                            | More supply; the threshold is config                                               |
+| Near-duplicates are detected per seller by an exact shape fingerprint                                                               | A seller who varies the shape (adds a step) escapes the discount; two sellers sharing one session aren't linked | Fuzzy shape similarity; cross-seller checks in authenticity tiers                  |
+| Seller price floors are not built                                                                                                   | Sellers can't refuse to sell below a price                                                                      | A floor per listing, enforced at checkout                                          |
+| The price band is a rule of thumb from domain confidence, cohort size and tier                                                      | It is not a statistical interval                                                                                | Bands from observed price movement                                                 |
+
+## Pricing — M3 (v1, now the fallback)
 
 | Limitation                                                                                                        | Impact                                                                  | Lifted by                                                                              |
 | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |

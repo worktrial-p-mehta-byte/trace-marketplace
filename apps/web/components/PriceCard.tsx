@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PriceQuote } from "@tm/pricing";
+import { FACTOR_NAMES } from "@/lib/labels";
 
 type License = "research" | "eval" | "training";
 const LICENSES: { key: License; label: string; body: string }[] = [
@@ -43,6 +44,11 @@ export function PriceCard({ quotes }: { quotes: Record<License, PriceQuote> }) {
       <p className="mt-4 text-4xl font-bold">
         <span className="price">{money(q.priceCents)}</span>
       </p>
+      {q.band && (
+        <p className="text-sm text-ink-3">
+          Likely range {money(q.band.lowCents)}–{money(q.band.highCents)}
+        </p>
+      )}
       <p className="mt-1 text-sm text-ink-2">{chosen.body}</p>
       <button type="button" className="btn mt-4 w-full" disabled>
         Buy {chosen.label.toLowerCase()} license
@@ -55,7 +61,7 @@ export function PriceCard({ quotes }: { quotes: Record<License, PriceQuote> }) {
         <tbody>
           {q.drivers.map((d) => (
             <tr key={d.factor} className="border-t border-rule/70 align-top">
-              <td className="py-1.5 pr-2 capitalize text-ink-2">{d.factor}</td>
+              <td className="py-1.5 pr-2 text-ink-2">{FACTOR_NAMES[d.factor] ?? d.factor}</td>
               <td
                 className={`py-1.5 pr-2 font-semibold ${
                   d.direction === "up" ? "text-moss" : d.direction === "down" ? "text-brick" : ""

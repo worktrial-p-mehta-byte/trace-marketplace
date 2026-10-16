@@ -17,6 +17,51 @@ export interface DemandSignalInput {
   criteria: DemandCriteria;
   weight: number;
   createdAt: Date;
+  /** The buyer organisation behind the signal, when known. */
+  buyerOrgId?: string;
+  kind?: string;
+}
+
+const criteriaKey = (c: DemandCriteria) =>
+  JSON.stringify(
+    Object.entries(c)
+      .filter(([, v]) => v !== undefined && v !== "")
+      .map(([k, v]) => [k, String(v).toLowerCase()])
+      .sort(),
+  );
+
+/**
+ * Demand V2: signals decay with age (half-life), and one buyer repeating the
+ * same ask counts log-wise, not linearly: refreshing a search fifty times is
+ * not fifty buyers. Returns one signal per (buyer, kind, criteria), weighted
+ * as of `now`, ready for `demandPressure`.
+ */
+export function consolidateSignals(
+  signals: DemandSignalInput[],
+  now: Date,
+  windowDays: number,
+  opts: { halfLifeDays: number; repeatWeight: number },
+): DemandSignalInput[] {
+  const since = now.getTime() - windowDays * 86_400_000;
+  const groups = new Map<string, { s: DemandSignalInput; best: number; n: number }>();
+  for (const s of signals) {
+    const t = s.createdAt.getTime();
+    if (t < since || isEmptyCriteria(s.criteria)) continue;
+    const ageDays = Math.max(0, (now.getTime() - t) / 86_400_000);
+    const w = s.weight * 0.5 ** (ageDays / opts.halfLifeDays);
+    const key = `${s.buyerOrgId ?? "-"}|${s.kind ?? "-"}|${criteriaKey(s.criteria)}`;
+    const g = groups.get(key);
+    if (!g) groups.set(key, { s, best: w, n: 1 });
+    else {
+      g.n++;
+      g.best = Math.max(g.best, w);
+    }
+  }
+  return [...groups.values()].map(({ s, best, n }) => ({
+    ...s,
+    weight: best * (1 + opts.repeatWeight * Math.log2(n)),
+    createdAt: now,
+  }));
 }
 
 type Matchable = Pick<TraceTraits, "language" | "framework" | "failureCategory" | "model"> &

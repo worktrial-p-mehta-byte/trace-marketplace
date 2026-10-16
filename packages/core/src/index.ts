@@ -8,3 +8,5 @@ export * from "./storage";
 export * from "./catalog";
 export * from "./search";
 export * from "./market";
+export * from "./pricing/shadow";
+export * from "./market/windtunnel";

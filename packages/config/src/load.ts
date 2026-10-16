@@ -31,6 +31,11 @@ function envOverrides(env: Env): DeepPartial<MarketplaceConfig> {
   const o: DeepPartial<MarketplaceConfig> = {};
   const sellerShare = num(env, "SELLER_SHARE");
   if (sellerShare !== undefined) o.revenue = { sellerShare };
+  if (env.PRICING_POLICY) {
+    if (env.PRICING_POLICY !== "trait-v1" && env.PRICING_POLICY !== "trait-v2")
+      throw new Error(`PRICING_POLICY must be trait-v1 or trait-v2, got "${env.PRICING_POLICY}"`);
+    o.pricing = { policy: env.PRICING_POLICY };
+  }
   if (env.DATABASE_PATH) o.database = { path: env.DATABASE_PATH };
   if (env.BLOB_DIR) o.storage = { blobPath: env.BLOB_DIR };
   if (env.TM_CONFIG_OVERRIDES) {

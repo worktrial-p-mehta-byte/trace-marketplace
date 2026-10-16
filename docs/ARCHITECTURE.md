@@ -81,18 +81,19 @@ warehouse) is in the design doc. What changes on the way there is in
 
 ## Milestones
 
-| #    | Milestone                                                   | Status  |
-| ---- | ----------------------------------------------------------- | ------- |
-| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI  | Done    |
-| M1   | Canonical schema + Claude Code adapter                      | Done    |
-| M2   | Scrubber + labeler + trait extractor                        | Done    |
-| M3   | Pricing engine                                              | Done    |
-| M4   | Onboarding + sharing                                        | Done    |
-| M5   | Catalog + trace viewer                                      | Done    |
-| M6   | Market simulator + seed data + failure lab                  | Done    |
-| M7   | Docs, deployment (Docker)                                   | Done    |
-| M8   | Rehearse, polish, end-to-end test                           | Done    |
-| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs | This PR |
+| #    | Milestone                                                                          | Status  |
+| ---- | ---------------------------------------------------------------------------------- | ------- |
+| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI                         | Done    |
+| M1   | Canonical schema + Claude Code adapter                                             | Done    |
+| M2   | Scrubber + labeler + trait extractor                                               | Done    |
+| M3   | Pricing engine                                                                     | Done    |
+| M4   | Onboarding + sharing                                                               | Done    |
+| M5   | Catalog + trace viewer                                                             | Done    |
+| M6   | Market simulator + seed data + failure lab                                         | Done    |
+| M7   | Docs, deployment (Docker)                                                          | Done    |
+| M8   | Rehearse, polish, end-to-end test                                                  | Done    |
+| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                        | Done    |
+| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel | This PR |
 
 ## Session log adapters
 

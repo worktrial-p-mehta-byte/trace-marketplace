@@ -37,6 +37,7 @@ export {
 export {
   enrichTrace,
   comboKeyOf,
+  shapeTraits,
   type Enrichment,
   type ExtractOptions,
   type TraceTraits,

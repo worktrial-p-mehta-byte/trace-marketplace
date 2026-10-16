@@ -10,6 +10,7 @@ import {
   detectFramework,
   detectLanguage,
   enrichTrace,
+  shapeTraits,
   isCorrection,
   testRunPassed,
   testRunResult,
@@ -383,5 +384,78 @@ describe("detectDomains", () => {
     expect(ids).toContain("data_querying");
     expect(ids).toContain("software_engineering");
     expect(d.distribution.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1, 1);
+  });
+});
+
+describe("shapeTraits", () => {
+  const ev = (calls: [string, object, boolean?][]): Trace => ({
+    schemaVersion: 1,
+    id: "s",
+    startedAt: "2026-10-15T00:00:00Z",
+    endedAt: "2026-10-15T00:10:00Z",
+    provenance: {
+      source: "real",
+      harness: { name: "claude-code" },
+      model: { id: "m" },
+      repo: { languages: [], frameworks: [] },
+      capturedAt: "2026-10-15T00:10:00Z",
+    },
+    events: [
+      { seq: 0, type: "user_message", text: "go" },
+      ...calls.flatMap(([tool, input, err], i) => [
+        { seq: 1 + 2 * i, type: "tool_call" as const, callId: `c${i}`, tool, input },
+        {
+          seq: 2 + 2 * i,
+          type: "tool_result" as const,
+          callId: `c${i}`,
+          output: "",
+          isError: Boolean(err),
+        },
+      ]),
+    ],
+  });
+
+  it("counts tools and exact repeats", () => {
+    const t = shapeTraits(
+      ev([
+        ["Bash", { command: "pytest" }, true],
+        ["Bash", { command: "pytest" }, true],
+        ["Bash", { command: "pytest" }, true],
+        ["Read", { file_path: "a.py" }],
+      ]),
+    );
+    expect(t.distinctTools).toBe(2);
+    expect(t.repeatRatio).toBe(0.5);
+  });
+
+  it("gives near-duplicates the same shape and different sessions different ones", () => {
+    const a = shapeTraits(
+      ev([
+        ["Read", { file_path: "a" }],
+        ["Bash", { command: "x" }, true],
+      ]),
+    );
+    const textOnly = shapeTraits(
+      ev([
+        ["Read", { file_path: "b" }],
+        ["Bash", { command: "y" }, true],
+      ]),
+    );
+    const padded = shapeTraits(
+      ev([
+        ["Read", { file_path: "a" }],
+        ["Read", { file_path: "c" }],
+        ["Bash", { command: "x" }, true],
+      ]),
+    );
+    const different = shapeTraits(
+      ev([
+        ["Read", { file_path: "a" }],
+        ["Bash", { command: "x" }],
+      ]),
+    );
+    expect(textOnly.shapeKey).toBe(a.shapeKey);
+    expect(padded.shapeKey).toBe(a.shapeKey); // a repeated step collapses
+    expect(different.shapeKey).not.toBe(a.shapeKey); // the error is part of the shape
   });
 });
