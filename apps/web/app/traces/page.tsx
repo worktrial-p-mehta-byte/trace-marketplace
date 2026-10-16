@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   browseCatalog,
@@ -17,6 +18,8 @@ import {
   getSearch,
   refreshPrices,
 } from "@/lib/server";
+
+export const metadata: Metadata = { title: "Browse traces" };
 
 export const dynamic = "force-dynamic";
 
@@ -79,17 +82,18 @@ function FacetGroup({
   return (
     <section>
       <h3 className="text-sm font-semibold">{title}</h3>
-      <ul className="mt-2 space-y-0.5 text-sm">
+      {/* Chips that wrap on phones; a vertical list beside the results on wide screens. */}
+      <ul className="mt-2 flex flex-wrap gap-1.5 text-sm lg:block lg:space-y-0.5">
         {values.slice(0, 8).map((v) => {
           const on = p[k] === v.value;
           return (
             <li key={v.value}>
               <Link
                 href={href(p, { [k]: on ? undefined : v.value })}
-                className={`flex justify-between gap-3 rounded px-2 py-1 ${
+                className={`flex justify-between gap-2 rounded border px-2 py-1 lg:gap-3 lg:border-transparent ${
                   on
-                    ? "bg-ink font-semibold text-paper"
-                    : "text-ink-2 hover:bg-surface hover:text-ink"
+                    ? "border-ink bg-ink font-semibold text-paper"
+                    : "border-rule text-ink-2 hover:bg-surface hover:text-ink"
                 }`}
                 aria-current={on ? "true" : undefined}
               >
@@ -159,7 +163,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[14rem_1fr]">
-        <aside className="space-y-6" aria-label="Filters">
+        <aside className="space-y-4 lg:space-y-6" aria-label="Filters">
           <FacetGroup title="What went wrong" k="failure" values={r.facets.failure} p={p} />
           <FacetGroup title="Outcome" k="outcome" values={r.facets.outcome} p={p} />
           <FacetGroup title="Language" k="language" values={r.facets.language} p={p} />

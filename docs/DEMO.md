@@ -26,6 +26,10 @@ pnpm build && pnpm start # production mode: every page is fast on first click
   (`buyer@example.com` / `demo-password`).
 - Close other tabs; zoom the browser to 110% for a projector.
 
+The whole script also runs as an automated test (`pnpm build && pnpm e2e`,
+[`e2e/demo.spec.ts`](../e2e/demo.spec.ts)), in CI on every pull request, so
+the steps below stay true.
+
 ## Script
 
 | Time | Step                  | What to do                                                                                                                                                                                           | What to say                                                                                                                                                     |

@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { canSell, TERMS_VERSION } from "@tm/core";
 import { TermsForm } from "@/components/TermsForm";
 import { getConfig, getCurrentUser } from "@/lib/server";
+
+export const metadata: Metadata = { title: "Before you share" };
 
 export const dynamic = "force-dynamic";
 
