@@ -162,6 +162,42 @@ describe("campaigns", () => {
     expect(filled).toBeGreaterThanOrEqual(0);
   });
 
+  it("reaches a new listing behind a long event backlog, and reports only its own fills", async () => {
+    createCampaign(db, deps, buyer, {
+      describe: "finance",
+      license: "research",
+      maxPriceCents: 4000,
+      quantity: 5,
+      days: 7,
+    });
+    // A long history the consumer hasn't read: more than one batch.
+    db.$client.exec("BEGIN");
+    const ins = db.$client.prepare(
+      "INSERT INTO events (type, payload) VALUES ('price.updated', '{}')",
+    );
+    for (let i = 0; i < 10_050; i++) ins.run();
+    db.$client.exec("COMMIT");
+    db.delete(schema.eventCursors).where(eq(schema.eventCursors.consumer, "campaigns")).run();
+    const other = await ensureAccount(db, "o2@example.com", "seller", "O2");
+    const [t] = generateFlood(51, 1, NOW, { domain: "finance", pattern: "tool_error" });
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    expect(r.campaignFills).toBe(1);
+    // A share in a domain no campaign wants reports none, whatever else cleared.
+    const [u] = generateFlood(52, 1, NOW, { domain: "design", pattern: "clean" });
+    const r2 = await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: u!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    expect(r2.campaignFills).toBeUndefined();
+  });
+
   it("never pays above the max price", () => {
     const { filled } = createCampaign(db, deps, buyer, {
       describe: "medical",

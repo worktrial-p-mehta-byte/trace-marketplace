@@ -352,24 +352,39 @@ export function expireCampaigns(db: Db, deps: Pick<CampaignDeps, "now">): number
  */
 export function runCampaignConsumer(db: Db, deps: CampaignDeps): number {
   expireCampaigns(db, deps);
-  const batch = deps.bus.peek("campaigns", 10_000);
-  const listingIds = batch
-    .filter((e) => e.type === EventTypes.ListingCreated)
-    .map((e) => (e.payload as { listingId?: string }).listingId)
-    .filter((x): x is string => Boolean(x));
+  const BATCH = 10_000;
   let filled = 0;
-  if (listingIds.length) {
-    const open = db
-      .select({ id: schema.campaigns.id })
-      .from(schema.campaigns)
-      .where(eq(schema.campaigns.status, "open"))
-      .orderBy(desc(schema.campaigns.maxPriceCents), asc(schema.campaigns.createdAt))
-      .all();
-    for (const c of open) filled += clearCampaign(db, deps, c.id, listingIds);
+  // Drain the whole backlog, batch by batch, so a listing created behind a
+  // long history (an upgraded database) is still offered to campaigns now.
+  for (;;) {
+    const batch = deps.bus.peek("campaigns", BATCH);
+    if (!batch.length) break;
+    const listingIds = batch
+      .filter((e) => e.type === EventTypes.ListingCreated)
+      .map((e) => (e.payload as { listingId?: string }).listingId)
+      .filter((x): x is string => Boolean(x));
+    if (listingIds.length) {
+      const open = db
+        .select({ id: schema.campaigns.id })
+        .from(schema.campaigns)
+        .where(eq(schema.campaigns.status, "open"))
+        .orderBy(desc(schema.campaigns.maxPriceCents), asc(schema.campaigns.createdAt))
+        .all();
+      for (const c of open) filled += clearCampaign(db, deps, c.id, listingIds);
+    }
+    deps.bus.ack("campaigns", batch.at(-1)!.seq);
+    if (batch.length < BATCH) break;
   }
-  const last = batch.at(-1);
-  if (last) deps.bus.ack("campaigns", last.seq);
   return filled;
+}
+
+/** How many campaigns have bought a listing. */
+export function campaignFillsFor(db: Db, listingId: string): number {
+  return db
+    .select({ id: schema.campaignFills.id })
+    .from(schema.campaignFills)
+    .where(eq(schema.campaignFills.listingId, listingId))
+    .all().length;
 }
 
 function view(db: Db, c: CampaignRow): CampaignView {

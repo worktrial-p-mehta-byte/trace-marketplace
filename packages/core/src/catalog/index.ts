@@ -19,7 +19,7 @@ import { TERMS_VERSION } from "../auth";
 import { EventTypes, type EventBus } from "../events";
 import { isTierSupported } from "../policy";
 import type { BlobStore, SearchIndex } from "../ports";
-import { runCampaignConsumer } from "../campaigns";
+import { campaignFillsFor, runCampaignConsumer } from "../campaigns";
 import { runSearchConsumer } from "../search";
 import { buildMarket, runPricingConsumer } from "../pricing";
 
@@ -406,7 +406,9 @@ export async function shareTrace(
       console.error("Search indexing after share failed; will retry on the next run", err);
     }
     try {
-      campaignFills = runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+      runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+      // Only this listing's fills: the run may also clear older listings.
+      campaignFills = campaignFillsFor(db, listingId);
     } catch (err) {
       console.error("Campaign clearing after share failed; will retry on the next run", err);
     }
