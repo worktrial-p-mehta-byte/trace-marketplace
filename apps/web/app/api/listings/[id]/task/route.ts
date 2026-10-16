@@ -16,6 +16,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const d = downloadable(getDb(), user, id);
   if (!d) return fail("You don't hold a licence for this trace.", 403);
+  // A task is for replaying the session against an agent: evaluation or
+  // training use. A research licence ("study, no training or evaluation")
+  // covers the trace download, not this.
+  if (!d.scopes.some((s) => s === "eval" || s === "training")) {
+    return fail("Exporting a task needs an evaluation or training licence.", 403);
+  }
   if (d.tier === 1) {
     return fail(
       "Signals-only sessions can't be exported as tasks: the prompt and files were never shared.",

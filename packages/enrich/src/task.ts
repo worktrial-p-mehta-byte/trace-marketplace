@@ -29,8 +29,15 @@ export interface TaskSpec {
   followUps: { event: number; kind: "correction" | "interrupt" | "message"; text: string }[];
   /** Files the agent read and changed (paths as scrubbed). */
   files: { read: string[]; written: string[] };
-  /** Shell commands the agent ran, in order. */
+  /** Shell commands that ran (refused ones are attempts), in order. */
   commands: string[];
+  /** Actions that were refused, failed or got no result: tried, not done. */
+  attempts: {
+    event: number;
+    tool: string;
+    what: string;
+    outcome: "rejected" | "failed" | "no result";
+  }[];
   /** How to check success: the last test command, and what it gave. */
   check: {
     command: string;
@@ -117,6 +124,7 @@ export function exportTask(
   const read = new Set<string>();
   const written = new Set<string>();
   const commands: string[] = [];
+  const attempts: TaskSpec["attempts"] = [];
   const calls = new Map<string, Extract<TraceEvent, { type: "tool_call" }>>();
   let check: TaskSpec["check"] = null;
   for (const e of ev) {
@@ -134,19 +142,37 @@ export function exportTask(
           text: e.text,
         });
         break;
-      case "tool_call": {
+      case "tool_call":
+        // Recorded once its result says whether it happened.
         calls.set(e.callId, e);
-        const p = pathOf(e.input);
-        if (p && WRITE_TOOLS.has(e.tool)) written.add(p);
-        else if (p && READ_TOOLS.has(e.tool)) read.add(p);
-        const c = commandOf(e);
-        if (c) commands.push(c);
         break;
-      }
       case "tool_result": {
         const call = calls.get(e.callId);
-        const c = call && commandOf(call);
-        if (c && isTestCommand(c)) {
+        if (!call) break;
+        calls.delete(e.callId);
+        const p = pathOf(call.input);
+        const c = commandOf(call);
+        // A refused call never ran. A command that exits with an error still
+        // ran (a failing test is a command that ran); an edit that errored
+        // did not change its file.
+        if (c) {
+          if (e.rejected)
+            attempts.push({ event: call.seq, tool: call.tool, what: c, outcome: "rejected" });
+          else commands.push(c);
+        } else if (p && WRITE_TOOLS.has(call.tool)) {
+          if (e.rejected || e.isError) {
+            attempts.push({
+              event: call.seq,
+              tool: call.tool,
+              what: p,
+              outcome: e.rejected ? "rejected" : "failed",
+            });
+          } else written.add(p);
+        } else if (p && READ_TOOLS.has(call.tool) && !e.rejected && !e.isError) {
+          read.add(p);
+        }
+        // A failing test run is still the check: it shows what success means.
+        if (c && isTestCommand(c) && !e.rejected) {
           check = {
             command: c,
             event: call.seq,
@@ -160,6 +186,12 @@ export function exportTask(
         break;
     }
   }
+  // Calls that never got a result were tried, not done.
+  for (const call of calls.values()) {
+    const what = commandOf(call) ?? pathOf(call.input);
+    if (what) attempts.push({ event: call.seq, tool: call.tool, what, outcome: "no result" });
+  }
+  attempts.sort((a, b) => a.event - b.event);
   // A file written is not also listed as only read.
   for (const p of written) read.delete(p);
 
@@ -204,6 +236,7 @@ export function exportTask(
     followUps,
     files: { read: [...read].sort(), written: [...written].sort() },
     commands,
+    attempts,
     check,
     expected: {
       success,

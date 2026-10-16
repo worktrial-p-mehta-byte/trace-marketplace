@@ -241,8 +241,9 @@ corrections or interrupts, files read and written, shell commands, the check
 failure), the expected outcome (what a passing re-run achieves, how the
 recorded agent ended, its failure modes with events, behaviours to avoid),
 provenance and honest notes (the starting repository state isn't included).
-A licence holder downloads it from `/api/listings/[id]/task` (same
-entitlement as the trace download); signals-only sessions are refused (409),
+A team holding an evaluation or training licence downloads it from
+`/api/listings/[id]/task` (research use excludes evaluation); refused,
+failed and unanswered actions are listed as `attempts`, not as work done; signals-only sessions are refused (409),
 since their prompt and files were never shared. Tier 3 (replaying a session
 in a sandbox) is post-demo.
 

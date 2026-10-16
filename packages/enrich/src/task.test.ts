@@ -114,6 +114,30 @@ describe("exportTask", () => {
     expect(task.notes.join(" ")).toMatch(/came before a later failure/);
   });
 
+  it("lists refused and failed actions as attempts, not as things done", () => {
+    const t = session([
+      { type: "user_message", text: "Clean the build and fix the config" },
+      call("a", "Bash", { command: "rm -rf /" }),
+      { type: "tool_result", callId: "a", output: "rejected", isError: true, rejected: true },
+      call("b", "Edit", { file_path: "config.json", old_string: "x", new_string: "y" }),
+      result("b", "old_string not found", true),
+      call("c", "Bash", { command: "npm run build" }),
+      result("c", "exit 1", true),
+      call("d", "Write", { file_path: "config.json", content: "{}" }),
+      result("d", "written"),
+      call("e", "Bash", { command: "npm run lint" }),
+    ]);
+    const task = exportOf(t);
+    // A command that failed still ran; a refused one didn't.
+    expect(task.commands).toEqual(["npm run build"]);
+    expect(task.files.written).toEqual(["config.json"]);
+    expect(task.attempts).toEqual([
+      { event: 1, tool: "Bash", what: "rm -rf /", outcome: "rejected" },
+      { event: 3, tool: "Edit", what: "config.json", outcome: "failed" },
+      { event: 9, tool: "Bash", what: "npm run lint", outcome: "no result" },
+    ]);
+  });
+
   it("has no check command when none ran, and says how success is judged", () => {
     const t = session([
       { type: "user_message", text: "Summarise the triage notes" },

@@ -78,16 +78,21 @@ export function PriceCard({
             <a href={`/api/listings/${listingId}/download`} className="text-cobalt">
               Download the trace
             </a>
-            {openSource && (
+            {openSource && license !== "research" && (
               <a href={`/api/listings/${listingId}/task`} className="text-cobalt">
                 Download as a task (JSON)
               </a>
             )}
           </p>
-          {openSource && (
+          {openSource && license !== "research" && (
             <p className="mt-1 text-xs text-ink-2">
               The task holds the prompt, files touched, commands, the check command and the expected
-              outcome, to replay the session as an eval.
+              outcome, to replay the session against an agent.
+            </p>
+          )}
+          {openSource && license === "research" && (
+            <p className="mt-1 text-xs text-ink-2">
+              Exporting it as a replayable task needs an evaluation or training licence.
             </p>
           )}
         </div>
