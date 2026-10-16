@@ -1,8 +1,16 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { ensureAccount, floodSupply, postBounty, resetSimulation, type PriceMove } from "@tm/core";
+import {
+  ensureAccount,
+  FloodError,
+  floodSupply,
+  postBounty,
+  resetSimulation,
+  type PriceMove,
+} from "@tm/core";
 import { PATTERNS, type Pattern } from "@tm/synth";
+import { DOMAIN_NAMES } from "@/lib/labels";
 import { getBlobs, getBus, getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
 const deps = () => ({ config: getConfig(), bus: getBus(), blobs: getBlobs(), search: getSearch() });
@@ -16,7 +24,7 @@ function summary(moves: PriceMove[]): string {
 
 function back(form: FormData, extra: Record<string, string>) {
   const q = new URLSearchParams();
-  for (const k of ["language", "failure"]) {
+  for (const k of ["domain", "language", "failure"]) {
     const v = String(form.get(k) ?? "");
     if (v) q.set(k, v);
   }
@@ -26,18 +34,23 @@ function back(form: FormData, extra: Record<string, string>) {
 
 function stackOf(form: FormData) {
   const [language, framework] = String(form.get("language") ?? "").split("/");
-  return { language: language || undefined, framework: framework || undefined };
+  const domain = String(form.get("domain") ?? "");
+  return {
+    domain: domain in DOMAIN_NAMES ? domain : undefined,
+    language: language || undefined,
+    framework: framework || undefined,
+  };
 }
 
 export async function postBountyAction(form: FormData) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const { language, framework } = stackOf(form);
+  const { domain, language, framework } = stackOf(form);
   const failure = String(form.get("failure") ?? "") || undefined;
   const perTrace = Math.min(500, Math.max(1, Number(form.get("perTrace") ?? 20)));
   const quantity = Math.min(500, Math.max(1, Math.round(Number(form.get("quantity") ?? 10))));
-  if (!language && !failure)
-    back(form, { error: "Choose a language or a failure type for the bounty." });
+  if (!domain && !language && !failure)
+    back(form, { error: "Choose a domain, a language or a failure type for the bounty." });
   // Sellers can try the simulator too: their bounty is posted for a demo buyer team.
   const orgId =
     user.buyerOrgId ??
@@ -45,8 +58,10 @@ export async function postBountyAction(form: FormData) {
       .buyerOrgId!;
   const r = postBounty(getDb(), deps(), {
     buyerOrgId: orgId,
-    title: `${[language, framework, failure?.replace(/_/g, " ")].filter(Boolean).join(" ")} traces`,
-    criteria: { language, framework, failure },
+    title: `${[domain && DOMAIN_NAMES[domain], language, framework, failure?.replace(/_/g, " ")]
+      .filter(Boolean)
+      .join(" ")} traces`,
+    criteria: { domain, language, framework, failure },
     perTraceCents: Math.round(perTrace * 100),
     quantity,
   });
@@ -55,13 +70,20 @@ export async function postBountyAction(form: FormData) {
 
 export async function floodAction(form: FormData) {
   if (!(await getCurrentUser())) redirect("/login");
-  const { language, framework } = stackOf(form);
+  const { domain, language, framework } = stackOf(form);
   const pattern = (String(form.get("failure") ?? "") || "clean") as Pattern;
-  if (!language) back(form, { error: "Choose a language to add supply for." });
+  if (!domain && !language)
+    back(form, { error: "Choose a domain or a language to add supply for." });
   if (!PATTERNS.some((p) => p.pattern === pattern))
     back(form, { error: "The simulator can't generate that failure type." });
   const count = Math.min(100, Math.max(1, Math.round(Number(form.get("count") ?? 20))));
-  const r = await floodSupply(getDb(), deps(), { language: language!, framework, pattern, count });
+  let r;
+  try {
+    r = await floodSupply(getDb(), deps(), { domain, language, framework, pattern, count });
+  } catch (err) {
+    if (err instanceof FloodError) back(form, { error: err.message });
+    throw err;
+  }
   back(form, { did: "flood", r: summary(r.moves), added: String(r.added) });
 }
 

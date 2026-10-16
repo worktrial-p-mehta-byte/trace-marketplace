@@ -98,6 +98,26 @@ test.describe.serial("demo flow", () => {
       .toBeGreaterThan(research);
   });
 
+  test("anyone can browse by domain, from the landing page to a filtered catalog", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const row = page.getByRole("region", { name: "Browse by domain" });
+    await row.getByRole("link", { name: /Medical and clinical evaluation/ }).click();
+    await expect(page).toHaveURL(/domain=medical/);
+    const results = page.locator("section[aria-label=Results] a[href^='/traces/']");
+    await expect(results.first()).toBeVisible();
+    await expect(results.first()).toContainText("Medical and clinical evaluation");
+    // The facet is on, and the trace page says what the session was about.
+    await expect(
+      page
+        .getByRole("complementary", { name: "Filters" })
+        .getByRole("link", { name: /Medical and clinical evaluation/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await results.first().click();
+    await expect(page.getByRole("heading", { name: "What it was about" })).toBeVisible();
+  });
+
   test("anonymous search never matches trace content", async ({ page }) => {
     await page.goto("/traces?q=pytest");
     await expect(page.locator("section[aria-label=Results] p").first()).toContainText("0 traces");
@@ -114,7 +134,7 @@ test.describe.serial("demo flow", () => {
   }) => {
     await signIn(page, BUYER);
     await page.goto("/market");
-    await page.getByRole("link", { name: "Rust + user corrected it" }).click();
+    await page.getByRole("link", { name: "Rust + user rejected an action" }).click();
     const price = async () =>
       dollars(await page.locator("main ul li span.shrink-0").first().textContent());
     const start = await price();

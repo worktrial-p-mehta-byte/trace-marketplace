@@ -54,6 +54,9 @@ function traits(over: Partial<TraceTraits>): TraceTraits {
     modelDeprecated: false,
     capturedAt: NOW.toISOString(),
     durationMinutes: 10,
+    domain: "software_engineering",
+    domainConfidence: 0.9,
+    domains: [{ domain: "software_engineering", share: 1 }],
     ...over,
   };
 }
@@ -329,6 +332,86 @@ describe("browseCatalog", () => {
     );
     expect(page.total).toBe(4);
     expect(page.items).toHaveLength(2);
+  });
+});
+
+describe("domains", () => {
+  async function addMedical() {
+    const id = await add({
+      title: "Grade the triage answers",
+      t: traits({
+        domain: "medical",
+        domainConfidence: 0.92,
+        domains: [
+          { domain: "medical", share: 0.8 },
+          { domain: "education", share: 0.2 },
+        ],
+        failureCategory: "user_correction",
+      }),
+      labels: ["user_correction"],
+    });
+    const traceId = db
+      .select({ t: schema.listings.traceId })
+      .from(schema.listings)
+      .where(eq(schema.listings.id, id))
+      .get()!.t;
+    db.insert(schema.labels)
+      .values({
+        id: newId("lbl"),
+        traceId,
+        kind: "domain",
+        code: "medical",
+        confidence: 0.92,
+        source: "heuristic",
+        evidence: [0],
+      })
+      .run();
+    repriceAll(db, { config, reason: "test" });
+    await rebuildSearchIndex(db, blobs, search);
+    return id;
+  }
+
+  it("filters and facets by domain, with the distribution on each item", async () => {
+    const med = await addMedical();
+    const r = await browseCatalog(db, { config, search }, { domain: "medical" });
+    expect(r.items.map((i) => i.listingId)).toEqual([med]);
+    expect(r.items[0]!.domains[0]).toEqual({ domain: "medical", share: 0.8 });
+    // The domain facet ignores its own filter.
+    expect(r.facets.domain).toEqual([
+      { value: "software_engineering", count: 4 },
+      { value: "medical", count: 1 },
+    ]);
+  });
+
+  it("treats traits stored before domains existed as unknown", async () => {
+    const legacy = traits({ language: "Go" }) as Partial<TraceTraits>;
+    delete legacy.domain;
+    delete legacy.domains;
+    const id = await add({ title: "Old row", t: legacy as TraceTraits, labels: [] });
+    repriceAll(db, { config, reason: "test" });
+    const r = await browseCatalog(db, { config, search }, { domain: "unknown" });
+    expect(r.items.map((i) => i.listingId)).toEqual([id]);
+    expect(r.items[0]!.domains).toEqual([]);
+  });
+
+  it("finds a session by its domain's name, not just its code", async () => {
+    const med = await addMedical();
+    const r = await browseCatalog(db, { config, search }, { text: "clinical evaluation" });
+    expect(r.items.map((i) => i.listingId)).toEqual([med]);
+  });
+
+  it("turns a domain filter into demand that raises only that domain's prices", async () => {
+    const med = await addMedical();
+    expect(criteriaOf({ domain: "medical", text: "x" })).toEqual({ domain: "medical" });
+    const price = async (id: string) =>
+      (await browseCatalog(db, { config, search }, {})).items.find((i) => i.listingId === id)!
+        .priceCents;
+    const [medBefore, rustBefore] = [await price(med), await price(rustLoop)];
+    expect(recordBuyerInterest(db, { config, bus }, buyer, "search", { domain: "medical" })).toBe(
+      true,
+    );
+    expect(await price(med)).toBeGreaterThan(medBefore);
+    expect(await price(rustLoop)).toBe(rustBefore);
   });
 });
 

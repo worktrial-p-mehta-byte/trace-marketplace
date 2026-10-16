@@ -61,6 +61,9 @@ function baseTraits(over: Partial<TraceTraits> = {}): TraceTraits {
     modelDeprecated: false,
     capturedAt: NOW.toISOString(),
     durationMinutes: 10,
+    domain: "software_engineering",
+    domainConfidence: 0.9,
+    domains: [{ domain: "software_engineering", share: 1 }],
     ...over,
   };
 }

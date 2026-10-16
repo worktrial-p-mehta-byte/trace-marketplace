@@ -150,6 +150,39 @@ describe("shareTrace", () => {
     expect(db.select().from(schema.assets).all()[0]!.kind).toBe("signals");
   });
 
+  it("keeps a signals-only upload's domain as a bounded claim", async () => {
+    const full = scrubbed();
+    const e = enrichTrace(full);
+    const share = (clientTraits: object) =>
+      shareTrace(
+        db,
+        deps,
+        { sellerId, trace: toSignalsOnly(full), tier: 1, clientTraits, clientLabels: e.labels },
+        {},
+      );
+    await share({
+      ...e.traits,
+      domain: "legal",
+      domainConfidence: 7,
+      domains: [{ domain: "legal", share: 3 }, { domain: "astrology", share: 0.5 }, null],
+    });
+    const stored = () =>
+      db.select().from(schema.traceTraits).all().at(-1)!.data as {
+        domain: string;
+        domainConfidence: number;
+        domains: { domain: string; share: number }[];
+      };
+    expect(stored()).toMatchObject({
+      domain: "legal",
+      domainConfidence: 1,
+      domains: [{ domain: "legal", share: 1 }],
+    });
+    // A made-up domain is not a facet value: it becomes unknown.
+    db.update(schema.consents).set({ revokedAt: new Date() }).run();
+    await share({ ...e.traits, domain: "astrology", domainConfidence: 0.9 });
+    expect(stored()).toMatchObject({ domain: "unknown", domainConfidence: 0 });
+  });
+
   it("refuses sessions with no model output, duplicates, synthetic uploads and missing terms", async () => {
     const empty: Trace = { ...raw, events: [{ seq: 0, type: "user_message", text: "hello?" }] };
     await expect(shareTrace(db, deps, { sellerId, trace: empty, tier: 0 })).rejects.toThrow(

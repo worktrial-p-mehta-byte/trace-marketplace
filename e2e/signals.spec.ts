@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { E2E_SESSIONS_DIR } from "../playwright.config";
 
 /**
- * The seller demo walkthrough (demo/seller-sessions/README.md): load all ten
+ * The seller demo walkthrough (demo/seller-sessions/README.md): load all twelve
  * demo sessions at once and share them as signals only, the default. Then the
  * owner's view of a signals-only listing, which must match the buyer's.
  */
@@ -33,9 +33,9 @@ async function signIn(page: Page, who: { email: string; password: string }) {
 test.describe.serial("signals-only sharing", () => {
   let listingUrl = "";
 
-  test("a seller shares all ten demo sessions at once as signals only", async ({ page }) => {
+  test("a seller shares all twelve demo sessions at once as signals only", async ({ page }) => {
     const sessions = sessionFiles();
-    expect(sessions).toHaveLength(10);
+    expect(sessions).toHaveLength(12);
     await page.goto("/signup");
     await page.getByLabel("Name", { exact: true }).fill(SELLER.name);
     await page.getByLabel("Email").fill(SELLER.email);
@@ -48,15 +48,15 @@ test.describe.serial("signals-only sharing", () => {
     await page.locator('input[accept=".jsonl"]').setInputFiles(sessions);
     // 04a and 04b are the same story in two languages: with the text stripped
     // they look identical, and one used to be refused as a duplicate.
-    const share = page.getByRole("button", { name: "Share 10 sessions" });
+    const share = page.getByRole("button", { name: "Share 12 sessions" });
     await expect(share).toBeEnabled();
     await share.click();
-    await expect(page.getByRole("heading", { name: "10 sessions shared" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "12 sessions shared" })).toBeVisible();
     await expect(page.getByText("Not shared")).toHaveCount(0);
 
     await page.goto("/me/traces");
-    await expect(page.getByText("On sale", { exact: true })).toHaveCount(10);
-    await expect(page.getByRole("cell", { name: "Signals only" })).toHaveCount(10);
+    await expect(page.getByText("On sale", { exact: true })).toHaveCount(12);
+    await expect(page.getByRole("cell", { name: "Signals only" })).toHaveCount(12);
   });
 
   test("the owner of a signals-only listing sees what buyers see", async ({ page }) => {

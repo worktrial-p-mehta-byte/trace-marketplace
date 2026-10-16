@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { matchesCriteria, type DemandCriteria } from "@tm/pricing";
-import { generateFlood, type Pattern } from "@tm/synth";
+import { floodStacks, generateFlood, type Pattern } from "@tm/synth";
 import { acceptTerms, createUser, TERMS_VERSION, type PublicUser } from "../auth";
 import { DuplicateShareError, shareTrace, type CatalogDeps } from "../catalog";
 import { EventTypes, type EventBus } from "../events";
@@ -142,19 +142,30 @@ export function postBounty(
 }
 
 export interface FloodInput {
-  language: string;
+  /** A domain id; with no language, the flood spans every stack of the domain. */
+  domain?: string;
+  language?: string;
   framework?: string;
   pattern: Pattern;
   count: number;
   seed?: number;
 }
 
+export class FloodError extends Error {}
+
 /**
- * Add `count` synthetic sessions of one stack and failure pattern, as the
- * simulator account, so that combination stops being rare. Then reprice.
+ * Add `count` synthetic sessions of one domain or stack and failure pattern,
+ * as the simulator account, so that combination stops being rare. Then reprice.
  */
 export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) {
+  if (!input.domain && !input.language) throw new FloodError("Choose a domain or a language.");
+  try {
+    floodStacks(input);
+  } catch (err) {
+    throw new FloodError(err instanceof Error ? err.message : String(err));
+  }
   const criteria: DemandCriteria = {
+    domain: input.domain,
     language: input.language,
     framework: input.framework,
     failure: input.pattern === "clean" ? undefined : input.pattern,

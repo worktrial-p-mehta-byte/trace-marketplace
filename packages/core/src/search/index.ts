@@ -1,5 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "@tm/db";
+import { labelName, type LabelKindId } from "@tm/enrich";
 import type { Trace } from "@tm/schema";
 import { EventTypes, type EventBus } from "../events";
 import type { BlobStore, SearchIndex, SearchQuery } from "../ports";
@@ -76,12 +77,14 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
   // A listing withdrawn since its event was queued must not come back into
   // the index, however late the run that handles that event is.
   if (!row || row.status !== "active") return null;
+  // Labels by code and by name, so "medical" and "clinical" both find a
+  // medical evaluation session.
   const labels = db
-    .select({ code: schema.labels.code })
+    .select({ kind: schema.labels.kind, code: schema.labels.code })
     .from(schema.labels)
     .where(eq(schema.labels.traceId, row.traceId))
     .all()
-    .map((l) => l.code.replace(/_/g, " "));
+    .flatMap((l) => [l.code.replace(/_/g, " "), labelName(l.kind as LabelKindId, l.code)]);
   const parts = [row.language, row.framework, row.model, row.harness, ...labels];
   let content = "";
   const raw = await blobs.get(row.blobKey);

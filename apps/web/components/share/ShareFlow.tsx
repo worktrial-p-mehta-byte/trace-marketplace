@@ -6,6 +6,7 @@ import { detectAdapter } from "@tm/adapters";
 import { enrichTrace } from "@tm/enrich";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
+import { DOMAIN_NAMES } from "@/lib/labels";
 import { redactionLabel } from "../Redacted";
 import { SignalsView } from "./SignalsView";
 import { Timeline } from "./Timeline";
@@ -427,6 +428,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
                   >
                     <span className="block truncate font-semibold">{titleOf(it)}</span>
                     <span className="mt-0.5 block text-xs text-ink-3">
+                      {DOMAIN_NAMES[it.enrich.traits.domain] ?? "Unknown domain"},{" "}
                       {new Date(it.raw.startedAt).toLocaleDateString()}, {it.enrich.traits.turns}{" "}
                       turns, {it.tier === 0 ? "open source" : "signals only"}
                     </span>
@@ -470,6 +472,25 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
               {active.fileName}, model {active.raw.provenance.model.id},{" "}
               {active.enrich.traits.toolCalls} tool calls,{" "}
               {Math.round(active.enrich.traits.durationMinutes)} min
+            </p>
+            <p className="mt-1 text-sm text-ink-2">
+              <span className="font-semibold text-ink">Domain: </span>
+              {DOMAIN_NAMES[active.enrich.traits.domain] ?? "Unknown domain"}
+              {active.enrich.traits.domain !== "unknown" && (
+                <span className="text-ink-3">
+                  {" "}
+                  ({Math.round(active.enrich.traits.domainConfidence * 100)}% sure
+                  {active.enrich.traits.domains.length > 1 &&
+                    `; also ${active.enrich.traits.domains
+                      .slice(1)
+                      .map(
+                        (d) =>
+                          `${DOMAIN_NAMES[d.domain] ?? d.domain} ${Math.round(d.share * 100)}%`,
+                      )
+                      .join(", ")}`}
+                  )
+                </span>
+              )}
             </p>
 
             {!active.eligible && <p className="mt-4 text-brick">{active.ineligibleReason}</p>}

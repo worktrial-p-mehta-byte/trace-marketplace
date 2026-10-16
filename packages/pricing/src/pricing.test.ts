@@ -6,6 +6,7 @@ import {
   demandPressure,
   failureFactor,
   freshnessFactor,
+  isEmptyCriteria,
   matchesCriteria,
   median,
   qualityFactor,
@@ -38,6 +39,9 @@ function traits(over: Partial<TraceTraits>): TraceTraits {
     modelDeprecated: false,
     capturedAt: daysAgo(0),
     durationMinutes: 10,
+    domain: "software_engineering",
+    domainConfidence: 0.9,
+    domains: [{ domain: "software_engineering", share: 1 }],
     ...over,
   };
 }
@@ -263,6 +267,15 @@ describe("demand matching", () => {
     expect(matchesCriteria(rust, { language: "Rust", failure: "retry_loop" })).toBe(true);
     expect(matchesCriteria(rust, { language: "Go" })).toBe(false);
     expect(matchesCriteria({ ...rust, framework: undefined }, { framework: "Tokio" })).toBe(false);
+  });
+
+  it("matches on domain, and a trace without one never matches a domain", () => {
+    const med = { ...rust, domain: "medical" as const };
+    expect(matchesCriteria(med, { domain: "medical" })).toBe(true);
+    expect(matchesCriteria(med, { domain: "medical", language: "Go" })).toBe(false);
+    expect(matchesCriteria(rust, { domain: "medical" })).toBe(false);
+    expect(isEmptyCriteria({ domain: "medical" })).toBe(false);
+    expect(isEmptyCriteria({})).toBe(true);
   });
 
   it("spreads each signal's weight over the listings it matches and ignores old or empty signals", () => {

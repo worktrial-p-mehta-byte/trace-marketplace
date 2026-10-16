@@ -137,7 +137,7 @@ export const labels = sqliteTable(
     traceId: text("trace_id")
       .notNull()
       .references(() => traces.id),
-    kind: text("kind", { enum: ["failure", "outcome", "signal"] }).notNull(),
+    kind: text("kind", { enum: ["failure", "outcome", "signal", "domain"] }).notNull(),
     code: text("code").notNull(),
     confidence: real("confidence").notNull(),
     source: text("source", { enum: ["heuristic", "model", "human"] }).notNull(),

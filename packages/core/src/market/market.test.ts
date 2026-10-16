@@ -4,10 +4,12 @@ import { loadConfig } from "@tm/config";
 import { openDb, runMigrations, schema, type Db } from "@tm/db";
 import { generateCatalog, generateFlood } from "@tm/synth";
 import {
+  browseCatalog,
   createDbEventBus,
   createMemoryBlobStore,
   createSqliteSearchIndex,
   ensureAccount,
+  FloodError,
   floodSupply,
   openBounties,
   postBounty,
@@ -138,6 +140,42 @@ describe("floodSupply", () => {
     await expect(floodSupply(db, broken, { ...input, count: 3, seed: 10 })).rejects.toThrow(
       "blob store down",
     );
+  });
+});
+
+describe("floodSupply by domain", () => {
+  it("adds supply across a domain's stacks and moves only that domain's prices", async () => {
+    const medical = { domain: "medical", failure: "user_correction" };
+    postBounty(db, deps, {
+      buyerOrgId,
+      title: "clinical corrections",
+      criteria: medical,
+      perTraceCents: 2000,
+      quantity: 5,
+      now: NOW,
+    });
+    const rustBefore = watchList(db, deps.config, rust).map((w) => w.priceCents);
+    const r = await floodSupply(db, deps, {
+      domain: "medical",
+      pattern: "user_correction",
+      count: 6,
+      seed: 21,
+    });
+    expect(r.added).toBe(6);
+    const listed = await browseCatalog(
+      db,
+      { config: deps.config, search: deps.search! },
+      { domain: "medical", failure: "user_correction" },
+    );
+    expect(listed.total).toBeGreaterThanOrEqual(6);
+    expect(watchList(db, deps.config, rust).map((w) => w.priceCents)).toEqual(rustBefore);
+  });
+
+  it("refuses a flood with no domain or language, or an impossible pair", async () => {
+    await expect(floodSupply(db, deps, { pattern: "clean", count: 1 })).rejects.toThrow(FloodError);
+    await expect(
+      floodSupply(db, deps, { domain: "medical", language: "Rust", pattern: "clean", count: 1 }),
+    ).rejects.toThrow(FloodError);
   });
 });
 

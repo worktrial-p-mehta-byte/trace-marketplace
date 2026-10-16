@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { browseCatalog } from "@tm/core";
 import { RedactingDemo } from "@/components/RedactingDemo";
-import { getCurrentUser } from "@/lib/server";
+import { DOMAIN_NAMES } from "@/lib/labels";
+import { getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
 const STEPS = [
   {
@@ -20,17 +22,26 @@ const STEPS = [
 export default async function Home() {
   const user = await getCurrentUser();
   const start = user ? "/share" : "/signup";
+  // What is for sale right now, by domain, most listings first; every domain
+  // the labeler knows when the catalog is empty.
+  const { facets } = await browseCatalog(
+    getDb(),
+    { config: getConfig(), search: getSearch() },
+    { limit: 1 },
+  );
+  const domains = facets.domain.filter((d) => d.value !== "unknown");
   return (
     <main>
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-16 pb-20 lg:grid-cols-[1fr_1.05fr]">
         <div>
           <h1 className="text-[2.6rem] leading-[1.05] font-bold tracking-tight sm:text-[3.4rem]">
-            Sell the sessions your coding agent already logs.
+            Sell the sessions your AI agent already logs.
           </h1>
           <p className="mt-6 max-w-[34rem] text-lg leading-relaxed text-ink-2">
-            AI labs pay for real examples of agents getting things wrong and recovering. Your
-            sessions are scrubbed on your own machine, priced by what makes them rare, and you can
-            withdraw them whenever you like.
+            AI labs pay for real examples of agents getting things wrong and recovering, whether the
+            work was code, data, research, clinical evaluation or support. Your sessions are
+            scrubbed on your own machine, priced by what makes them rare, and you can withdraw them
+            whenever you like.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href={start} className="btn">
@@ -42,6 +53,36 @@ export default async function Home() {
           </div>
         </div>
         <RedactingDemo />
+      </section>
+
+      <section className="border-t border-rule" aria-labelledby="domains">
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <h2 id="domains" className="text-2xl font-bold tracking-tight">
+            Browse by domain
+          </h2>
+          <p className="mt-3 max-w-2xl leading-relaxed text-ink-2">
+            Every session is labelled with what the agent was working on, so labs can buy the
+            domains they train on, not just code.
+          </p>
+          <ul className="mt-6 flex flex-wrap gap-2">
+            {(domains.length
+              ? domains
+              : Object.keys(DOMAIN_NAMES)
+                  .filter((d) => d !== "unknown")
+                  .map((value) => ({ value, count: 0 }))
+            ).map((d) => (
+              <li key={d.value}>
+                <Link
+                  href={`/traces?domain=${d.value}`}
+                  className="flex items-baseline gap-2 rounded-full border border-rule px-3 py-1.5 text-sm text-ink-2 hover:border-ink hover:text-ink"
+                >
+                  <span>{DOMAIN_NAMES[d.value] ?? d.value}</span>
+                  {d.count > 0 && <span className="text-xs text-ink-3">{d.count}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section className="border-t border-rule bg-surface">
@@ -63,8 +104,8 @@ export default async function Home() {
         <h2 className="text-2xl font-bold tracking-tight">What a trace is worth</h2>
         <p className="mt-3 max-w-2xl leading-relaxed text-ink-2">
           Price follows what buyers learn from a session: failures, especially ones the agent
-          recovered from, unusual languages and frameworks, and what buyers are searching for right
-          now. Every price comes with its reasons.
+          recovered from, unusual domains, languages and frameworks, and what buyers are searching
+          for right now. Every price comes with its reasons.
         </p>
         <div className="mt-8 grid gap-px overflow-hidden rounded-lg border border-rule bg-rule md:grid-cols-2">
           <div className="bg-surface p-6">

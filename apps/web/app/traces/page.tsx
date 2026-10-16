@@ -8,7 +8,14 @@ import {
   type BrowseQuery,
   type FacetValue,
 } from "@tm/core";
-import { FAILURE_NAMES, money, OUTCOME_NAMES, SOURCE_NAMES, TIER_NAMES } from "@/lib/labels";
+import {
+  DOMAIN_NAMES,
+  FAILURE_NAMES,
+  money,
+  OUTCOME_NAMES,
+  SOURCE_NAMES,
+  TIER_NAMES,
+} from "@/lib/labels";
 import {
   getBlobs,
   getBus,
@@ -26,6 +33,7 @@ export const dynamic = "force-dynamic";
 type Params = Record<string, string | undefined>;
 const PAGE = 20;
 const FILTER_KEYS = [
+  "domain",
   "language",
   "framework",
   "failure",
@@ -38,6 +46,7 @@ const FILTER_KEYS = [
 function toQuery(p: Params): BrowseQuery {
   return {
     text: p.q || undefined,
+    domain: p.domain,
     language: p.language,
     framework: p.framework,
     failure: p.failure,
@@ -60,6 +69,7 @@ function href(p: Params, change: Params): string {
 }
 
 function nameFor(key: string, value: string): string {
+  if (key === "domain") return DOMAIN_NAMES[value] ?? value;
   if (key === "failure") return FAILURE_NAMES[value] ?? value;
   if (key === "outcome") return OUTCOME_NAMES[value] ?? value;
   if (key === "source") return SOURCE_NAMES[value] ?? value;
@@ -72,11 +82,14 @@ function FacetGroup({
   k,
   values,
   p,
+  max = 8,
 }: {
   title: string;
   k: string;
   values: FacetValue[];
   p: Params;
+  /** How many values to show; the long tail of domains is the point, so it shows whole. */
+  max?: number;
 }) {
   if (!values.length) return null;
   return (
@@ -84,7 +97,7 @@ function FacetGroup({
       <h3 className="text-sm font-semibold">{title}</h3>
       {/* Chips that wrap on phones; a vertical list beside the results on wide screens. */}
       <ul className="mt-2 flex flex-wrap gap-1.5 text-sm lg:block lg:space-y-0.5">
-        {values.slice(0, 8).map((v) => {
+        {values.slice(0, max).map((v) => {
           const on = p[k] === v.value;
           return (
             <li key={v.value}>
@@ -164,6 +177,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[14rem_1fr]">
         <aside className="space-y-4 lg:space-y-6" aria-label="Filters">
+          <FacetGroup title="Domain" k="domain" values={r.facets.domain} p={p} max={16} />
           <FacetGroup title="What went wrong" k="failure" values={r.facets.failure} p={p} />
           <FacetGroup title="Outcome" k="outcome" values={r.facets.outcome} p={p} />
           <FacetGroup title="Language" k="language" values={r.facets.language} p={p} />
@@ -238,8 +252,11 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                           `${i.language ?? "Untitled"} session, ${i.startedAt.toLocaleDateString()}`}
                       </h2>
                       <p className="mt-0.5 text-sm text-ink-3">
-                        {[i.language, i.framework].filter(Boolean).join(" / ") || "Unknown stack"},{" "}
-                        {i.model}, {i.turns} turns, {TIER_NAMES[String(i.tier)]?.toLowerCase()}
+                        {DOMAIN_NAMES[i.domain] ?? "Unknown domain"}
+                        {(i.language || i.framework) && (
+                          <> · {[i.language, i.framework].filter(Boolean).join(" / ")}</>
+                        )}
+                        , {i.model}, {i.turns} turns, {TIER_NAMES[String(i.tier)]?.toLowerCase()}
                         {i.source !== "real" && <>, {SOURCE_NAMES[i.source]?.toLowerCase()}</>}
                       </p>
                       <p className="mt-1.5 flex flex-wrap gap-1">

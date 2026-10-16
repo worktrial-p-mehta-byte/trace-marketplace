@@ -1,3 +1,14 @@
+import { labelsOfKind } from "@tm/enrich";
+
+/** Domain ids to names, from the label registry, most general first. */
+export const DOMAIN_NAMES: Record<string, string> = Object.fromEntries(
+  labelsOfKind("domain").map((d) => [d.code, d.name]),
+);
+
+export const DOMAIN_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
+  labelsOfKind("domain").map((d) => [d.code, d.description]),
+);
+
 /** Plain-language names for label codes, shared by the catalog and viewer. */
 export const FAILURE_NAMES: Record<string, string> = {
   test_tampering: "Test tampering",
