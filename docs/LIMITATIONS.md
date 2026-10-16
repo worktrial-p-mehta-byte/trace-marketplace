@@ -93,6 +93,14 @@ where the limit lives and what would lift it.
 | One instance only: SQLite file, in-process consumers                                                              | No horizontal scaling or zero-downtime deploys             | Postgres, object storage and a worker (S3)     |
 | `/api/health` checks only the database                                                                            | A broken blob folder or search index still reports healthy | Deeper checks                                  |
 
+## Rehearsal and end-to-end test — M8
+
+| Limitation                                                                       | Impact                                                                | Lifted by                                     |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------- |
+| The end-to-end test runs in Chromium only, with the synthetic fixture session    | Safari and Firefox quirks, and real sessions' variety, aren't covered | More browsers; scrubbed real-session fixtures |
+| On phones the catalog's filters still come before the results (as compact chips) | One screen of scrolling to the first result                           | A filter drawer                               |
+| Accounts are buyer or seller at sign-up; a buyer can't become a seller           | A buyer who wants to sell needs a second account                      | Role switch in account settings               |
+
 ## Platform
 
 | Limitation                                         | Impact                                     | Lifted by                                               |

@@ -82,13 +82,15 @@ All settings have defaults; nothing is required. See
 | Variable              | Default                     | What it does                                                                                     |
 | --------------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
 | `DATABASE_PATH`       | `data/trace-marketplace.db` | SQLite file, relative to the repo root or absolute                                               |
+| `BLOB_DIR`            | `data/blobs`                | Folder for stored traces, relative to the repo root or absolute                                  |
 | `SELLER_SHARE`        | `0.7`                       | Seller's share of each sale                                                                      |
 | `TM_CONFIG_OVERRIDES` | none                        | Any config value as JSON, e.g. `{"pricing":{"refreshIntervalMinutes":30}}`                       |
 | `TM_ROOT`             | found by walking up         | Repo root (the image sets `/app`); `data/` and `config/` are resolved from it                    |
 | `SEED_DEMO`           | `0`                         | Docker only: `1` seeds an empty database with the demo market                                    |
 | `TM_COOKIE_SECURE`    | on in production            | `0` lets sign-in work over plain HTTP. Only for a trial on a private network, never the internet |
 
-Stored traces live in `data/blobs/` next to the database. The port is 3000
+Stored traces live in `data/blobs/` (`BLOB_DIR`) next to the database;
+`pnpm db:reset` deletes both together. The port is 3000
 (`apps/web/package.json`).
 
 ## Before others can reach it

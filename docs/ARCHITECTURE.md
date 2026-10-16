@@ -90,8 +90,8 @@ warehouse) is in the design doc. What changes on the way there is in
 | M4  | Onboarding + sharing                                       | Done    |
 | M5  | Catalog + trace viewer                                     | Done    |
 | M6  | Market simulator + seed data + failure lab                 | Done    |
-| M7  | Docs, deployment (Docker)                                  | This PR |
-| M8  | Rehearse + polish                                          |         |
+| M7  | Docs, deployment (Docker)                                  | Done    |
+| M8  | Rehearse, polish, end-to-end test                          | This PR |
 
 ## Session log adapters
 

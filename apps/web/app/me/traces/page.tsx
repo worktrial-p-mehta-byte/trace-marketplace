@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { listSellerTraces } from "@tm/core";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
+
+export const metadata: Metadata = { title: "My traces" };
 
 export const dynamic = "force-dynamic";
 

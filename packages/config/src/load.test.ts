@@ -44,4 +44,11 @@ describe("loadConfig", () => {
   it("rejects a floor above the ceiling", () => {
     expect(() => loadConfig({ fileOverrides: { pricing: { floor: 60 } } })).toThrow(/floor/);
   });
+
+  it("lets DATABASE_PATH and BLOB_DIR move the data, e.g. for end-to-end tests", () => {
+    expect(loadConfig().storage.blobPath).toBe("data/blobs");
+    const c = loadConfig({ env: { DATABASE_PATH: "data/e2e.db", BLOB_DIR: "data/e2e-blobs" } });
+    expect(c.database.path).toBe("data/e2e.db");
+    expect(c.storage.blobPath).toBe("data/e2e-blobs");
+  });
 });

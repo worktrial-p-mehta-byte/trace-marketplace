@@ -18,6 +18,7 @@
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "check:secrets": "tsx scripts/check-secrets.ts",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "1.56.0",
     "@types/node": "^22.20.5",
     "eslint": "^9.39.5",
     "prettier": "^3.6.2",
@@ -50,11 +52,11 @@
   "dependencies": {
     "@tm/adapters": "workspace:*",
     "@tm/config": "workspace:*",
-    "@tm/enrich": "workspace:*",
-    "@tm/scrub": "workspace:*",
     "@tm/core": "workspace:*",
     "@tm/db": "workspace:*",
+    "@tm/enrich": "workspace:*",
     "@tm/schema": "workspace:*",
+    "@tm/scrub": "workspace:*",
     "@tm/synth": "workspace:*"
   }
 }

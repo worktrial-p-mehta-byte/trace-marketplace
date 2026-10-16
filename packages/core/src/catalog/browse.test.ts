@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { loadConfig, type MarketplaceConfig } from "@tm/config";
 import { newId, openDb, runMigrations, schema, type Db } from "@tm/db";
 import { comboKeyOf, type TraceTraits } from "@tm/enrich";
 import { TRACE_SCHEMA_VERSION, type Trace } from "@tm/schema";
 import {
+  listingTitle,
   acceptTerms,
   browseCatalog,
   canViewContent,
@@ -230,6 +232,18 @@ describe("ensureSearchIndex", () => {
       rustLoop,
     ]);
     expect(await ensureSearchIndex(db, blobs, search)).toBe(false);
+  });
+});
+
+describe("listingTitle", () => {
+  it("gives the title of a listing for sale, and nothing once it is withdrawn", () => {
+    expect(listingTitle(db, rustLoop)).toBe("Async deadlock in the job queue");
+    expect(listingTitle(db, "lst_missing")).toBeUndefined();
+    db.update(schema.listings)
+      .set({ status: "delisted" })
+      .where(eq(schema.listings.id, rustLoop))
+      .run();
+    expect(listingTitle(db, rustLoop)).toBeUndefined();
   });
 });
 

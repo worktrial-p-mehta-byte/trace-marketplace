@@ -5,7 +5,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Trace Marketplace",
+  title: { default: "Trace Marketplace", template: "%s · Trace Marketplace" },
   description: "Sell the sessions your coding agent already logs. Scrubbed on your machine.",
 };
 

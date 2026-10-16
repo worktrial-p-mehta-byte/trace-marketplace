@@ -51,4 +51,8 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
   database: {
     path: "data/trace-marketplace.db",
   },
+  storage: {
+    /** Folder for stored traces (the local BlobStore). */
+    blobPath: "data/blobs",
+  },
 };

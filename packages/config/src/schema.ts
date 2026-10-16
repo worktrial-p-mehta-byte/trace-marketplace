@@ -65,6 +65,7 @@ export const MarketplaceConfig = z
     }),
     pricing: PricingConfig,
     database: z.object({ path: z.string().min(1) }),
+    storage: z.object({ blobPath: z.string().min(1) }),
   })
   .superRefine((c, ctx) => {
     if (c.pricing.floor >= c.pricing.ceiling) {

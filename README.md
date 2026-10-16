@@ -12,7 +12,7 @@ reviewed in the browser, and only the approved, scrubbed version is uploaded.
 
 ![Market simulator: post a bounty and watch matching prices rise](docs/screenshots/market.png)
 
-> **Status: v0 demo** (milestones M0–M7). Everything runs locally with no
+> **Status: v0 demo** (milestones M0–M8). Everything runs locally with no
 > accounts or API keys. What v0 does not do yet is in
 > [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
@@ -118,6 +118,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | `pnpm reprice`                   | Reprice every listing now (prices also refresh on their own hourly) |
 | `pnpm inspect:sessions <folder>` | Parse session files locally and print their structure (no content)  |
 | `pnpm check`                     | Typecheck, lint, unit tests and secret scan, as CI runs them        |
+| `pnpm build && pnpm e2e`         | The demo flow end to end in a browser, on its own database          |
 
 ## Repository layout
 

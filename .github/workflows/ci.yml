@@ -38,6 +38,39 @@ jobs:
       - name: Build website
         run: pnpm build
 
+  e2e:
+    # The demo script end to end in a real browser, against a production
+    # build on its own seeded database (see playwright.config.ts).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build website
+        run: pnpm build
+
+      - name: End-to-end tests
+        run: pnpm e2e
+
+      - name: Keep traces and screenshots of failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
   docker:
     # Builds the production image and smoke-tests it: migrations run, the
     # demo seed loads, and the site serves the catalog.

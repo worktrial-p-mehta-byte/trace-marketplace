@@ -363,3 +363,18 @@ export async function getListingDetail(
     contentVisible,
   };
 }
+
+/**
+ * Just the title of a listing that's for sale, for page metadata. Cheap (one
+ * indexed query), and nothing for withdrawn listings, whose page is a 404
+ * for everyone but the seller.
+ */
+export function listingTitle(db: Db, listingId: string): string | undefined {
+  const row = db
+    .select({ title: schema.traces.title, status: schema.listings.status })
+    .from(schema.listings)
+    .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
+    .where(eq(schema.listings.id, listingId))
+    .get();
+  return row?.status === "active" ? (row.title ?? undefined) : undefined;
+}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { browseCatalog, ensureSearchIndex, openBounties, watchList } from "@tm/core";
@@ -6,6 +7,8 @@ import { PATTERNS, STACKS } from "@tm/synth";
 import { FAILURE_NAMES, money, reasonText } from "@/lib/labels";
 import { getBlobs, getConfig, getCurrentUser, getDb, getSearch, refreshPrices } from "@/lib/server";
 import { floodAction, postBountyAction, resetAction } from "./actions";
+
+export const metadata: Metadata = { title: "Market simulator" };
 
 export const dynamic = "force-dynamic";
 
@@ -205,13 +208,16 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
           ) : watched.length === 0 ? (
             <p className="mt-3 text-ink-2">No traces match yet. Add supply to create some.</p>
           ) : (
-            <ul className="mt-4 grid gap-4 md:grid-cols-2">
+            <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               {watched.map((w) => (
-                <li key={w.listingId} className="rounded-lg border border-rule bg-surface p-4">
+                <li
+                  key={w.listingId}
+                  className="min-w-0 rounded-lg border border-rule bg-surface p-4"
+                >
                   <div className="flex items-baseline justify-between gap-3">
                     <Link
                       href={`/traces/${w.listingId}`}
-                      className="truncate font-semibold hover:text-cobalt"
+                      className="min-w-0 truncate font-semibold hover:text-cobalt"
                     >
                       {w.title ?? "Untitled session"}
                     </Link>

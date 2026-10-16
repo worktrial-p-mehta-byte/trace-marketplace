@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingDetail, recordBuyerInterest } from "@tm/core";
+import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
 import { PriceChart } from "@/components/PriceChart";
@@ -26,6 +27,15 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
       <dd className="font-semibold">{value}</dd>
     </div>
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  return { title: listingTitle(getDb(), id) ?? "Trace" };
 }
 
 export default async function TracePage({ params }: { params: Promise<{ id: string }> }) {
@@ -166,7 +176,8 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
           </section>
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+        {/* On phones the price comes first, above the (often long) session. */}
+        <aside className="order-first space-y-4 lg:sticky lg:top-6 lg:order-none lg:self-start">
           {d.isOwner && (
             <section className="rounded-lg border border-cobalt/40 bg-surface p-4 text-sm">
               <p className="font-semibold">This is your trace</p>
