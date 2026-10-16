@@ -359,6 +359,7 @@ export default async function TracePage({
           {d.quotes && (
             <PriceCard
               quotes={d.quotes}
+              openSource={d.tier === 0}
               listingId={d.listingId}
               buyer={user?.buyerOrgId ? "buyer" : user ? "seller" : "none"}
               held={user?.buyerOrgId ? licensesHeld(getDb(), user.buyerOrgId, d.listingId) : []}

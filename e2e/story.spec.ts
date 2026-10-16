@@ -83,9 +83,12 @@ test.describe.serial("the demo story", () => {
     const results = page.locator("section[aria-label=Results] a[href^='/traces/']");
     const n = await results.count();
     let bought = false;
+    let listing = "";
     for (let i = 0; i < n && !bought; i++) {
       await page.goto("/traces?domain=medical&tier=0");
       await results.nth(i).click();
+      await page.waitForURL(/\/traces\/lst_/);
+      listing = page.url();
       const card = page.getByRole("region", { name: "Price" });
       await card.getByRole("radio", { name: "Evaluation" }).click();
       const buy = card.getByRole("button", { name: "Buy evaluation" });
@@ -96,6 +99,23 @@ test.describe.serial("the demo story", () => {
       bought = true;
     }
     expect(bought).toBe(true);
+
+    // The licence holder can take the session as a replayable task.
+    await page.goto(listing);
+    await page
+      .getByRole("region", { name: "Price" })
+      .getByRole("radio", { name: "Evaluation" })
+      .click();
+    const taskLink = page.getByRole("link", { name: "Download as a task (JSON)" });
+    await expect(taskLink).toBeVisible();
+    const res = await page.request.get((await taskLink.getAttribute("href"))!);
+    expect(res.ok()).toBe(true);
+    const task = await res.json();
+    expect(task.format).toBe("trace-task/v1");
+    expect(task.prompt.length).toBeGreaterThan(0);
+    expect(task.environment.domain).toBe("medical");
+    expect(task.provenance.licenses).toContain("eval");
+    expect(Array.isArray(task.expected.failureModes)).toBe(true);
 
     await page.goto("/campaigns");
     const campaign = page.locator("li", { hasText: "Clinical evaluations with corrections" });

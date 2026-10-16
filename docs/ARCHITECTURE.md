@@ -233,8 +233,18 @@ traits; it is a catalog facet and a badge, listed check by check on the trace
 page, and a V2 price factor (flagged 0.7×, well-formed 0.95×). It also sets
 how far a signals-only domain claim is trusted in pricing: domain rarity and
 the niche factor are raised to the power 0.75 when consistent, 0.5 otherwise.
-Tiers 3–4 (replaying a session in a sandbox; exporting it as a verifiable
-task) are post-demo.
+Tier 4, **task export**: `exportTask` (`packages/enrich/src/task.ts`,
+browser-safe) turns an open-source session into a replayable task,
+`trace-task/v1`: the prompt (first user message), follow-ups marked as
+corrections or interrupts, files read and written, shell commands, the check
+(the last test command, its result, and whether it ran after the last
+failure), the expected outcome (what a passing re-run achieves, how the
+recorded agent ended, its failure modes with events, behaviours to avoid),
+provenance and honest notes (the starting repository state isn't included).
+A licence holder downloads it from `/api/listings/[id]/task` (same
+entitlement as the trace download); signals-only sessions are refused (409),
+since their prompt and files were never shared. Tier 3 (replaying a session
+in a sandbox) is post-demo.
 
 ### Explaining a session (`explainTrace`)
 
