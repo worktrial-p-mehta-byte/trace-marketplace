@@ -31,6 +31,7 @@ share in force at the time, so changing it never rewrites past sales.
 | `pricing.rarity.includeSynthetic`    | `true`             | Whether synthetic traces count as supply (turn off in production) |
 | `pricing.demand.windowDays`          | `14`               | How long a search or bounty keeps pushing prices                  |
 | `pricing.refreshIntervalMinutes`     | `60`               | How stale prices may get before the app reprices on its own       |
+| `pricing.freshness.deprecatedModels` | Claude 3 family    | Model ids whose traces are priced as superseded (×0.7 freshness)  |
 | `pricing.license`                    | 1 / 1.5 / 2        | Research, evaluation and training license multipliers             |
 
 Every key, with comments, is in

@@ -40,3 +40,6 @@ playwright-report/
 
 # Python
 __pycache__/
+
+# Generated seller demo sessions (pnpm demo:sessions): dated relative to now
+demo/seller-sessions/*.jsonl

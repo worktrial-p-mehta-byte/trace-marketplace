@@ -10,6 +10,21 @@ import { redactionLabel } from "../Redacted";
 import { Timeline } from "./Timeline";
 import { money, type Item, type Quote, type ShareOutcome } from "./types";
 
+/** "3 API keys, 1 password": kinds that share a label are counted together. */
+function removedSummary(byKind: Record<string, number>): string {
+  const byLabel = new Map<string, number>();
+  for (const [kind, n] of Object.entries(byKind)) {
+    const label = redactionLabel(kind);
+    byLabel.set(label, (byLabel.get(label) ?? 0) + n);
+  }
+  return [...byLabel]
+    .sort((a, b) => b[1] - a[1])
+    .map(
+      ([label, n]) => `${n} ${n === 1 ? label : label.endsWith("s") ? `${label}es` : `${label}s`}`,
+    )
+    .join(", ");
+}
+
 const FAILURE_NAMES: Record<string, string> = {
   test_tampering: "Test tampering",
   retry_loop: "Retry loop",
@@ -568,11 +583,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
                 <p className="text-sm text-ink-2">
                   {active.scrub.stats.redactions === 0
                     ? "Nothing needed removing. Read through it before sharing."
-                    : `${active.scrub.stats.redactions} item${active.scrub.stats.redactions > 1 ? "s" : ""} removed: ${Object.entries(
-                        active.scrub.stats.byKind,
-                      )
-                        .map(([k, n]) => `${n} ${redactionLabel(k)}${n > 1 ? "s" : ""}`)
-                        .join(", ")}.`}
+                    : `${active.scrub.stats.redactions} item${active.scrub.stats.redactions > 1 ? "s" : ""} removed: ${removedSummary(active.scrub.stats.byKind)}.`}
                 </p>
               </div>
               {active.tier === 0 && (

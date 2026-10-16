@@ -65,16 +65,30 @@ export function demandFactor(pressure: number, c: PricingConfig, baseline?: numb
   return v;
 }
 
+/**
+ * Is the trace's model superseded? Decided at pricing time from
+ * `freshness.deprecatedModels`, so deprecating a model reprices traces that
+ * are already listed. A trait set when the trace was enriched also counts.
+ */
+export function isModelDeprecated(
+  t: Pick<TraceTraits, "modelDeprecated"> & { model?: string },
+  c: PricingConfig,
+): boolean {
+  return (
+    t.modelDeprecated || (t.model !== undefined && c.freshness.deprecatedModels.includes(t.model))
+  );
+}
+
 /** T: traces lose value as models move on; deprecated models lose more. */
 export function freshnessFactor(
-  t: Pick<TraceTraits, "capturedAt" | "modelDeprecated">,
+  t: Pick<TraceTraits, "capturedAt" | "modelDeprecated"> & { model?: string },
   now: Date,
   c: PricingConfig,
 ): number {
   const f = c.freshness;
   const ageDays = Math.max(0, (now.getTime() - Date.parse(t.capturedAt)) / DAY_MS);
   const v = Math.max(f.floor, 0.5 ** (ageDays / f.halfLifeDays));
-  return t.modelDeprecated ? v * f.deprecatedModelFactor : v;
+  return isModelDeprecated(t, c) ? v * f.deprecatedModelFactor : v;
 }
 
 /** L: the same data is worth more to train on than to evaluate or study. */

@@ -51,7 +51,12 @@ export const PricingConfig = z.object({
       save: z.number().min(0),
     }),
   }),
-  freshness: z.object({ halfLifeDays: positive, floor: share, deprecatedModelFactor: share }),
+  freshness: z.object({
+    halfLifeDays: positive,
+    floor: share,
+    deprecatedModelFactor: share,
+    deprecatedModels: z.array(z.string().min(1)),
+  }),
   license: z.object({ research: positive, eval: positive, training: positive }),
   quoteLockMinutes: positive,
   refreshIntervalMinutes: positive,

@@ -42,7 +42,24 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       bountyWeightPerDollar: 0.02,
       signalWeights: { search: 0.2, view: 0.05, save: 0.5 },
     },
-    freshness: { halfLifeDays: 90, floor: 0.4, deprecatedModelFactor: 0.7 },
+    freshness: {
+      halfLifeDays: 90,
+      floor: 0.4,
+      deprecatedModelFactor: 0.7,
+      /**
+       * Model ids the marketplace treats as superseded. Checked when pricing,
+       * so adding a model here reprices traces already listed.
+       */
+      deprecatedModels: [
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-5-sonnet-20240620",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-7-sonnet-20250219",
+      ],
+    },
     license: { research: 1.0, eval: 1.5, training: 2.0 },
     quoteLockMinutes: 15,
     /** Prices depend on time (freshness, demand window): refresh them at least this often. */

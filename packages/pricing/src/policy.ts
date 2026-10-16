@@ -6,6 +6,7 @@ import {
   demandFactor,
   failureFactor,
   freshnessFactor,
+  isModelDeprecated,
   licenseFactor,
   qualityFactor,
   rarityFactor,
@@ -67,7 +68,7 @@ function drivers(
         : f.demand < 0.995
           ? "little buyer interest"
           : "normal demand",
-    freshness: `${ageDays} day${ageDays === 1 ? "" : "s"} old${t.modelDeprecated ? ", model deprecated" : ""}`,
+    freshness: `${ageDays} day${ageDays === 1 ? "" : "s"} old${isModelDeprecated(t, c) ? `, ${t.model} is superseded` : ""}`,
   };
   return (["failure", "rarity", "demand", "richness", "quality", "freshness"] as FactorKey[]).map(
     (k) => ({ factor: k, value: f[k], reason: reasons[k], direction: direction(f[k]) }),
