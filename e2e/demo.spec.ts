@@ -47,13 +47,14 @@ test.describe.serial("demo flow", () => {
     await expect(page.getByText("Estimated price")).toBeVisible();
     await expect(page.getByText("Test tampering").first()).toBeVisible();
 
-    // Signals only (the default) shows the session's shape and no content.
+    // Signals only shows the session's shape and no content.
+    await page.getByText("Signals only", { exact: true }).last().click();
     await expect(page.getByText("The session, step by step")).toBeVisible();
     await expect(page.getByText("Test tampering").first()).toBeVisible();
 
-    // Open source shows the scrubbed content. A word the seller adds is hidden
-    // everywhere before anything is sent.
-    await page.getByText("Open source", { exact: true }).click();
+    // Open source (the default) shows the scrubbed content. A word the seller
+    // adds is hidden everywhere before anything is sent.
+    await page.getByText("Open source", { exact: true }).last().click();
     await page.getByLabel("Also hide these words").fill("parseDueDate");
     await expect(page.getByText("hidden word").first()).toBeVisible();
     // Gone from the review (the text box value itself is not page text).

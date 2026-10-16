@@ -183,7 +183,7 @@ async function main() {
     title: "Clinical evaluations with corrections",
     describe: "medical evaluations where the agent was corrected",
     license: "research" as const,
-    maxPriceCents: 2500,
+    maxPriceCents: 4000,
     quantity: 6,
     days: 14,
   };
@@ -210,14 +210,14 @@ async function main() {
   setInterest(db, demoSeller.id, "data_querying", true);
   const campaign = createCampaign(db, checkoutDeps, buyer, campaignInput);
   // A second lab competes for the same sessions at a lower bid, so a new
-  // medical session goes to auction: the $25 bid wins and pays $15. It is
+  // medical session goes to auction: the $40 bid wins and pays $30. It is
   // funded with exactly its campaign's escrow.
   const rival = await ensureAccount(db, "buyer2@example.com", "buyer", "Second lab", DEMO_PASSWORD);
   const rivalInput = {
     title: "Medical corrections for our eval set",
     describe: "medical evaluations where the agent was corrected",
     license: "research" as const,
-    maxPriceCents: 1500,
+    maxPriceCents: 3000,
     quantity: 4,
     days: 14,
   };

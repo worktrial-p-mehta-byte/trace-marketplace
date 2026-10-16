@@ -52,7 +52,9 @@ function build(raw: Trace, fileName: string, customTerms: string[], prev?: Item)
     raw,
     scrub,
     enrich,
-    tier: prev?.tier ?? 1,
+    // Open source by default: buyers get the content and sellers earn more;
+    // signals only is one click away for private work.
+    tier: prev?.tier ?? 0,
     rightToShare: prev?.rightToShare ?? false,
     staged: prev?.staged ?? false,
     selected: prev?.selected ?? !noOutput,
@@ -391,12 +393,62 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
             onChange={(e) => setTermsText(e.target.value)}
           />
         </label>
+        {items.filter((i) => i.eligible && i.state !== "shared").length > 1 && (
+          <div className="flex items-center gap-2 text-sm" role="group" aria-label="Share all as">
+            <span className="text-ink-2">Share all as</span>
+            <button
+              type="button"
+              className="btn-quiet px-2 py-1"
+              onClick={() =>
+                setItems((cur) =>
+                  cur.map((it) =>
+                    it.state === "shared" || it.tier === 0
+                      ? it
+                      : { ...it, tier: 0 as const, quote: undefined },
+                  ),
+                )
+              }
+            >
+              Open source
+            </button>
+            <button
+              type="button"
+              className="btn-quiet px-2 py-1"
+              onClick={() =>
+                setItems((cur) =>
+                  cur.map((it) =>
+                    it.state === "shared" || it.tier === 1
+                      ? it
+                      : { ...it, tier: 1 as const, quote: undefined },
+                  ),
+                )
+              }
+            >
+              Signals only
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-4">
           {blocked.length > 0 && (
-            <p className="max-w-xs text-sm text-brick">
-              Confirm you can share {blocked.length} open-source session
-              {blocked.length > 1 ? "s" : ""}, or switch them to signals only.
-            </p>
+            <div className="max-w-sm text-sm text-brick">
+              <p>
+                Confirm you can share {blocked.length} open-source session
+                {blocked.length > 1 ? "s" : ""}, or switch them to signals only.
+              </p>
+              <button
+                type="button"
+                className="mt-1 font-semibold text-cobalt"
+                onClick={() =>
+                  setItems((cur) =>
+                    cur.map((it) =>
+                      blocked.some((b) => b.key === it.key) ? { ...it, rightToShare: true } : it,
+                    ),
+                  )
+                }
+              >
+                They are all open-source work or my own projects
+              </button>
+            </div>
           )}
           <button
             type="button"

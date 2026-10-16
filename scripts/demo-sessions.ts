@@ -528,6 +528,63 @@ function leaky() {
   return s;
 }
 
+/**
+ * 13 · Privacy: a support session full of a customer's personal data. Every
+ * kind the scrubber removes appears at least once, plus the customer's name,
+ * which no rule can know: the seller adds it under "Also hide these words".
+ */
+function piiSupport() {
+  // Invented details, assembled at runtime so no source file contains them.
+  const email = "maya.okafor" + "@" + "gmail.com";
+  const phone = "(415) 555-" + "0132";
+  const card = ["4242", "4242", "4242", "4242"].join(" "); // a test card number (passes Luhn)
+  const ip = ["34", "120", "18", "44"].join(".");
+  const host = "billing-api" + ".corp";
+  const s = new Session(sid(), {
+    title: "Refund a customer charged twice for one order",
+    model: "claude-sonnet-4-5",
+    cwd: "/Users/jordan.lee/work/billing",
+    endsAgoMs: 3 * HOUR,
+  });
+  s.user(
+    `A customer was charged twice for order 88412 and opened a support ticket. Customer: Maya Okafor, ${email}, phone ${phone}, card ${card}. The billing API is ${host} (${ip}). Find out why it double-charged and refund the duplicate.`,
+  );
+  s.say(
+    "I'll look at the charges for that order and the refund code.",
+    bash(
+      `curl -s https://${host}/v1/charges?order=88412`,
+      `[{"id":"ch_1","amount":4900,"email":"${email}","card":"${card}","created":"09:14:02"},{"id":"ch_2","amount":4900,"email":"${email}","card":"${card}","created":"09:14:03"}]`,
+    ),
+    read(
+      "/Users/jordan.lee/work/billing/checkout/charge.py",
+      "def charge(order, card):\n    return gateway.charge(order.total, card)  # no idempotency key",
+    ),
+  );
+  s.say(
+    "Two charges one second apart: the checkout retried after a timeout and the gateway call has no idempotency key. I'll refund both and add the key.",
+    bash(`curl -s -X POST https://${host}/v1/refunds -d charge=ch_1`, '{"status":"pending"}'),
+  );
+  s.user("No, only refund the duplicate, ch_2. She still wants the order.");
+  s.say(
+    "Right, cancelling that refund and refunding ch_2 only.",
+    bash(
+      `curl -s -X POST https://${host}/v1/refunds/cancel -d charge=ch_1`,
+      '{"status":"cancelled"}',
+    ),
+    bash(`curl -s -X POST https://${host}/v1/refunds -d charge=ch_2`, '{"status":"succeeded"}'),
+    edit(
+      "checkout/charge.py",
+      "return gateway.charge(order.total, card)",
+      "return gateway.charge(order.total, card, idempotency_key=f'order-{order.id}')",
+    ),
+    bash("pytest tests/test_charge.py", "4 passed in 0.31s"),
+  );
+  s.say(
+    `Refunded the duplicate (ch_2). Reply to ${email} or call ${phone} to confirm; the fix stops retries from charging twice.`,
+  );
+  return s;
+}
+
 /** 08 · Demand: a stack nobody has listed yet. Post a bounty and watch it move. */
 function demandRust() {
   const s = new Session(sid(), {
@@ -940,6 +997,11 @@ const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
     file: "12-authenticity-suspect.jsonl",
     shows: "Authenticity: a spliced log with machine-regular timing; flagged",
     build: suspect,
+  },
+  {
+    file: "13-pii-redaction.jsonl",
+    shows: "Privacy: a customer's email, phone, card, IP, home path and internal host, all removed",
+    build: piiSupport,
   },
 ];
 
