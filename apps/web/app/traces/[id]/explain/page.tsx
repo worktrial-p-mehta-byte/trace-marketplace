@@ -82,7 +82,7 @@ export default async function ExplainPage({ params }: { params: Promise<{ id: st
         key: `label:domain:${domain}`,
         name: DOMAIN_NAMES[domain] ?? "Unknown domain",
         value: domain === "unknown" ? undefined : `${Math.round(t.domainConfidence * 100)}% sure`,
-        detail: `${DOMAIN_DESCRIPTIONS[domain] ?? ""} Read from the words, tools and file types on the highlighted lines.${
+        detail: `${DOMAIN_DESCRIPTIONS[domain] ?? ""} Read from the words, tools and file types on the highlighted lines${x.title.length ? " and the title" : ""}.${
           (t.domains ?? []).length > 1
             ? ` Also ${t.domains
                 .slice(1)

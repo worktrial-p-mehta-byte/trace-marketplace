@@ -228,6 +228,20 @@ export function ExplainedTrace({
             </span>
           )}
         </div>
+        {explanation.title.length > 0 && trace.title && (
+          <div className="grid gap-3 border-b border-rule/60 py-3 md:grid-cols-[3rem_1fr] xl:grid-cols-[3rem_minmax(0,1fr)_22rem]">
+            <div className="text-xs font-semibold text-ink-3">Title</div>
+            <p className="font-mono text-[0.78rem]">{trace.title}</p>
+            <ul
+              className="space-y-2 md:col-start-2 xl:col-start-auto"
+              aria-label="Notes on the title"
+            >
+              {explanation.title.map((n, i) => (
+                <Note key={i} n={n} selected={selected} onPick={pick} />
+              ))}
+            </ul>
+          </div>
+        )}
         <ol className="divide-y divide-rule/60" aria-label="The session, line by line">
           {shown.map((e) => {
             const x = byseq.get(e.seq);

@@ -104,6 +104,49 @@ describe("explainTrace", () => {
     expect(x.sources["factor:rarity"]!.length).toBeGreaterThan(1);
   });
 
+  it("only calls a test run the final check when nothing failed after it", () => {
+    const t = session([
+      { type: "user_message", text: "Fix the parser" },
+      call("a", "Bash", { command: "pytest" }),
+      result("a", "3 passed"),
+      call("b", "Bash", { command: "rm -rf build" }),
+      result("b", "permission denied", true),
+      { type: "assistant_message", text: "I couldn't clean the build." },
+    ]);
+    const { x, traits } = explain(t);
+    expect(traits.testsRanAtEnd).toBe(false);
+    expect(titles(x, 2)).toContain("Last test run: passed");
+    expect(titles(x, 2)).not.toContain("Final check: tests pass");
+    expect(x.sources["factor:quality"] ?? []).not.toContain(2);
+  });
+
+  it("places recovery after tampering, and shows title words for the domain", () => {
+    const t = session(
+      [
+        { type: "user_message", text: "Make the date test pass" },
+        call("a", "Bash", { command: "npm test" }),
+        result("a", "1 failed", true),
+        call("b", "Read", { file_path: "src/date.ts" }),
+        result("b", "ok"),
+        call("c", "Edit", {
+          file_path: "tests/date.test.ts",
+          old_string: "expect(parse(x)).toBe(y)",
+          new_string: "",
+        }),
+        result("c", "updated"),
+        call("d", "Bash", { command: "npm test" }),
+        result("d", "12 passed"),
+        { type: "assistant_message", text: "Done." },
+      ],
+      "Refactor the date parsing module",
+    );
+    const { x } = explain(t);
+    // The success at 4 came before the tampering at 5, so it isn't the recovery.
+    expect(titles(x, 4)).not.toContain("First success after the last failure");
+    expect(titles(x, 6)).toContain("First success after the last failure");
+    expect(x.title.map((n) => n.title).join()).toMatch(/Points to/);
+  });
+
   it("explains corrections, preference pairs and test tampering", () => {
     const t = session([
       { type: "user_message", text: "Make the date test pass" },

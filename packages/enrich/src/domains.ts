@@ -1128,7 +1128,7 @@ export interface DomainEventEvidence {
 }
 
 /**
- * Per event, what pointed at `domain`: the words, tool and file types the
+ * Per event (the title at seq -1), what pointed at `domain`: the words, tool and file types the
  * detector counted. For explaining a detection, not for scoring it (the
  * weights and pooling live in detectDomains).
  */
@@ -1153,6 +1153,8 @@ export function domainEvidenceByEvent(
       if (!e.terms.includes(name)) e.terms.push(name);
     });
   };
+  // The title is scored like the person's words; it is reported at seq -1.
+  if (trace.title) words(-1, trace.title);
   for (const e of trace.events as TraceEvent[]) {
     switch (e.type) {
       case "user_message":

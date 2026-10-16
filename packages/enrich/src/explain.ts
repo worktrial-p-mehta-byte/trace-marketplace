@@ -38,6 +38,8 @@ export interface EventExplanation {
 
 export interface TraceExplanation {
   events: EventExplanation[];
+  /** Notes on the session's title (it counts like the person's words for the domain). */
+  title: EventNote[];
   /** For each derivation key, the events behind it, in order. */
   sources: Record<string, number[]>;
 }
@@ -148,7 +150,16 @@ export function explainTrace(
   let lastStreakTool: string | undefined;
   let prevTs: string | undefined;
   // The last failure the labeler counted, for "recovered".
-  const failureSeqs = [...toolError, ...rejected, ...correction, ...interrupt];
+  // Every failure the labeler found, tampering included: recovery can only
+  // come after the last of them.
+  const failureSeqs = [
+    ...toolError,
+    ...rejected,
+    ...correction,
+    ...interrupt,
+    ...tampering,
+    ...retry,
+  ];
   const lastFailure = failureSeqs.length ? Math.max(...failureSeqs) : -1;
   let recoveryMarked = false;
   const domainToolSeen = new Set<string>();
@@ -296,20 +307,31 @@ export function explainTrace(
         // signals-only sessions too (whose output wasn't kept).
         if (finalPassed.has(e.seq) || finalFailed.has(e.seq)) {
           const passed = finalPassed.has(e.seq);
-          note({
-            kind: "outcome",
-            title: passed ? "Final check: tests pass" : "Final check: tests fail",
-            detail: `The last test run, after the last failure, so the outcome can be checked. ${
-              passed
-                ? "Tests pass at the end: the recovery is proven, and a checkable outcome raises the quality factor."
-                : "Tests still fail at the end; a checkable outcome still raises the quality factor."
-            }`,
-            feeds: [
-              `label:outcome:${passed ? "tests_passed_at_end" : "tests_failed_at_end"}`,
-              "trait:testsRanAtEnd",
-              "factor:quality",
-            ],
-          });
+          if (traits.testsRanAtEnd) {
+            note({
+              kind: "outcome",
+              title: passed ? "Final check: tests pass" : "Final check: tests fail",
+              detail: `The last test run, after the last failure, so the outcome can be checked. ${
+                passed
+                  ? "Tests pass at the end: the recovery is proven, and a checkable outcome raises the quality factor."
+                  : "Tests still fail at the end; a checkable outcome still raises the quality factor."
+              }`,
+              feeds: [
+                `label:outcome:${passed ? "tests_passed_at_end" : "tests_failed_at_end"}`,
+                "trait:testsRanAtEnd",
+                "factor:quality",
+              ],
+            });
+          } else {
+            // The last run, but something failed after it: not a checkable outcome.
+            note({
+              kind: "outcome",
+              title: `Last test run: ${passed ? "passed" : "failed"}`,
+              detail:
+                "The last test run in the session, but something failed after it, so it doesn't prove how the session ended and earns no quality bonus.",
+              feeds: [`label:outcome:${passed ? "tests_passed_at_end" : "tests_failed_at_end"}`],
+            });
+          }
         } else {
           const cmd = call && commandOf(call);
           const result = cmd && isTestCommand(cmd) ? testRunResult(e.output, e.isError) : "unknown";
@@ -429,5 +451,19 @@ export function explainTrace(
     for (const seq of l.evidence) if (!(sources[k] ?? []).includes(seq)) feed([k], seq);
     sources[k]?.sort((a, b) => a - b);
   }
-  return { events, sources };
+  // The title counts toward the domain like the person's own words.
+  const title: EventNote[] = [];
+  const titleHit = domainHits.get(-1);
+  if (titleHit?.terms.length) {
+    title.push({
+      kind: "domain",
+      title: `Points to ${domainName(domain)}`,
+      detail: `The session's title has words ${titleHit.terms
+        .slice(0, 5)
+        .map((t: string) => `“${t}”`)
+        .join(", ")}. Titles count as much as the person's own words (3×).`,
+      feeds: [`label:domain:${domain}`, "factor:rarity", "factor:niche"],
+    });
+  }
+  return { events, title, sources };
 }
