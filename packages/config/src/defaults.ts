@@ -123,6 +123,19 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       /** Score added for a listing matching the strongest interest in each dimension. */
       match: { domain: 5, failure: 3, language: 1.5, framework: 1 },
     },
+    /** "What buyers want from you": where a seller's next share pays most. */
+    sellerSuggestions: {
+      limit: 3,
+      /** Score for an open campaign bidding there (plus a tenth per dollar of its best bid). */
+      campaign: 3,
+      /** Score when buyers ask and nothing is listed. */
+      unsupplied: 4,
+      /** Score added when demand rose this week. */
+      rising: 0.5,
+      /** Multipliers for domains the seller shares in or follows. */
+      yoursBoost: 2,
+      followedBoost: 1.5,
+    },
   },
   database: {
     path: "data/trace-marketplace.db",

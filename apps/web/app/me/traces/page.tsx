@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { listSellerTraces, sellerEarnings } from "@tm/core";
+import { canSell, listSellerTraces, sellerEarnings, sellerSuggestions } from "@tm/core";
+import { SellerSuggestions } from "@/components/trends/SellerSuggestions";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
 
@@ -48,6 +49,14 @@ export default async function MyTracesPage() {
           Share more sessions
         </Link>
       </div>
+
+      {canSell(user) && (
+        <div className="mt-8">
+          <SellerSuggestions
+            suggestions={sellerSuggestions(getDb(), { config: getConfig() }, user.id)}
+          />
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="mt-10 rounded-lg border border-rule bg-surface p-8">

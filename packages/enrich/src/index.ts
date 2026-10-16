@@ -44,6 +44,7 @@ export {
   labelsOfKind,
   type LabelDef,
   type LabelKindId,
+  failureClause,
 } from "./registry";
 export {
   enrichTrace,

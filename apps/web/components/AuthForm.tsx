@@ -50,7 +50,7 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
     const user = data.user as { role: string };
     const sells = user.role === "seller" || user.role === "both" || user.role === "admin";
     router.push(
-      mode === "signup" || !data.termsCurrent ? "/onboarding" : sells ? "/share" : "/market",
+      mode === "signup" || !data.termsCurrent ? "/onboarding" : sells ? "/share" : "/traces",
     );
     router.refresh();
   }

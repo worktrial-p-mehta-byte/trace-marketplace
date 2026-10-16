@@ -392,12 +392,27 @@ searches (demand signals), saved searches and purchases, weighted
 enough), searches the team's top domains, skips listings it already holds,
 scores each listing by how well it matches the team's strongest interest in
 each dimension plus quality, and gives every pick its reason ("Like the 3
-data and querying traces your team bought", "Because your team viewed
+sessions your team bought where tools failed", "Because your team viewed
 medical sessions", "You said you need Medical"). The
 answers then personalise the marketplace: a "Picked for you" row tops the
 catalog when browsing, price cards open on the stated licence, and the
 welcome page suggests a campaign prefilled with the buyer's domain,
 behaviour, budget and licence.
+
+Buyers land on the catalog after signing in, so picks are the first thing
+they see; a team with no answers and no behaviour yet gets a prompt to say
+what it needs.
+
+**Sellers get suggestions too.** `sellerSuggestions`
+(`packages/core/src/trends/suggestions.ts`) reads the Trends board and
+keeps segments where a campaign is bidding, buyers ask and nothing is
+listed, demand outruns supply, or demand rose this week. It boosts domains
+the seller already shares in (×2) or follows (×1.5), keeps one per domain,
+and phrases each as what to share and why ("You follow Medical: 2 campaigns
+bidding up to $40, demand far outstrips supply, they sell for about $18").
+A seller with neither sees what the market wants. They appear as "What
+buyers want from you" on Share and My traces (`discovery.sellerSuggestions`
+in config).
 
 ## Accounts, onboarding and sharing (M4)
 

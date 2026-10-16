@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
-import { DOMAIN_IDS, FAILURE_CODES, labelName } from "@tm/enrich";
+import { DOMAIN_IDS, FAILURE_CODES, failureClause, labelName } from "@tm/enrich";
 import { newId, schema, type Db } from "@tm/db";
 import type { LicenseScope } from "@tm/schema";
 import type { PublicUser } from "../auth";
@@ -130,12 +130,15 @@ function reasonFor(dim: InterestDim, value: string, i: Interest): string {
   )[0];
   const name = interestName(dim, value);
   const n = source ? (i.count[source] ?? 1) : 1;
-  const sessions = dim === "failure" ? `sessions with ${name}` : `${name} sessions`;
+  const where = dim === "failure" ? failureClause(value) : "";
+  const sessions = dim === "failure" ? `sessions where ${where}` : `${name} sessions`;
   switch (source) {
     case "stated":
-      return `You said you need ${dim === "failure" ? `sessions with ${name}` : name}`;
+      return `You said you need ${dim === "failure" ? sessions : name}`;
     case "purchase":
-      return `Like the ${n === 1 ? "" : `${n} `}${dim === "failure" ? `traces with ${name}` : `${name} trace${n === 1 ? "" : "s"}`} your team bought`;
+      return dim === "failure"
+        ? `Like the ${n === 1 ? "session" : `${n} sessions`} your team bought where ${where}`
+        : `Like the ${n === 1 ? "" : `${n} `}${name} trace${n === 1 ? "" : "s"} your team bought`;
     case "save":
       return `Matches your saved search for ${name}`;
     case "view":
