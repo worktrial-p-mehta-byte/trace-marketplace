@@ -1,10 +1,12 @@
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { findRepoRoot, loadServerConfig } from "@tm/config/server";
 import {
   createDbEventBus,
   createLocalBlobStore,
   createSqliteSearchIndex,
   ensureAccount,
+  EventTypes,
   rebuildSearchIndex,
   recordDemandSignal,
   repriceAll,
@@ -28,6 +30,9 @@ import { createRng, generateCatalog } from "@tm/synth";
  *   buyer@example.com   (a buyer, for searching and posting bounties)
  */
 const DEMO_PASSWORD = "demo-password";
+// Exit codes the Docker entrypoint relies on (scripts/docker-entrypoint.sh).
+const EXIT_NOT_EMPTY = 3; // the database already has traces: nothing to do
+const EXIT_PARTIAL = 4; // an earlier seed stopped part-way: needs a reset
 const WEEK = 7 * 86_400_000;
 
 function arg(name: string, fallback: number): number {
@@ -41,10 +46,24 @@ async function main() {
   const config = loadServerConfig();
   const db = openDb(config.database.path);
   if (db.select().from(schema.traces).all().length > 0) {
+    const demoUser = db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, "seller@example.com"))
+      .get();
+    const finished = db
+      .select()
+      .from(schema.events)
+      .where(eq(schema.events.type, EventTypes.DemoSeeded))
+      .get();
+    if (demoUser && !finished) {
+      console.error("An earlier demo seed stopped part-way. Run `pnpm demo:reset` to start again.");
+      process.exit(EXIT_PARTIAL);
+    }
     console.error(
       "The database already has traces. Run `pnpm demo:reset` for a fresh demo market.",
     );
-    process.exit(1);
+    process.exit(EXIT_NOT_EMPTY);
   }
   const bus = createDbEventBus(db);
   const blobs = createLocalBlobStore(join(findRepoRoot(), "data", "blobs"));
@@ -129,6 +148,7 @@ async function main() {
   bus.poll("pricing", () => {}, 1_000_000); // seed already priced everything
   bus.poll("search", () => {}, 1_000_000);
   const indexed = await rebuildSearchIndex(db, blobs, search);
+  bus.emit(EventTypes.DemoSeeded, { traces: listed, seed });
 
   const prices = db
     .select({ p: schema.listings.currentPriceCents })
@@ -145,4 +165,7 @@ async function main() {
   );
   console.log(`Demo logins (password "${DEMO_PASSWORD}"): seller@example.com, buyer@example.com`);
 }
-main();
+main().catch((err) => {
+  console.error("Seed failed:", err);
+  process.exit(1);
+});

@@ -47,7 +47,10 @@ docker run -p 3000:3000 -v tm-data:/app/data -e SEED_DEMO=1 trace-marketplace
 
 - `SEED_DEMO=1` fills an empty database with the 200-trace synthetic market
   and the two demo logins. On a database that already has traces it does
-  nothing, so restarts are safe. Leave it unset for a real deployment.
+  nothing, so restarts are safe. If a seed stopped part-way, the container
+  exits with a message instead of serving a half-built demo: delete the
+  volume and start again (`docker compose down -v && docker compose up`).
+  Leave it unset for a real deployment.
 - The container runs as the unprivileged `node` user and has a health check
   on `GET /api/health` (200 when the database is ready, 503 otherwise).
 - CI builds this image on every pull request, starts it with the demo seed
