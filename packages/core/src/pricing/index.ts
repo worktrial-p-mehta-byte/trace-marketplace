@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import type { TraceTraits } from "@tm/enrich";
@@ -407,6 +407,97 @@ export function quoteListing(
   const market = buildMarket(db, deps);
   const row = market.active.find((r) => r.listingId === listingId);
   return row ? market.quote(row, license) : undefined;
+}
+
+/** One listing that shows what a trace in its domain sells for right now. */
+export interface PriceExample {
+  listingId: string;
+  title: string | null;
+  domain: string;
+  tier: Tier;
+  language?: string;
+  framework?: string;
+  turns: number;
+  failureCategory?: string;
+  recovered: boolean;
+  testsPassedAtEnd: boolean;
+  ageDays: number;
+  /** The research-licence quote, priced by the configured policy now. */
+  quote: PriceQuote;
+}
+
+/**
+ * Live pricing examples for the landing page: one listing per domain, the
+ * one at the domain's median price (so it is typical, not an outlier), in
+ * `order` first and then the busiest other domains, up to `limit`. Prices
+ * come from the same market and policy as every quote, so they can't go
+ * stale. Domains the labeler couldn't name are skipped.
+ */
+export function priceExamples(
+  db: Db,
+  deps: PricingDeps,
+  opts: {
+    order?: readonly string[];
+    limit?: number;
+    /** Only listings whose traits pass (e.g. one kind of failure). */
+    where?: (t: TraceTraits, tier: Tier) => boolean;
+  } = {},
+): PriceExample[] {
+  const limit = opts.limit ?? 6;
+  const now = deps.now ?? new Date();
+  const market = buildMarket(db, { ...deps, now });
+  const byDomain = new Map<string, ActiveListing[]>();
+  for (const r of market.active) {
+    if (r.traits.domain === "unknown" || (opts.where && !opts.where(r.traits, r.tier))) continue;
+    const list = byDomain.get(r.traits.domain) ?? [];
+    list.push(r);
+    byDomain.set(r.traits.domain, list);
+  }
+  const preferred = (opts.order ?? []).filter((d) => byDomain.has(d));
+  const rest = [...byDomain.keys()]
+    .filter((d) => !preferred.includes(d))
+    .sort((a, b) => byDomain.get(b)!.length - byDomain.get(a)!.length || a.localeCompare(b));
+  const picked = [...preferred, ...rest].slice(0, limit).map((domain) => {
+    const quoted = byDomain
+      .get(domain)!
+      .map((row) => ({ row, quote: market.quote(row, "research") }))
+      .sort(
+        (a, b) =>
+          a.quote.priceCents - b.quote.priceCents || a.row.listingId.localeCompare(b.row.listingId),
+      );
+    return quoted[Math.floor((quoted.length - 1) / 2)]!;
+  });
+  if (!picked.length) return [];
+  const titles = new Map(
+    db
+      .select({ id: schema.traces.id, title: schema.traces.title })
+      .from(schema.traces)
+      .where(
+        inArray(
+          schema.traces.id,
+          picked.map((p) => p.row.traceId),
+        ),
+      )
+      .all()
+      .map((t) => [t.id, t.title]),
+  );
+  return picked.map(({ row, quote }) => ({
+    listingId: row.listingId,
+    title: titles.get(row.traceId) ?? null,
+    domain: row.traits.domain,
+    tier: row.tier,
+    language: row.traits.language,
+    framework: row.traits.framework,
+    turns: row.traits.turns,
+    failureCategory: row.traits.failureCategory,
+    recovered: row.traits.recovered,
+    testsPassedAtEnd: row.traits.testsPassedAtEnd,
+    ageDays: Math.max(
+      0,
+      Math.floor((now.getTime() - Date.parse(row.traits.capturedAt)) / 86_400_000),
+    ),
+    quote,
+  }));
 }
 
 /** Price history for a listing, oldest first (for the price chart). */

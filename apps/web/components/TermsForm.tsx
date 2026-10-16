@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function TermsForm({ next }: { next: string }) {
+export function TermsForm({ next, agreement }: { next: string; agreement: string }) {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +14,7 @@ export function TermsForm({ next }: { next: string }) {
       onSubmit={async (e) => {
         e.preventDefault();
         if (!checked) {
-          setError("Tick the box to accept the data terms.");
+          setError("Tick the box to accept the terms.");
           return;
         }
         setBusy(true);
@@ -42,10 +42,7 @@ export function TermsForm({ next }: { next: string }) {
           }}
           className="mt-1 size-4 accent-cobalt"
         />
-        <span>
-          I agree to these terms. I will only share sessions I have the right to share, and I
-          understand that sold copies can&apos;t be recalled.
-        </span>
+        <span>{agreement}</span>
       </label>
       {error && (
         <p role="alert" className="text-sm text-brick">

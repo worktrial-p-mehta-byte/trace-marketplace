@@ -77,7 +77,13 @@ P = clamp( B_tier × min(cap, Q × R × F × X × D × T) × L , floor, ceiling 
 
 Defaults: multiplier cap 12×, floor $0.10, ceiling $50, seller share 70%.
 
-## Worked examples (from the tests)
+## Worked examples (v1, from the tests)
+
+The landing page shows live examples instead: a typical listing (the
+median price) from each of several domains, priced by the current policy
+with its biggest reasons (`priceExamples` in `packages/core/src/pricing`),
+and the hero's price is today's typical price for an open-source
+test-tampering session that recovered with its tests passing.
 
 | Factor                  | Everyday TypeScript/React trace       | Rare Rust/Tokio near-miss                                                             |
 | ----------------------- | ------------------------------------- | ------------------------------------------------------------------------------------- |

@@ -36,7 +36,8 @@ function Line({
   );
 }
 
-export function RedactingDemo() {
+/** `priceCents`: what a session like this sells for today (omitted when none is listed). */
+export function RedactingDemo({ priceCents }: { priceCents?: number }) {
   return (
     <figure className="rounded-lg border border-rule bg-surface p-5 shadow-[0_1px_0_var(--color-rule)]">
       <div className="space-y-0.5 font-mono text-[0.8rem] leading-relaxed text-ink">
@@ -63,10 +64,12 @@ export function RedactingDemo() {
         <span className="text-ink-2">
           Agent tampered with a test, you corrected it, it recovered.
         </span>
-        <span className="font-semibold">
-          <span className="price">$22.72</span>{" "}
-          <span className="font-normal text-ink-3">estimated</span>
-        </span>
+        {priceCents !== undefined && (
+          <span className="font-semibold">
+            <span className="price">${(priceCents / 100).toFixed(2)}</span>{" "}
+            <span className="font-normal text-ink-3">for one like it today</span>
+          </span>
+        )}
       </figcaption>
     </figure>
   );

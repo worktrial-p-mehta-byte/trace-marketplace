@@ -45,8 +45,13 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
       setError(data.error ?? "Something went wrong. Try again.");
       return;
     }
-    const terms = data.user.termsAcceptedVersion;
-    router.push(mode === "signup" || !terms ? "/onboarding" : "/share");
+    // New accounts and anyone who hasn't accepted the terms see the terms
+    // for their role; returning sellers go to sharing, buyers to the market.
+    const user = data.user as { role: string };
+    const sells = user.role === "seller" || user.role === "both" || user.role === "admin";
+    router.push(
+      mode === "signup" || !data.termsCurrent ? "/onboarding" : sells ? "/share" : "/market",
+    );
     router.refresh();
   }
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { creditBalance, ensureWelcomeCredits, getQuote } from "@tm/core";
+import { creditBalance, ensureWelcomeCredits, getQuote, hasCurrentTerms } from "@tm/core";
 import { payAction, topUpAction } from "@/app/cart/actions";
 import { money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
@@ -21,6 +21,8 @@ export default async function CheckoutPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!user.buyerOrgId) redirect("/cart");
+  // Buying needs the current terms; accounts from before them accept first.
+  if (!hasCurrentTerms(user)) redirect("/onboarding");
   const { quoteId } = await params;
   const p = await searchParams;
   const q = getQuote(getDb(), user, quoteId);

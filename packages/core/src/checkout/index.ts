@@ -4,7 +4,7 @@ import { newId, schema, type Db } from "@tm/db";
 import type { TraceTraits } from "@tm/enrich";
 import { splitSale } from "@tm/pricing";
 import type { LicenseScope } from "@tm/schema";
-import type { PublicUser } from "../auth";
+import { hasCurrentTerms, type PublicUser } from "../auth";
 import { EventTypes, type EventBus } from "../events";
 import { Accounts, balanceOf, postTransaction } from "../ledger";
 import { notify } from "../notifications";
@@ -30,6 +30,13 @@ const LICENSES: LicenseScope[] = ["research", "eval", "training"];
 function buyerOrg(user: PublicUser | undefined): string {
   if (!user?.buyerOrgId) throw new CheckoutError("Sign in with a buyer account to buy.");
   return user.buyerOrgId;
+}
+
+/** Spending needs the current terms (licences, no redistribution) accepted. */
+function payingBuyerOrg(user: PublicUser | undefined): string {
+  const orgId = buyerOrg(user);
+  if (!hasCurrentTerms(user!)) throw new CheckoutError("Accept the terms before buying.");
+  return orgId;
 }
 
 // ---------------------------------------------------------------- credits
@@ -263,7 +270,7 @@ export function quoteCart(
   license: LicenseScope,
   listingIds?: string[],
 ): QuoteView {
-  const orgId = buyerOrg(user);
+  const orgId = payingBuyerOrg(user);
   if (!LICENSES.includes(license)) throw new CheckoutError("Choose a licence.");
   const ids = listingIds ?? cartListingIds(db, orgId);
   if (!ids.length) throw new CheckoutError("Your cart is empty.");
@@ -492,7 +499,7 @@ export function placeOrder(
   user: PublicUser,
   quoteId: string,
 ): OrderResult {
-  const orgId = buyerOrg(user);
+  const orgId = payingBuyerOrg(user);
   const now = deps.now ?? new Date();
   const quote = getQuote(db, user, quoteId, now);
   if (!quote) throw new CheckoutError("That quote doesn't exist.");

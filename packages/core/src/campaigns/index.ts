@@ -3,7 +3,7 @@ import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { isEmptyCriteria, matchesCriteria, type DemandCriteria } from "@tm/pricing";
 import type { LicenseScope } from "@tm/schema";
-import type { PublicUser } from "../auth";
+import { hasCurrentTerms, type PublicUser } from "../auth";
 import {
   creditBalance,
   licensesHeld,
@@ -93,6 +93,8 @@ export function createCampaign(
   input: CampaignInput,
 ): { campaign: CampaignRow; filled: number } {
   const orgId = orgOf(user);
+  if (!hasCurrentTerms(user))
+    throw new CampaignError("Accept the terms before starting a campaign.");
   const criteria = campaignCriteria(input);
   if (isEmptyCriteria(criteria))
     throw new CampaignError("Say what the campaign should buy: a domain, failure, language…");

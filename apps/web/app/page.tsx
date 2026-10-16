@@ -1,23 +1,65 @@
 import Link from "next/link";
-import { browseCatalog } from "@tm/core";
+import { browseCatalog, priceExamples, type PriceExample } from "@tm/core";
+import { TIER_NAMES } from "@tm/schema";
 import { RedactingDemo } from "@/components/RedactingDemo";
-import { DOMAIN_NAMES } from "@/lib/labels";
+import { DOMAIN_NAMES, FACTOR_NAMES, FAILURE_NAMES, money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb, getSearch } from "@/lib/server";
 
-const STEPS = [
-  {
-    title: "Choose sessions",
-    body: "Pick Claude Code session files from your machine. They are read in your browser and never uploaded as they are.",
-  },
-  {
-    title: "Review what leaves",
-    body: "Keys, emails, your username and any words you add are blacked out. You see every redaction and the estimated price before anything is sent.",
-  },
-  {
-    title: "Share and earn",
-    body: "Approved sessions are listed and priced. You keep 70% of each sale and can withdraw a session from sale at any time.",
-  },
+function steps(sharePct: number) {
+  return [
+    {
+      title: "Choose sessions",
+      body: "Pick Claude Code session files from your machine. They are read in your browser and never uploaded as they are.",
+    },
+    {
+      title: "Review what leaves",
+      body: "Keys, emails, your username and any words you add are blacked out. You see every redaction and the estimated price before anything is sent.",
+    },
+    {
+      title: "Share and earn",
+      body: `Approved sessions are listed and priced. You keep ${sharePct}% of each sale and can withdraw a session from sale at any time.`,
+    },
+  ];
+}
+
+export const dynamic = "force-dynamic";
+
+// Domains shown first in "What a trace is worth": the common case, then the
+// scarcer kinds of work labs pay more for.
+const EXAMPLE_DOMAINS = [
+  "software_engineering",
+  "data_querying",
+  "medical",
+  "legal",
+  "research",
+  "customer_support",
 ];
+
+/** One line on what the session is, from its traits. */
+function describeExample(e: PriceExample): string {
+  const stack = [e.language, e.framework].filter(Boolean).join(" and ");
+  const failure = e.failureCategory
+    ? `${(FAILURE_NAMES[e.failureCategory] ?? e.failureCategory).toLowerCase()}${
+        e.recovered
+          ? e.testsPassedAtEnd
+            ? ", recovered with the check passing"
+            : ", recovered"
+          : ", not recovered"
+      }`
+    : "no failures";
+  const age = e.ageDays === 0 ? "today" : e.ageDays === 1 ? "a day old" : `${e.ageDays} days old`;
+  return [stack, `${e.turns} turns`, failure, age, TIER_NAMES[e.tier].toLowerCase()]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The two biggest moves away from the base price, largest first. */
+function topDrivers(e: PriceExample) {
+  return e.quote.drivers
+    .filter((d) => d.direction !== "neutral")
+    .sort((a, b) => Math.abs(Math.log(b.value)) - Math.abs(Math.log(a.value)))
+    .slice(0, 2);
+}
 
 export default async function Home() {
   const user = await getCurrentUser();
@@ -30,6 +72,23 @@ export default async function Home() {
     { limit: 1 },
   );
   const domains = facets.domain.filter((d) => d.value !== "unknown");
+  const examples = priceExamples(getDb(), { config: getConfig() }, { order: EXAMPLE_DOMAINS });
+  // The hero session: open-source coding work, a tampered test, corrected,
+  // recovered with the tests passing.
+  const [hero] = priceExamples(
+    getDb(),
+    { config: getConfig() },
+    {
+      order: ["software_engineering"],
+      limit: 1,
+      where: (t, tier) =>
+        t.domain === "software_engineering" &&
+        tier === 0 &&
+        t.failureCategory === "test_tampering" &&
+        t.recovered &&
+        t.testsPassedAtEnd,
+    },
+  );
   return (
     <main>
       <section className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-16 pb-20 lg:grid-cols-[1fr_1.05fr]">
@@ -52,7 +111,7 @@ export default async function Home() {
             </Link>
           </div>
         </div>
-        <RedactingDemo />
+        <RedactingDemo priceCents={hero?.quote.priceCents} />
       </section>
 
       <section className="border-t border-rule" aria-labelledby="domains">
@@ -89,7 +148,7 @@ export default async function Home() {
         <div className="mx-auto max-w-6xl px-6 py-16">
           <h2 className="text-2xl font-bold tracking-tight">How sharing works</h2>
           <ol className="mt-8 grid gap-8 md:grid-cols-3">
-            {STEPS.map((s, i) => (
+            {steps(Math.round(getConfig().revenue.sellerShare * 100)).map((s, i) => (
               <li key={s.title} className="border-t-2 border-ink pt-4">
                 <p className="text-sm font-semibold text-ink-3">Step {i + 1}</p>
                 <h3 className="mt-1 text-lg font-semibold">{s.title}</h3>
@@ -108,31 +167,53 @@ export default async function Home() {
           unusual languages, and what buyers are asking for right now. Every price comes with its
           reasons.
         </p>
-        <div className="mt-8 grid gap-px overflow-hidden rounded-lg border border-rule bg-rule md:grid-cols-2">
-          <div className="bg-surface p-6">
-            <p className="text-sm text-ink-3">An everyday session</p>
-            <p className="mt-1 text-3xl font-bold">
-              <span className="price">$1.76</span>
+        {examples.length ? (
+          <>
+            <ul className="mt-8 grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-3">
+              {examples.map((e) => (
+                <li key={e.listingId} className="bg-surface">
+                  <Link href={`/traces/${e.listingId}`} className="block h-full p-6 hover:bg-paper">
+                    <p className="text-sm font-semibold text-ink-3">
+                      {DOMAIN_NAMES[e.domain] ?? e.domain}
+                    </p>
+                    <p className="mt-1 text-3xl font-bold">
+                      <span className="price">{money(e.quote.priceCents)}</span>
+                    </p>
+                    {e.quote.band && (
+                      <p className="text-xs text-ink-3">
+                        Likely {money(e.quote.band.lowCents)}–{money(e.quote.band.highCents)}
+                      </p>
+                    )}
+                    <p className="mt-3 font-semibold">{e.title ?? "Untitled session"}</p>
+                    <p className="mt-1 text-sm text-ink-2">{describeExample(e)}</p>
+                    <ul className="mt-3 space-y-1 text-sm">
+                      {topDrivers(e).map((d) => (
+                        <li key={d.factor} className="flex gap-2">
+                          <span
+                            className={`font-semibold tabular-nums ${d.direction === "up" ? "text-moss" : "text-brick"}`}
+                          >
+                            {d.value.toFixed(2)}×
+                          </span>
+                          <span className="text-ink-2">
+                            {FACTOR_NAMES[d.factor] ?? d.factor}: {d.reason}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm text-ink-3">
+              Live: a typical listing from each domain (its median price), priced by the current
+              pricing model for a research licence. Evaluation and training licences cost more.
             </p>
-            <p className="mt-3 text-ink-2">
-              TypeScript and React, 18 turns, one tool error, a month old. Common, so rarity pulls
-              the price down.
-            </p>
-          </div>
-          <div className="bg-surface p-6">
-            <p className="text-sm text-ink-3">A rare near-miss</p>
-            <p className="mt-1 text-3xl font-bold">
-              <span className="price">$22.72</span>
-            </p>
-            <p className="mt-3 text-ink-2">
-              Rust and Tokio, 64 turns, stuck in a retry loop then recovered with tests passing, and
-              a buyer has a bounty open for exactly this.
-            </p>
-          </div>
-        </div>
-        <p className="mt-4 text-sm text-ink-3">
-          Illustrative prices from the pricing model. Prices move as the catalog and demand change.
-        </p>
+          </>
+        ) : (
+          <p className="mt-8 text-ink-2">
+            Nothing is listed yet. Prices appear here as soon as the first sessions are shared.
+          </p>
+        )}
       </section>
     </main>
   );

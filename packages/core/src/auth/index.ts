@@ -11,7 +11,17 @@ const scrypt = promisify(scryptCb) as (
 ) => Promise<Buffer>;
 
 /** Version of the data terms shown at onboarding. Bump when the terms change. */
-export const TERMS_VERSION = "2026-10-v0";
+/**
+ * The terms every account accepts. v1 added the buying terms (licences, no
+ * redistribution, no re-identification), so accounts that accepted v0 (the
+ * sharing terms alone) accept again before sharing or buying.
+ */
+export const TERMS_VERSION = "2026-10-v1";
+
+/** Whether the account has accepted the current terms. */
+export function hasCurrentTerms(user: { termsAcceptedVersion: string | null }): boolean {
+  return user.termsAcceptedVersion === TERMS_VERSION;
+}
 
 const SESSION_DAYS = 7;
 const MIN_PASSWORD = 8;
