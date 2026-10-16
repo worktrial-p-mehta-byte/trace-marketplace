@@ -223,6 +223,36 @@ describe("sellerSuggestions", () => {
     expect(mine.reason).toMatch(/^You share Medical and clinical evaluation sessions \(\d+ listed\)/);
   });
 
+  it("ignores expired campaigns and ones that need more than a suggestion can name", async () => {
+    const other = await ensureAccount(db, "o2@example.com", "seller", "O");
+    setInterest(db, other.id, "legal", true);
+    const rust = createCampaign(db, deps, buyer, {
+      describe: "legal sessions in Rust",
+      license: "research",
+      maxPriceCents: 4300,
+      quantity: 3,
+      days: 7,
+    });
+    expect(rust.campaign.criteria).toMatchObject({ domain: "legal", language: "Rust" });
+    const reasons = () => sellerSuggestions(db, deps, other.id).map((x) => x.reason).join(" ");
+    expect(reasons()).not.toMatch(/\$43/);
+    createCampaign(db, deps, buyer, {
+      describe: "legal",
+      license: "research",
+      maxPriceCents: 4200,
+      quantity: 3,
+      days: 7,
+    });
+    expect(reasons()).toMatch(/\$42/);
+    // Eight days on, the week-long campaign has ended even if nothing expired it.
+    const later = { ...deps, now: new Date(NOW.getTime() + 8 * 86_400_000) };
+    expect(
+      sellerSuggestions(db, later, other.id)
+        .map((x) => x.reason)
+        .join(" "),
+    ).not.toMatch(/\$42/);
+  });
+
   it("suggests nothing when nobody is asking and no campaign is open", async () => {
     const fresh = await ensureAccount(db, "quiet@example.com", "seller", "Q");
     expect(sellerSuggestions(db, deps, fresh.id)).toEqual([]);

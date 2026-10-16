@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { failureClause, labelName } from "@tm/enrich";
+import type { DemandCriteria } from "@tm/pricing";
 import { schema, type Db } from "@tm/db";
 import { interestsOf, marketTrends, type MarketTrends, type TrendRow } from "./index";
 
@@ -34,11 +35,16 @@ function whatToShare(r: TrendRow): string {
   return `${domain} sessions where ${failureClause(r.failure)}`;
 }
 
-function reasonOf(r: TrendRow, relation: SellerSuggestion["relation"], mine: number): string {
+function reasonOf(
+  r: TrendRow,
+  bids: number[],
+  relation: SellerSuggestion["relation"],
+  mine: number,
+): string {
   const why: string[] = [];
-  if (r.openCampaigns > 0) {
+  if (bids.length > 0) {
     why.push(
-      `${r.openCampaigns} campaign${r.openCampaigns > 1 ? "s" : ""} bidding up to ${usd(r.bestBidCents)}`,
+      `${bids.length} campaign${bids.length > 1 ? "s" : ""} bidding up to ${usd(Math.max(...bids))}`,
     );
   }
   if (r.status === "unsupplied") why.push("buyers are asking and none are listed");
@@ -84,14 +90,42 @@ export function sellerSuggestions(
   const relationOf = (d: string): SellerSuggestion["relation"] =>
     mine.has(d) ? "yours" : followed.has(d) ? "followed" : "market";
 
+  // Campaigns that would buy any session matching the row: only domain and
+  // failure can be named in a suggestion, so a campaign that also needs a
+  // language, framework or model doesn't count here (a Rust-only campaign is
+  // not a bid for "Medical sessions"). Open and unexpired.
+  const now = deps.now ?? new Date();
+  const campaigns = db
+    .select()
+    .from(schema.campaigns)
+    .where(eq(schema.campaigns.status, "open"))
+    .all()
+    .filter((c) => c.expiresAt.getTime() > now.getTime())
+    .map((c) => ({ criteria: c.criteria as DemandCriteria, bid: c.maxPriceCents }))
+    .filter(({ criteria }) =>
+      Object.entries(criteria).every(([k, v]) => v == null || k === "domain" || k === "failure"),
+    );
+  const bidsFor = (r: TrendRow) =>
+    campaigns
+      .filter(
+        ({ criteria: c }) =>
+          (!c.domain || c.domain === r.domain) && (!c.failure || c.failure === r.failure),
+      )
+      .map((c) => c.bid);
+  const bids = new Map<string, number[]>();
+  const bidsOf = (r: TrendRow) => {
+    if (!bids.has(r.key)) bids.set(r.key, bidsFor(r));
+    return bids.get(r.key)!;
+  };
+
   const wanted = (r: TrendRow) =>
-    r.openCampaigns > 0 ||
+    bidsOf(r).length > 0 ||
     r.status === "unsupplied" ||
     r.status === "undersupplied" ||
     (r.direction === "rising" && r.status !== "crowded");
   // How much a share there is worth: bids count most, then scarcity, then momentum.
   const score = (r: TrendRow) =>
-    (r.openCampaigns > 0 ? cfg.campaign + r.bestBidCents / 1000 : 0) +
+    (bidsOf(r).length > 0 ? cfg.campaign + Math.max(...bidsOf(r)) / 1000 : 0) +
     (r.status === "unsupplied" ? cfg.unsupplied : r.status === "undersupplied" ? r.gap : 0) +
     (r.direction === "rising" ? cfg.rising : 0);
   const boost = (r: TrendRow) => {
@@ -118,9 +152,9 @@ export function sellerSuggestions(
       domain: r.domain,
       failure: r.failure,
       label: whatToShare(r),
-      reason: reasonOf(r, rel, mine.get(r.domain) ?? 0),
+      reason: reasonOf(r, bidsOf(r), rel, mine.get(r.domain) ?? 0),
       relation: rel,
-      bestBidCents: r.bestBidCents,
+      bestBidCents: Math.max(0, ...bidsOf(r)),
       medianPriceCents: r.medianPriceCents,
       supply: r.supply,
     });
