@@ -290,20 +290,41 @@ describe("duplicate shares of signals-only traces", () => {
     ).rejects.toThrow(DuplicateShareError);
   });
 
-  it("still refuses a re-upload of a session stored with the old hash format", async () => {
-    const trace = scrubTrace(raw).trace;
-    const r = await shareTrace(db, deps, { sellerId, trace, tier: 0 });
+  it("upgrades signals-only rows stored with the events-only hash before judging duplicates", async () => {
+    // Two different sessions, byte-identical once stripped (as above).
+    const a = { ...scrubTrace(raw).trace, id: "cc_session_a" };
+    const b = {
+      ...a,
+      id: "cc_session_b",
+      events: a.events.map((e) =>
+        e.type === "user_message" ? { ...e, text: e.text.replace("parseDueDate", "b") } : e,
+      ),
+    };
+    const shared = await shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 });
     // A row written before the format change carries the events-only hash.
     db.update(schema.traces)
-      .set({ contentHash: legacyContentHashOf(trace) })
-      .where(eq(schema.traces.id, r.traceId))
+      .set({ contentHash: legacyContentHashOf(toSignalsOnly(a)) })
+      .where(eq(schema.traces.id, shared.traceId))
       .run();
-    await expect(shareTrace(db, deps, { sellerId, trace, tier: 0 })).rejects.toThrow(
-      DuplicateShareError,
-    );
-    // Meeting it upgraded the row to the current format.
-    const row = db.select().from(schema.traces).where(eq(schema.traces.id, r.traceId)).get()!;
-    expect(row.contentHash).toBe(contentHashOf(trace));
+
+    // B is a different session, so it lists, and A's row is upgraded from its own blob.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(b), tier: 1 }),
+    ).resolves.toMatchObject({ listingId: expect.any(String) });
+    const row = db.select().from(schema.traces).where(eq(schema.traces.id, shared.traceId)).get()!;
+    expect(row.contentHash).toBe(contentHashOf(toSignalsOnly(a), 1));
+    // A itself is still a duplicate.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 }),
+    ).rejects.toThrow(DuplicateShareError);
+  });
+
+  it("ignores a changed trace id when the content itself is re-uploaded as open source", async () => {
+    const trace = scrubTrace(raw).trace;
+    await shareTrace(db, deps, { sellerId, trace, tier: 0 });
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: { ...trace, id: "cc_renamed" }, tier: 0 }),
+    ).rejects.toThrow(DuplicateShareError);
   });
 });
 

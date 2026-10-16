@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { comboKeyOf, enrichTrace, type TraceTraits } from "@tm/enrich";
@@ -30,19 +30,63 @@ export class DuplicateShareError extends ShareError {
  * shape (same steps, tools and timing) have identical events, and hashing
  * events alone refused the second as "already shared".
  */
-export function contentHashOf(trace: Pick<Trace, "id" | "events">): string {
-  return createHash("sha256")
-    .update(JSON.stringify({ id: trace.id, events: trace.events }))
-    .digest("hex");
+/**
+ * Identity of a trace's content for duplicate detection and rarity.
+ *
+ * Open source (tier 0): the events alone. The content is what buyers get
+ * and the server verifies it, so a re-upload under a different trace id is
+ * still the same trace.
+ *
+ * Signals only (tier 1): the stripped events plus the trace id. With the
+ * text gone, two different sessions of the same shape are byte-identical,
+ * so the id (derived from the harness session id) tells them apart. The id
+ * is client-supplied, so a seller could relist one shape under new ids;
+ * such copies are priced as near-duplicates and carry the lowest base price.
+ */
+export function contentHashOf(trace: Pick<Trace, "id" | "events">, tier: Tier): string {
+  const subject = tier === 1 ? { id: trace.id, events: trace.events } : trace.events;
+  return createHash("sha256").update(JSON.stringify(subject)).digest("hex");
+}
+
+/** The events-only hash, which signals-only rows written by older versions still carry. */
+export function legacyContentHashOf(trace: Pick<Trace, "events">): string {
+  return createHash("sha256").update(JSON.stringify(trace.events)).digest("hex");
 }
 
 /**
- * The hash format used before the trace id was included. Rows written by
- * older versions still carry it, so duplicate detection accepts both and
- * rewrites a matching row to the current format when it meets one.
+ * Rewrite a seller's signals-only rows that still carry the events-only hash
+ * to the current format, each from its own stored trace. Runs before a
+ * duplicate check that could meet such a row, so a different session with
+ * the same shape is never mistaken for it, and the same session still is.
  */
-export function legacyContentHashOf(trace: Pick<Trace, "events">): string {
-  return createHash("sha256").update(JSON.stringify(trace.events)).digest("hex");
+async function upgradeLegacyHashes(
+  db: Db,
+  blobs: BlobStore,
+  sellerId: string,
+  legacyHash: string,
+): Promise<void> {
+  const rows = db
+    .select({ id: schema.traces.id, blobKey: schema.traces.blobKey })
+    .from(schema.traces)
+    .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
+    .where(
+      and(
+        eq(schema.traces.sellerId, sellerId),
+        eq(schema.traces.contentHash, legacyHash),
+        eq(schema.consents.tier, 1),
+      ),
+    )
+    .all();
+  for (const row of rows) {
+    const raw = await blobs.get(row.blobKey);
+    if (!raw) continue; // nothing to verify against; leave it as it is
+    const stored = Trace.safeParse(JSON.parse(raw));
+    if (!stored.success) continue;
+    db.update(schema.traces)
+      .set({ contentHash: contentHashOf(stored.data, 1) })
+      .where(eq(schema.traces.id, row.id))
+      .run();
+  }
 }
 
 export interface CatalogDeps {
@@ -173,28 +217,26 @@ export async function shareTrace(
     );
   }
 
-  const contentHash = contentHashOf(stored);
-  const legacyHash = legacyContentHashOf(stored);
-  /** Same seller, same content (either hash format), consent not revoked. */
-  const findDuplicate = (q: Db) => {
-    const row = q
-      .select({ id: schema.traces.id, hash: schema.traces.contentHash })
+  const contentHash = contentHashOf(stored, tier);
+  // Signals-only rows from before the id joined the hash are upgraded first,
+  // each from its own stored trace, so the check below sees one format.
+  if (tier === 1) {
+    await upgradeLegacyHashes(db, deps.blobs, input.sellerId, legacyContentHashOf(stored));
+  }
+  /** Same seller, same content, consent not revoked. */
+  const findDuplicate = (q: Db) =>
+    q
+      .select({ id: schema.traces.id })
       .from(schema.traces)
       .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
       .where(
         and(
           eq(schema.traces.sellerId, input.sellerId),
-          inArray(schema.traces.contentHash, [contentHash, legacyHash]),
+          eq(schema.traces.contentHash, contentHash),
           isNull(schema.consents.revokedAt),
         ),
       )
       .get();
-    if (row && row.hash === legacyHash && legacyHash !== contentHash) {
-      // Backfill this row to the current format while we have it in hand.
-      q.update(schema.traces).set({ contentHash }).where(eq(schema.traces.id, row.id)).run();
-    }
-    return row;
-  };
   // Fast path: refuse before writing anything.
   if (findDuplicate(db)) throw new DuplicateShareError();
 
