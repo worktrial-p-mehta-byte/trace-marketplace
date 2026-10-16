@@ -199,6 +199,26 @@ describe("cart, quote and order", () => {
     ).toBeGreaterThan(before);
   });
 
+  it("never lets a team buy its own members' listings", async () => {
+    // A seller who also buys: both roles on one account.
+    const both = await ensureAccount(db, "both@example.com", "both", "Both");
+    const [t] = generateCatalog(99, 1, NOW);
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: both.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    ensureWelcomeCredits(db, deps.config, both.buyerOrgId!);
+    expect(() => addToCart(db, both, r.listingId)).toThrow(/your own trace/);
+    expect(() => quoteCart(db, deps, both, "research", [r.listingId])).toThrow(
+      /Nothing in the cart/,
+    );
+    // Someone else's listing is fine.
+    expect(quoteCart(db, deps, both, "research", [listings[0]!]).totalCents).toBeGreaterThan(0);
+    expect(balanceOf(db, Accounts.seller(both.id))).toBe(0);
+  });
+
   it("lets a buyer remove from the cart", () => {
     addToCart(db, buyer, listings[10]!);
     removeFromCart(db, buyer, listings[10]!);

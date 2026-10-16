@@ -129,6 +129,9 @@ export function addToCart(db: Db, user: PublicUser, listingId: string): void {
   const listing = db.select().from(schema.listings).where(eq(schema.listings.id, listingId)).get();
   if (!listing || listing.status !== "active")
     throw new CheckoutError("That trace is not for sale.");
+  const seller = sellerOf(db, listingId);
+  if (seller && orgMemberIds(db, orgId).has(seller))
+    throw new CheckoutError("You can't buy your own trace.");
   const id = cartId(db, orgId, true)!;
   db.insert(schema.collectionItems)
     .values({ collectionId: id, listingId })
@@ -166,7 +169,31 @@ export interface PricedLine {
   title: string | null;
   priceCents: number;
   /** Why the line is left out of the order, if it is. */
-  excluded?: "not_for_sale" | "already_licensed";
+  excluded?: "not_for_sale" | "already_licensed" | "own_listing";
+}
+
+/**
+ * The users behind a buyer team. A team never buys its own members' listings:
+ * that would pay their own seller account and fake sales and demand.
+ */
+export function orgMemberIds(db: Pick<Db, "select">, orgId: string): Set<string> {
+  return new Set(
+    db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.buyerOrgId, orgId))
+      .all()
+      .map((r) => r.id),
+  );
+}
+
+function sellerOf(db: Db, listingId: string): string | undefined {
+  return db
+    .select({ sellerId: schema.traces.sellerId })
+    .from(schema.listings)
+    .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
+    .where(eq(schema.listings.id, listingId))
+    .get()?.sellerId;
 }
 
 /** Price listings under a licence as the market stands now. */
@@ -189,10 +216,13 @@ function priceLines(
       .all()
       .map((r) => [r.id, r.title]),
   );
+  const members = orgMemberIds(db, orgId);
   return listingIds.map((listingId) => {
     const row = byId.get(listingId);
     const title = titles.get(listingId) ?? null;
     if (!row) return { listingId, title, priceCents: 0, excluded: "not_for_sale" as const };
+    if (members.has(row.sellerId))
+      return { listingId, title, priceCents: 0, excluded: "own_listing" as const };
     if (licensesHeld(db, orgId, listingId).includes(license))
       return { listingId, title, priceCents: 0, excluded: "already_licensed" as const };
     return { listingId, title, priceCents: market.quote(row, license).priceCents };
@@ -352,9 +382,11 @@ export function placeOrder(
     .all();
   const byId = new Map(rows.map((r) => [r.listingId, r]));
   // A listing withdrawn since the quote is skipped, not charged.
+  const members = orgMemberIds(db, orgId);
   const lines = wanted.filter(
     (l) =>
       byId.get(l.listingId)?.status === "active" &&
+      !members.has(byId.get(l.listingId)!.sellerId) &&
       !licensesHeld(db, orgId, l.listingId).includes(quote.license),
   );
   const skipped = wanted.filter((l) => !lines.includes(l)).map((l) => l.listingId);

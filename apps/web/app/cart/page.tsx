@@ -100,7 +100,9 @@ export default async function CartPage({
                     <span className="text-sm text-ink-3">
                       {l.excluded === "already_licensed"
                         ? "You already hold this licence"
-                        : "No longer for sale"}
+                        : l.excluded === "own_listing"
+                          ? "Your own trace"
+                          : "No longer for sale"}
                     </span>
                   )}
                 </div>
