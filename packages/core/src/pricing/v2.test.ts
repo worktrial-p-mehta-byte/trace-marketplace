@@ -13,6 +13,8 @@ import {
   estimatePrice,
   listSellerTraces,
   postBounty,
+  priceExamples,
+  quoteListing,
   repriceAll,
   shadowReport,
   shareTrace,
@@ -175,5 +177,43 @@ describe("Pricing V2 in the market", () => {
     for (const d of tail) expect(d.medianRatio).toBeGreaterThan(coding.medianRatio);
     const { v1, v2 } = compareInWindTunnel(db, deps);
     expect(v2.revenueCents).toBeGreaterThan(v1.revenueCents);
+  });
+});
+
+describe("landing-page price examples", () => {
+  it("shows a typical listing per domain, preferred domains first, priced like any quote", () => {
+    const order = ["medical", "software_engineering", "no_such_domain"];
+    const ex = priceExamples(db, deps, { order, limit: 5 });
+    expect(ex.length).toBe(5);
+    expect(ex.slice(0, 2).map((e) => e.domain)).toEqual(["medical", "software_engineering"]);
+    expect(new Set(ex.map((e) => e.domain)).size).toBe(5);
+    expect(ex.some((e) => e.domain === "unknown")).toBe(false);
+    const m = buildMarket(db, deps);
+    for (const e of ex) {
+      // Same price as the listing's own research quote.
+      expect(e.quote.priceCents).toBe(quoteListing(db, e.listingId, "research", deps)!.priceCents);
+      // The domain's median: as many listings cost less as cost more (±1).
+      const prices = m.active
+        .filter((r) => r.traits.domain === e.domain)
+        .map((r) => m.quote(r).priceCents);
+      const below = prices.filter((p) => p < e.quote.priceCents).length;
+      const above = prices.filter((p) => p > e.quote.priceCents).length;
+      expect(Math.abs(below - above)).toBeLessThanOrEqual(prices.length - below - above + 1);
+      expect(e.title).toBeTruthy();
+    }
+  });
+
+  it("can be narrowed to one kind of session", () => {
+    const ex = priceExamples(db, deps, {
+      where: (t, tier) => tier === 0 && t.failureCategory === "retry_loop",
+    });
+    expect(ex.length).toBeGreaterThan(0);
+    expect(ex.every((e) => e.failureCategory === "retry_loop" && e.tier === 0)).toBe(true);
+  });
+
+  it("is empty on an empty market", () => {
+    const empty = openDb(":memory:");
+    runMigrations(empty);
+    expect(priceExamples(empty, deps)).toEqual([]);
   });
 });

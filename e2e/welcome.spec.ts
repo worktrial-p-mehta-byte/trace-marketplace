@@ -8,6 +8,10 @@ test("a new buyer says what they need and gets traces picked for them", async ({
   await page.getByLabel("Password").fill("correct horse");
   await page.getByRole("radio", { name: /Buy traces/ }).check();
   await page.getByRole("button", { name: "Create account" }).click();
+  // A buyer's terms are about buying, not about sharing sessions.
+  await expect(page.getByRole("heading", { name: "Before you buy anything" })).toBeVisible();
+  await expect(page.getByText("Licences", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stays on your machine")).toHaveCount(0);
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Accept and continue" }).click();
 

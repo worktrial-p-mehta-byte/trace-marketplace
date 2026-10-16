@@ -36,6 +36,8 @@ test.describe.serial("demo flow", () => {
     await page.getByRole("button", { name: "Create account" }).click();
 
     await expect(page).toHaveURL(/\/onboarding/);
+    await expect(page.getByRole("heading", { name: "Before you share anything" })).toBeVisible();
+    await expect(page.getByText("Licences", { exact: true })).toHaveCount(0);
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Accept and continue" }).click();
     await expect(page).toHaveURL(/\/share/);
