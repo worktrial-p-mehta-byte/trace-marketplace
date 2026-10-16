@@ -96,7 +96,8 @@ warehouse) is in the design doc. What changes on the way there is in
 | P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel                        | Done    |
 | P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing                        | Done    |
 | P2.4 | Discovery V2: intent parser, behaviour search, ranking with reasons, grouping, saved searches             | Done    |
-| P2.5 | Checkout (local-only): credits, cart, quotes, orders, ledger, licences, entitlements, downloads, receipts | This PR |
+| P2.5 | Checkout (local-only): credits, cart, quotes, orders, ledger, licences, entitlements, downloads, receipts | Done    |
+| P2.6 | Campaigns: standing bids with escrow that buy matching supply automatically                               | This PR |
 
 ## Session log adapters
 
@@ -292,6 +293,32 @@ real flow, on tables that existed since M0:
    (scrubbed, or signals only) wrapped with the licence it is held under.
 
 Sellers see licences sold and their ledger balance on My traces.
+
+## Campaigns
+
+`packages/core/src/campaigns` (tables `campaigns`, `campaign_fills`,
+`notifications`; migration 0003). A buyer describes what a campaign should
+buy ("medical evaluations where the agent was corrected" → criteria via the
+intent parser), a licence, a maximum price per trace, a quantity and a
+duration. The budget (max price × quantity) moves into `escrow:<id>`
+(balanced posting). The campaign then clears:
+
+- **at once**, against active listings that match (cheapest first), and
+- **on every new listing** (`runCampaignConsumer`, on `listing.created`,
+  run after each share and after the simulator adds supply), open
+  campaigns offered the listing highest bid first.
+
+A match is bought when its price under the campaign's licence is at or
+under the max price, the team doesn't hold that licence yet, and quantity
+and escrow remain. With one bidder the auction clears at the reserve: the
+buyer pays the list price, not the bid. Each fill is an ordinary order
+(a one-line quote on the campaign's collection, order, line, licence,
+entitlement, balanced sale posting funded from escrow), is purchase demand,
+and notifies the seller. The campaign's collection is the dataset it is
+assembling. When filled, ended by the buyer, or expired, the rest of the
+escrow returns to the buyer. Creating a campaign is `campaign` demand
+(weighted like a bounty by its budget). Multi-bidder clearing, exclusivity
+and bid landscapes come after the demo.
 
 ## Accounts, onboarding and sharing (M4)
 

@@ -35,7 +35,9 @@ function Outcome({ p }: { p: Params }) {
     p.did === "bounty"
       ? `Bounty posted: a buyer offers ${money(Number(p.budget ?? 0) * 100)} in total. ${moved}`
       : p.did === "flood"
-        ? `Added ${p.added} synthetic sessions of this kind. ${moved}`
+        ? `Added ${p.added} synthetic sessions of this kind.${
+            Number(p.bought) > 0 ? ` Open campaigns bought ${p.bought} of them straight away.` : ""
+          } ${moved}`
         : `Simulator reset: bounties closed and ${p.withdrawn} simulated sessions withdrawn. Prices are back to normal.`;
   return (
     <p role="status" className="rounded-md border border-moss/40 bg-moss/5 px-4 py-3 text-ink">

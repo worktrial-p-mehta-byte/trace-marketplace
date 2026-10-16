@@ -349,7 +349,15 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
         <ul className="mt-6 divide-y divide-rule border-y border-rule">
           {shared.map((i) => (
             <li key={i.key} className="flex items-center justify-between gap-4 py-3">
-              <span className="truncate">{titleOf(i)}</span>
+              <span className="truncate">
+                {titleOf(i)}
+                {i.outcome!.campaignFills ? (
+                  <span className="ml-2 rounded bg-moss/10 px-1.5 py-0.5 text-xs font-semibold text-moss">
+                    Bought by {i.outcome!.campaignFills} campaign
+                    {i.outcome!.campaignFills > 1 ? "s" : ""} already
+                  </span>
+                ) : null}
+              </span>
               <span className="shrink-0 font-semibold">
                 {i.outcome!.pricePending ? "Price pending" : money(i.outcome!.priceCents)}
               </span>

@@ -7,6 +7,7 @@ import type { LicenseScope } from "@tm/schema";
 import type { PublicUser } from "../auth";
 import { EventTypes, type EventBus } from "../events";
 import { Accounts, balanceOf, postTransaction } from "../ledger";
+import { notify } from "../notifications";
 import { buildMarket, recordDemandSignal, runPricingConsumer } from "../pricing";
 
 /**
@@ -347,6 +348,144 @@ export interface OrderResult {
  * posting (buyer −total; each seller +share; platform +fee). Then each line
  * counts as purchase demand and prices are recomputed.
  */
+/** What a sale needs to know about each listing. */
+export interface SaleRow {
+  listingId: string;
+  status: "active" | "delisted";
+  assetId: string;
+  sellerId: string;
+  title: string | null;
+  traits: TraceTraits;
+}
+
+export function loadSaleRows(db: Db, listingIds: string[]): Map<string, SaleRow> {
+  if (!listingIds.length) return new Map();
+  const rows = db
+    .select({
+      listingId: schema.listings.id,
+      status: schema.listings.status,
+      assetId: schema.listings.assetId,
+      sellerId: schema.traces.sellerId,
+      title: schema.traces.title,
+      traits: schema.traceTraits.data,
+    })
+    .from(schema.listings)
+    .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
+    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.traces.id))
+    .where(inArray(schema.listings.id, listingIds))
+    .all();
+  return new Map(rows.map((r) => [r.listingId, { ...r, traits: r.traits as TraceTraits }]));
+}
+
+/**
+ * Write a paid order inside an open transaction: the order, a line, licence
+ * and entitlement per listing, and one balanced sale posting from
+ * `fundingAccount` (the buyer's credits, or a campaign's escrow) to each
+ * seller and the platform. Sellers are notified of the sale.
+ */
+export function writeOrderTx(
+  tx: Pick<Db, "insert" | "transaction">,
+  deps: { config: MarketplaceConfig },
+  o: {
+    orgId: string;
+    quoteId: string;
+    license: LicenseScope;
+    lines: { listingId: string; priceCents: number }[];
+    rows: Map<string, SaleRow>;
+    fundingAccount: string;
+    now: Date;
+    /** How the sale is described to sellers, e.g. "a campaign". */
+    via?: string;
+  },
+): string {
+  const orderId = newId("ord");
+  const total = o.lines.reduce((s, l) => s + l.priceCents, 0);
+  tx.insert(schema.orders)
+    .values({
+      id: orderId,
+      quoteId: o.quoteId,
+      buyerOrgId: o.orgId,
+      status: "paid",
+      totalCents: total,
+      createdAt: o.now,
+    })
+    .run();
+  const ledger: { account: string; amountCents: number }[] = [
+    { account: o.fundingAccount, amountCents: -total },
+  ];
+  let platform = 0;
+  for (const l of o.lines) {
+    const row = o.rows.get(l.listingId)!;
+    const share = sellerShareFor(deps.config, row.traits.domain);
+    const split = splitSale(l.priceCents, share);
+    const lineId = newId("oln");
+    tx.insert(schema.orderLines)
+      .values({
+        id: lineId,
+        orderId,
+        listingId: l.listingId,
+        priceCents: l.priceCents,
+        sellerShareRate: share,
+        createdAt: o.now,
+      })
+      .run();
+    const licenseId = newId("lic");
+    tx.insert(schema.licenses)
+      .values({
+        id: licenseId,
+        orderLineId: lineId,
+        scope: o.license,
+        exclusive: false,
+        startsAt: o.now,
+      })
+      .run();
+    tx.insert(schema.entitlements)
+      .values({
+        id: newId("ent"),
+        buyerOrgId: o.orgId,
+        assetId: row.assetId,
+        licenseId,
+        grantedAt: o.now,
+      })
+      .run();
+    ledger.push({ account: Accounts.seller(row.sellerId), amountCents: split.seller });
+    platform += split.platform;
+    notify(tx, row.sellerId, {
+      kind: "sale",
+      title: `Sold: ${row.title ?? "a signals-only session"}`,
+      body: `A buyer licensed it for ${o.license}${o.via ? ` through ${o.via}` : ""}. You earned $${(split.seller / 100).toFixed(2)}.`,
+      href: `/traces/${l.listingId}`,
+      now: o.now,
+    });
+  }
+  ledger.push({ account: Accounts.platformFees, amountCents: platform });
+  postTransaction(tx, { kind: "sale", refType: "order", refId: orderId, lines: ledger });
+  return orderId;
+}
+
+/** Each bought trace is purchase demand for its domain and failure; then reprice. */
+export function recordPurchases(
+  db: Db,
+  deps: CheckoutDeps,
+  orgId: string,
+  traits: TraceTraits[],
+  now: Date,
+): void {
+  for (const t of traits) {
+    recordDemandSignal(db, deps.bus, {
+      kind: "purchase",
+      criteria: {
+        domain: t.domain && t.domain !== "unknown" ? t.domain : undefined,
+        failure: t.failureCategory,
+      },
+      weight: deps.config.pricing.demand.signalWeights.purchase,
+      buyerOrgId: orgId,
+      now,
+    });
+  }
+  runPricingConsumer(db, deps.bus, { config: deps.config, now });
+}
+
 export function placeOrder(
   db: Db,
   deps: CheckoutDeps,
@@ -362,25 +501,10 @@ export function placeOrder(
     throw new CheckoutError("The quote expired. Review the cart again for current prices.");
 
   const wanted = quote.lines.filter((l) => !l.excluded);
-  const rows = db
-    .select({
-      listingId: schema.listings.id,
-      status: schema.listings.status,
-      assetId: schema.listings.assetId,
-      sellerId: schema.traces.sellerId,
-      traits: schema.traceTraits.data,
-    })
-    .from(schema.listings)
-    .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
-    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.traces.id))
-    .where(
-      inArray(
-        schema.listings.id,
-        wanted.map((l) => l.listingId),
-      ),
-    )
-    .all();
-  const byId = new Map(rows.map((r) => [r.listingId, r]));
+  const byId = loadSaleRows(
+    db,
+    wanted.map((l) => l.listingId),
+  );
   // A listing withdrawn since the quote is skipped, not charged.
   const members = orgMemberIds(db, orgId);
   const lines = wanted.filter(
@@ -399,7 +523,7 @@ export function placeOrder(
     );
   }
 
-  const orderId = newId("ord");
+  let orderId = "";
   db.transaction((tx) => {
     // Re-check inside the transaction: two tabs paying the same quote.
     if (
@@ -410,60 +534,15 @@ export function placeOrder(
         .get()
     )
       throw new CheckoutError("This quote has already been paid.");
-    tx.insert(schema.orders)
-      .values({
-        id: orderId,
-        quoteId,
-        buyerOrgId: orgId,
-        status: "paid",
-        totalCents: total,
-        createdAt: now,
-      })
-      .run();
-    const ledger: { account: string; amountCents: number }[] = [
-      { account: Accounts.buyer(orgId), amountCents: -total },
-    ];
-    let platform = 0;
-    for (const l of lines) {
-      const row = byId.get(l.listingId)!;
-      const traits = row.traits as TraceTraits;
-      const share = sellerShareFor(deps.config, traits.domain);
-      const split = splitSale(l.priceCents, share);
-      const lineId = newId("oln");
-      tx.insert(schema.orderLines)
-        .values({
-          id: lineId,
-          orderId,
-          listingId: l.listingId,
-          priceCents: l.priceCents,
-          sellerShareRate: share,
-          createdAt: now,
-        })
-        .run();
-      const licenseId = newId("lic");
-      tx.insert(schema.licenses)
-        .values({
-          id: licenseId,
-          orderLineId: lineId,
-          scope: quote.license,
-          exclusive: false,
-          startsAt: now,
-        })
-        .run();
-      tx.insert(schema.entitlements)
-        .values({
-          id: newId("ent"),
-          buyerOrgId: orgId,
-          assetId: row.assetId,
-          licenseId,
-          grantedAt: now,
-        })
-        .run();
-      ledger.push({ account: Accounts.seller(row.sellerId), amountCents: split.seller });
-      platform += split.platform;
-    }
-    ledger.push({ account: Accounts.platformFees, amountCents: platform });
-    postTransaction(tx, { kind: "sale", refType: "order", refId: orderId, lines: ledger });
+    orderId = writeOrderTx(tx, deps, {
+      orgId,
+      quoteId,
+      license: quote.license,
+      lines,
+      rows: byId,
+      fundingAccount: Accounts.buyer(orgId),
+      now,
+    });
     // Bought traces leave the cart.
     const cart = cartId(tx as unknown as Db, orgId, false);
     if (cart) {
@@ -482,20 +561,13 @@ export function placeOrder(
   });
 
   deps.bus.emit(EventTypes.OrderPaid, { orderId, lines: lines.length, totalCents: total });
-  for (const l of lines) {
-    const t = byId.get(l.listingId)!.traits as TraceTraits;
-    recordDemandSignal(db, deps.bus, {
-      kind: "purchase",
-      criteria: {
-        domain: t.domain && t.domain !== "unknown" ? t.domain : undefined,
-        failure: t.failureCategory,
-      },
-      weight: deps.config.pricing.demand.signalWeights.purchase,
-      buyerOrgId: orgId,
-      now,
-    });
-  }
-  runPricingConsumer(db, deps.bus, { config: deps.config, now });
+  recordPurchases(
+    db,
+    deps,
+    orgId,
+    lines.map((l) => byId.get(l.listingId)!.traits),
+    now,
+  );
   return { orderId, totalCents: total, lines: lines.length, skipped };
 }
 

@@ -44,6 +44,15 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Campaigns — phase 2
+
+| Limitation                                                                                                             | Impact                                                               | Lifted by                                          |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
+| One bidder per listing clears at the list price; several campaigns that match each buy their own non-exclusive licence | No price discovery between bidders, no second-price auction          | Multi-bidder clearing with exclusivity (post-demo) |
+| Criteria are domain, language, framework, failure and model only                                                       | A campaign can't ask for an authenticity level, outcome or behaviour | Campaign criteria on the full browse query         |
+| Clearing runs in the web process after shares and floods                                                               | A listing that arrives while clearing fails waits for the next share | A worker on the event outbox (S3)                  |
+| A campaign's dataset is a collection without versioned snapshots per fill shown to the buyer                           | Buyers see the list, not a frozen dataset version                    | Dataset versions from collection snapshots         |
+
 ## Checkout — phase 2
 
 | Limitation                                                               | Impact                                       | Lifted by                                                                               |

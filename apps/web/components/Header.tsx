@@ -32,6 +32,9 @@ export async function Header() {
               )}
               {user.buyerOrgId && (
                 <>
+                  <Link href="/campaigns" className="hover:text-ink">
+                    Campaigns
+                  </Link>
                   <Link href="/cart" className="hover:text-ink">
                     Cart ({cartListingIds(getDb(), user.buyerOrgId).length})
                   </Link>
