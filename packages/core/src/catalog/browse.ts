@@ -150,6 +150,11 @@ function loadCatalog(db: Db, config: MarketplaceConfig): CatalogItem[] {
     .all();
   const failureCodes = new Set<string>(FAILURE_CODES);
   const market = buildMarket(db, { config });
+  const rarityOf = new Map(
+    market.policy.name === "trait-v2"
+      ? market.active.map((a) => [a.listingId, market.quote(a).factors.rarity])
+      : [],
+  );
   return rows.map((r) => {
     const traits = r.traits as TraceTraits;
     return {
@@ -169,7 +174,9 @@ function loadCatalog(db: Db, config: MarketplaceConfig): CatalogItem[] {
         .map((l) => l.code),
       outcomes: outcomesOf(traits),
       failureCategory: traits.failureCategory,
+      // The rarity the active policy prices with (V2: domain-first cohorts).
       rarity:
+        rarityOf.get(r.listingId) ??
         market.medianComboCount / Math.max(1, market.comboCounts.get(comboKeyOf(traits)) ?? 1),
       sharedAt: r.sharedAt,
       startedAt: r.startedAt,

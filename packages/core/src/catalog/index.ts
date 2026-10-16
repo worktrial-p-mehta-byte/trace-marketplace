@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { MarketplaceConfig } from "@tm/config";
+import { sellerShareFor, type MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import {
   comboKeyOf,
@@ -10,7 +10,7 @@ import {
   type DomainScore,
   type TraceTraits,
 } from "@tm/enrich";
-import { median, splitSale, traitPolicyV1, type PriceQuote } from "@tm/pricing";
+import { median, splitSale, type PriceQuote } from "@tm/pricing";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import { Trace, type Label, type Tier } from "@tm/schema";
 import { TERMS_VERSION } from "../auth";
@@ -122,6 +122,7 @@ export type ClientTraits = Partial<
     | "domain"
     | "domainConfidence"
     | "domains"
+    | "repeatRatio"
   >
 >;
 
@@ -172,6 +173,12 @@ function mergeSignalsTraits(server: TraceTraits, client: ClientTraits): TraceTra
     language: client.language ?? server.language,
     framework: client.framework ?? server.framework,
     redactionDensity: Math.min(1, Math.max(0, client.redactionDensity ?? 0)),
+    // Without inputs every call to a tool looks like a repeat, so the
+    // server's count is an upper bound; the browser's count can only lower it.
+    repeatRatio:
+      client.repeatRatio === undefined
+        ? server.repeatRatio
+        : Math.min(server.repeatRatio, unit(client.repeatRatio)),
     ...claimedDomain(client),
   };
 }
@@ -388,7 +395,7 @@ export async function shareTrace(
     traceId,
     listingId,
     priceCents,
-    sellerCents: splitSale(priceCents, deps.config.revenue.sellerShare).seller,
+    sellerCents: splitSale(priceCents, sellerShareFor(deps.config, traits.domain)).seller,
     labels: labels.map((l) => l.code),
     ...(listed === null && !internal.deferMarket ? { pricePending: true } : {}),
   };
@@ -475,7 +482,15 @@ export function listSellerTraces(
   return rows.map((r) => ({
     ...r,
     sellerCents:
-      r.priceCents === null ? null : splitSale(r.priceCents, config.revenue.sellerShare).seller,
+      r.priceCents === null
+        ? null
+        : splitSale(
+            r.priceCents,
+            sellerShareFor(
+              config,
+              labelRows.find((l) => l.traceId === r.traceId && l.kind === "domain")?.code,
+            ),
+          ).seller,
     labels: labelRows
       .filter((l) => l.traceId === r.traceId && l.kind === "failure" && l.code !== "harness_error")
       .map((l) => l.code),
@@ -491,6 +506,7 @@ export function estimatePrice(
   deps: { config: MarketplaceConfig; now?: Date },
   traits: TraceTraits,
   tier: Tier,
+  opts: { sellerId?: string } = {},
 ): PriceQuote {
   const market = buildMarket(db, deps);
   const comboKey = comboKeyOf(traits);
@@ -501,7 +517,7 @@ export function estimatePrice(
   const comboCount = (after.get(comboKey) ?? 0) + 1;
   after.set(comboKey, comboCount);
   const medianComboCount = median([...after.values()]);
-  return traitPolicyV1.price({
+  return market.policy.price({
     traits,
     tier,
     license: "research",
@@ -511,6 +527,7 @@ export function estimatePrice(
       medianComboCount,
       demandPressure: market.pressureFor(traits),
       now: market.now,
+      v2: market.contextFor(traits, { sellerId: opts.sellerId, tier }),
     },
   });
 }

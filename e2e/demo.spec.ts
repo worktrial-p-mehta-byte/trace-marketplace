@@ -90,6 +90,10 @@ test.describe.serial("demo flow", () => {
     // Labels link to the events that triggered them.
     await page.locator("a[href^='#e-']").first().click();
     await expect(page.getByText("Why this price")).toBeVisible();
+    // Pricing V2: the domain's niche is a factor, and the price comes with a range.
+    const card = page.getByRole("region", { name: "Price" });
+    await expect(card.getByRole("cell", { name: "Domain niche" })).toBeVisible();
+    await expect(card.getByText(/Likely range \$\d+\.\d\d–\$\d+\.\d\d/)).toBeVisible();
 
     const research = dollars(await page.locator(".price").first().textContent());
     await page.getByRole("radio", { name: "Training" }).click();

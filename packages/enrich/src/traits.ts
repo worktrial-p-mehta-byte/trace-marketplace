@@ -32,6 +32,16 @@ export interface TraceTraits {
   /** Share of evidence per domain, top three. A session can span domains. */
   domains: DomainScore[];
   failureCategory?: FailureCode;
+  /** Different tools the agent used. */
+  distinctTools: number;
+  /** Share of tool calls that repeat an earlier call exactly (same tool and input), 0..1. */
+  repeatRatio: number;
+  /**
+   * Fingerprint of the session's shape (event kinds, tools, errors, length
+   * bucket), without any text. Equal for near-duplicate sessions, so pricing
+   * can discount a seller listing the same session many times over.
+   */
+  shapeKey: string;
   model: string;
   modelDeprecated: boolean;
   capturedAt: string;
@@ -57,6 +67,51 @@ export function comboKeyOf(
   t: Pick<TraceTraits, "language" | "framework" | "failureCategory" | "model">,
 ): string {
   return [t.language ?? "-", t.framework ?? "-", t.failureCategory ?? "none", t.model].join("|");
+}
+
+/** FNV-1a, 32 bit: a small, browser-safe hash for fingerprints (not for security). */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** Tool variety, repetition and a shape fingerprint, from structure alone. */
+export function shapeTraits(
+  trace: Trace,
+): Pick<TraceTraits, "distinctTools" | "repeatRatio" | "shapeKey"> {
+  const tools = new Set<string>();
+  const seen = new Set<string>();
+  let calls = 0;
+  let repeats = 0;
+  const shape: string[] = [];
+  const errors = new Set<string>();
+  for (const e of trace.events) {
+    if (e.type === "tool_result" && e.isError) errors.add(e.callId);
+  }
+  for (const e of trace.events) {
+    if (e.type === "tool_call") {
+      calls++;
+      tools.add(e.tool);
+      const sig = `${e.tool}:${JSON.stringify(e.input ?? null)}`;
+      if (seen.has(sig)) repeats++;
+      seen.add(sig);
+      shape.push(`${e.tool}${errors.has(e.callId) ? "!" : ""}`);
+    } else if (e.type === "user_message") shape.push(e.interrupted ? "U!" : "U");
+    else if (e.type === "assistant_message") shape.push("A");
+  }
+  // Runs collapse ("Read Read Read" is one step), so padding a session with
+  // extra filler doesn't make a new shape; length is kept as a coarse bucket.
+  const collapsed = shape.filter((x, i) => x !== shape[i - 1]);
+  const bucket = Math.round(Math.log2(1 + shape.length));
+  return {
+    distinctTools: tools.size,
+    repeatRatio: calls ? Math.round((100 * repeats) / calls) / 100 : 0,
+    shapeKey: fnv1a(`${bucket}|${collapsed.join(" ")}`),
+  };
 }
 
 /** Label a scrubbed trace and extract its pricing traits in one pass. */
@@ -89,6 +144,7 @@ export function enrichTrace(trace: Trace, opts: ExtractOptions = {}): Enrichment
     domainConfidence: domain.confidence,
     domains: domain.distribution,
     failureCategory: a.primaryFailure,
+    ...shapeTraits(trace),
     model,
     modelDeprecated: (opts.deprecatedModels ?? []).includes(model),
     capturedAt: trace.provenance.capturedAt,

@@ -45,6 +45,19 @@ export const SOURCE_NAMES: Record<string, string> = {
 
 export const TIER_NAMES: Record<string, string> = { "0": "Open source", "1": "Signals only" };
 
+/** Names of the price factors in "why this price". */
+export const FACTOR_NAMES: Record<string, string> = {
+  quality: "Quality",
+  richness: "Richness",
+  failure: "Failure",
+  rarity: "Rarity",
+  niche: "Domain niche",
+  demand: "Demand",
+  bounty: "Bounty",
+  duplicates: "Near-duplicates",
+  freshness: "Freshness",
+};
+
 export const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 /** Event names behind a price change, in words. */

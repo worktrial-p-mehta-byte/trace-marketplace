@@ -1,5 +1,62 @@
 # Pricing
 
+Two policies sit behind the same `PricingPolicy` interface. **Pricing V2
+(`trait-v2`) is the default**; v1 stays available as a fallback
+(`pricing.policy` in config, or `PRICING_POLICY=trait-v1`). `pnpm
+pricing:shadow` prices the live catalog under both without changing
+anything, by domain, and runs both through the wind tunnel.
+
+## Pricing V2
+
+```
+P = clamp( anchor( B × min(cap, Q × R × F × X × N × D × U × T) ) × L , floor, ceiling )
+```
+
+| Factor            | What it measures                                                                                                                                                                          | Default rule                                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B, Q, T, L        | As v1 (below)                                                                                                                                                                             |                                                                                                                                                   |
+| R richness        | Information, not length: exact repeats of an earlier call count for little; each extra tool adds a little                                                                                 | 1 + 0.4 × log2(1 + turns × (1 − 0.8 × repeat share) / 20), × (1 + 0.04 per extra tool, ≤ +0.16), max 2                                            |
+| F failure         | Failures tiered by evidence                                                                                                                                                               | none 1.0; unresolved 1.35; recovered (inferred from the finish) 1.6; recovered and the final check passes 1.9; +0.08 per preference pair, ≤ +0.32 |
+| X rarity          | Scarcity, domain first. Cohorts: domain → domain+failure → +language/framework; each scored √((typical+α)/(count+α)) with typical = Σc²/Σc and α = 2; blended 0.5 / 0.3 / 0.2 (geometric) | Stack level only once the domain+failure cohort has ≥ 5 listings; the model's share within the domain moves it ±10%; 0.6–2.5                      |
+| N niche           | The domain's demand against its supply, and the platform's strategic weight                                                                                                               | (demand share / supply share)^0.35, demand smoothed with a prior of 20 weight units spread like supply (no demand → 1); 0.85–1.6                  |
+| D demand          | As v1, but each signal decays (half-life 7 days) and one buyer repeating the same ask counts log-wise                                                                                     | weight = max decayed weight × (1 + 0.5 × log2 n) per (buyer, kind, criteria)                                                                      |
+| U near-duplicates | A seller listing the same session shape (tools, errors, length bucket; no text) again                                                                                                     | 1 / (1 + 0.5 × others), floor 0.4                                                                                                                 |
+| anchor            | An open bounty this trace matches                                                                                                                                                         | Below 60% of the bounty's per-trace offer, the price is pulled up towards it, by at most 1.5×                                                     |
+| band              | How sure the price is                                                                                                                                                                     | ±(8% + 12% × domain doubt + 8% if the domain+failure cohort is under 3 + 5% if signals-only), ≤ ±35%                                              |
+
+All numbers live in `pricing.v2` in `packages/config/src/defaults.ts`.
+
+**Platform levers** (config, off by default): `pricing.v2.niche.strategicWeights`
+multiplies the niche factor for domains the marketplace wants more of (say
+`{ "medical": 1.3 }`), and `revenue.sellerShareByDomain` sets a different
+seller share per domain (default 70% everywhere).
+
+**What it guarantees** (tests in `packages/pricing/src/pricing-v2.test.ts`):
+more supply in a cohort never raises a price, more demand never lowers it,
+older never raises it, verified recovery ≥ inferred ≥ unresolved,
+near-duplicates and bounties move it the right way, every quote stays within
+the floor and ceiling with its band around it (500 random cases), a rare
+domain prices above a crowded one with the same traits, and without V2 market
+data the policy prices exactly as v1.
+
+**On the seeded demo market** (`pnpm pricing:shadow`, 200 sessions): coding
+listings move to about 0.9× of v1, data and querying 1.5×, the long tail of
+domains 2–5× (medical about 5×). The catalog's list value goes from about
+$560 to $850.
+
+### The wind tunnel
+
+`runWindTunnel` (`packages/core/src/market/windtunnel.ts`) puts a modelled
+population of 20 buyers in front of the catalog: each values a trace by its
+failure evidence, information, freshness and the scarcity of its domain
+(labs want diverse data), with log-normal noise, and licenses it when the
+price is at or under their willingness to pay. Revenue is price × expected
+buyers. It is a model of the agreed goal (total sales), not a forecast; on
+the seeded market V2 makes about 40% more than v1 while selling slightly
+fewer licenses (prices on scarce domains rise towards what buyers pay).
+
+## Pricing v1
+
 Each trace is priced from its traits with an explainable formula:
 
 ```

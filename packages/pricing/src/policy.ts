@@ -12,7 +12,7 @@ import {
   rarityFactor,
   richnessFactor,
 } from "./factors";
-import type { FactorKey, PriceDriver, PriceFactors, PricingPolicy } from "./types";
+import type { PriceDriver, PriceFactors, PricingPolicy } from "./types";
 
 const FAILURE_NAMES: Record<string, string> = {
   test_tampering: "agent tampered with a failing test",
@@ -39,7 +39,8 @@ function drivers(
 ): PriceDriver[] {
   const ageDays = Math.max(0, Math.round((now.getTime() - Date.parse(t.capturedAt)) / 86_400_000));
   const combo = [t.language, t.framework].filter(Boolean).join(" / ") || "unknown stack";
-  const reasons: Record<FactorKey, string> = {
+  type V1Key = "quality" | "richness" | "failure" | "rarity" | "demand" | "freshness";
+  const reasons: Record<V1Key, string> = {
     quality:
       [
         t.testsRanAtEnd ? "outcome checked by tests" : undefined,
@@ -70,7 +71,7 @@ function drivers(
           : "normal demand",
     freshness: `${ageDays} day${ageDays === 1 ? "" : "s"} old${isModelDeprecated(t, c) ? `, ${t.model} is superseded` : ""}`,
   };
-  return (["failure", "rarity", "demand", "richness", "quality", "freshness"] as FactorKey[]).map(
+  return (["failure", "rarity", "demand", "richness", "quality", "freshness"] as V1Key[]).map(
     (k) => ({ factor: k, value: f[k], reason: reasons[k], direction: direction(f[k]) }),
   );
 }
@@ -137,6 +138,7 @@ export const traitPolicyV1: PricingPolicy<TraceTraits> = {
       factors,
       drivers: ds,
       summary: summarise(ds),
+      policy: "trait-v1",
     };
   },
 };

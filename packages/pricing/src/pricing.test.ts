@@ -42,6 +42,9 @@ function traits(over: Partial<TraceTraits>): TraceTraits {
     domain: "software_engineering",
     domainConfidence: 0.9,
     domains: [{ domain: "software_engineering", share: 1 }],
+    distinctTools: 2,
+    repeatRatio: 0,
+    shapeKey: "", // no fingerprint: not a near-duplicate of anything
     ...over,
   };
 }
