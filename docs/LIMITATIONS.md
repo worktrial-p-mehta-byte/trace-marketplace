@@ -84,6 +84,15 @@ where the limit lives and what would lift it.
 | Price history keeps every simulator move after a reset                                       | Charts show past experiments as steps                          | Mark or hide simulator moves                                     |
 | Failure-lab tasks raise the odds of a failure but don't guarantee one, and are not run in CI | A run can produce a clean session; a task could rot unnoticed  | Check the tasks' starting failures in CI                         |
 
+## Docs and deployment — M7
+
+| Limitation                                                                                                        | Impact                                                     | Lifted by                                      |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| The Docker image contains the whole workspace and its dev dependencies                                            | Larger image (scripts run from TypeScript with `tsx`)      | Next standalone output and precompiled scripts |
+| Docker is tested in CI (build, start, seeded catalog), not on a real host; Fly.io, Render and Railway are untried | A host may need small changes (port, volume path)          | Try one host and document it                   |
+| One instance only: SQLite file, in-process consumers                                                              | No horizontal scaling or zero-downtime deploys             | Postgres, object storage and a worker (S3)     |
+| `/api/health` checks only the database                                                                            | A broken blob folder or search index still reports healthy | Deeper checks                                  |
+
 ## Platform
 
 | Limitation                                         | Impact                                     | Lifted by                                               |

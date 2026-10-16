@@ -5,5 +5,15 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
   const status = getSystemStatus();
-  return NextResponse.json(status, { status: status.database.ok ? 200 : 503 });
+  // Public endpoint (load balancers, container health checks): no file paths
+  // or error details, just whether the app can serve.
+  const ok = status.database.ok;
+  return NextResponse.json(
+    {
+      ok,
+      database: { ok, tables: status.database.tables },
+      traceSchemaVersion: status.traceSchemaVersion,
+    },
+    { status: ok ? 200 : 503 },
+  );
 }

@@ -20,7 +20,9 @@ export function withSession(res: NextResponse, userId: string) {
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // HTTPS-only in production. TM_COOKIE_SECURE=0 allows plain HTTP for a
+    // trial on a private network (see docs/DEPLOYING.md); never on the internet.
+    secure: process.env.NODE_ENV === "production" && process.env.TM_COOKIE_SECURE !== "0",
     path: "/",
     expires: expiresAt,
   });

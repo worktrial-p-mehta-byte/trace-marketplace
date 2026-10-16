@@ -18,6 +18,8 @@ export const EventTypes = {
   OrderPaid: "order.paid",
   BountyPosted: "bounty.posted",
   BountyMatched: "bounty.matched",
+  /** The demo seed finished (scripts/seed.ts); its absence after a seed means it stopped part-way. */
+  DemoSeeded: "demo.seeded",
 } as const;
 export type EventType = (typeof EventTypes)[keyof typeof EventTypes];
 
