@@ -333,6 +333,14 @@ function scoreItem(
     score += 0.5;
     reasons.push(`Stack: ${[i.language, i.framework].filter(Boolean).join(" / ")}`);
   }
+  if (q.tier !== undefined) {
+    score += 0.3;
+    reasons.push(
+      i.tier === 1
+        ? "Signals only: the session's shape, no content"
+        : "Open source: full scrubbed content",
+    );
+  }
   for (const b of q.behaviours ?? []) {
     score += 0.6;
     reasons.push(BEHAVIOURS[b]?.name ?? b);

@@ -126,6 +126,20 @@ describe("checkAuthenticity", () => {
     ).toContain("label_evidence");
   });
 
+  it("checks label evidence has the flags of its failure, not just the event type", () => {
+    const t = session();
+    const one = (code: string, evidence: number[]) => [
+      { kind: "failure" as const, code, evidence },
+    ];
+    // Event 3 is a failed result, 5 a successful one; 9 a normal message.
+    expect(failed(t, { labels: one("tool_error", [3]) })).not.toContain("label_evidence");
+    expect(failed(t, { labels: one("tool_error", [5]) })).toContain("label_evidence");
+    expect(failed(t, { labels: one("tool_rejected", [3]) })).toContain("label_evidence");
+    expect(failed(t, { labels: one("user_interrupt", [9]) })).toContain("label_evidence");
+    // A retry loop needs three failures of the same tool.
+    expect(failed(t, { labels: one("retry_loop", [3]) })).toContain("label_evidence");
+  });
+
   it("checks a test outcome comes from a test command", () => {
     const t = session();
     const noTests = {

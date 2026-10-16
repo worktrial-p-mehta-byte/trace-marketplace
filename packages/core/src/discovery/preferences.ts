@@ -5,14 +5,15 @@ import { newId, schema, type Db } from "@tm/db";
 import type { LicenseScope } from "@tm/schema";
 import type { PublicUser } from "../auth";
 import { browseCatalog, type CatalogItem } from "../catalog/browse";
+import { orgMemberIds } from "../checkout";
 import type { EventBus } from "../events";
 import type { SearchIndex } from "../ports";
-import { recordDemandSignal, runPricingConsumer } from "../pricing";
+import { buildMarket, recordDemandSignal, runPricingConsumer } from "../pricing";
 
 /**
  * What a buyer team told us when it joined: the domains and behaviours it
  * needs, how it will use the data, whether it needs the content, and what it
- * pays per trace. Stored as a "Preferences" query collection, it shapes the
+ * pays per trace. Stored as a "preferences" collection, it shapes the
  * catalog ("Picked for you"), the default licence, and a suggested campaign.
  */
 export interface BuyerPreferences {
@@ -31,10 +32,14 @@ const NAME = "Preferences";
 const LICENSES: LicenseScope[] = ["research", "eval", "training"];
 
 function prefsRow(db: Db, orgId: string) {
+  // Its own kind, so a saved search can never be mistaken for it, whatever
+  // it is called.
   return db
     .select()
     .from(schema.collections)
-    .where(and(eq(schema.collections.buyerOrgId, orgId), eq(schema.collections.name, NAME)))
+    .where(
+      and(eq(schema.collections.buyerOrgId, orgId), eq(schema.collections.kind, "preferences")),
+    )
     .get();
 }
 
@@ -66,8 +71,6 @@ export function setBuyerPreferences(
       input.maxPriceCents && input.maxPriceCents > 0 ? Math.round(input.maxPriceCents) : undefined,
   };
   const row = prefsRow(db, user.buyerOrgId);
-  // "kind: query" so it lists with saved searches' storage, but a reserved
-  // name keeps it out of the saved-search list.
   if (row) {
     db.update(schema.collections)
       .set({ query: prefs })
@@ -79,7 +82,7 @@ export function setBuyerPreferences(
         id: newId("col"),
         buyerOrgId: user.buyerOrgId,
         name: NAME,
-        kind: "query",
+        kind: "preferences",
         query: prefs,
       })
       .run();
@@ -107,21 +110,43 @@ export function setBuyerPreferences(
  */
 export async function recommendFor(
   db: Db,
-  deps: { config: MarketplaceConfig; search: SearchIndex },
+  deps: { config: MarketplaceConfig; search: SearchIndex; now?: Date },
   prefs: BuyerPreferences,
   limit = 6,
+  /** The team the picks are for: its own members' listings are left out. */
+  buyerOrgId?: string,
 ): Promise<CatalogItem[]> {
+  const members = buyerOrgId ? orgMemberIds(db, buyerOrgId) : new Set<string>();
+  // Prices under the team's own licence (evaluation and training cost more
+  // than research), for both the budget and what the picks show.
+  const market = buildMarket(db, { config: deps.config, now: deps.now });
+  const rows = new Map(market.active.map((a) => [a.listingId, a]));
+  // Only what the team can actually buy under its licence.
+  const offered = new Set(
+    db
+      .select({ id: schema.listings.id, allowed: schema.listings.allowedLicenses })
+      .from(schema.listings)
+      .where(eq(schema.listings.status, "active"))
+      .all()
+      .filter((r) => r.allowed.includes(prefs.license))
+      .map((r) => r.id),
+  );
   const pool: CatalogItem[] = [];
   for (const domain of prefs.domains) {
+    // The whole domain: ranking happens below, after the budget, so a cheap
+    // match is never cut off by a page of expensive ones.
     const r = await browseCatalog(db, deps, {
       domain,
       tier: prefs.contentNeeded ? 0 : undefined,
-      limit: 500,
+      limit: Number.MAX_SAFE_INTEGER,
     });
-    // Within budget: the research price is the least a licence costs.
-    pool.push(
-      ...r.items.filter((i) => !prefs.maxPriceCents || i.priceCents <= prefs.maxPriceCents),
-    );
+    for (const i of r.items) {
+      const row = rows.get(i.listingId);
+      if (!row || members.has(row.sellerId) || !offered.has(i.listingId)) continue;
+      const priceCents = market.quote(row, prefs.license).priceCents;
+      if (prefs.maxPriceCents && priceCents > prefs.maxPriceCents) continue;
+      pool.push({ ...i, priceCents });
+    }
   }
   const want = new Set(prefs.failures);
   const score = (i: CatalogItem) =>

@@ -29,7 +29,9 @@ export function rarityFactorV2(
   const stack = useStack ? cohortScore(cohorts.stack, a) : undefined;
   const w = r.weights;
   // Without the stack level its weight goes to the two levels above, pro rata.
-  const scale = useStack ? 1 : 1 / (w.domain + w.failure);
+  // (With no weight above either, rarity is neutral rather than NaN.)
+  const above = w.domain + w.failure;
+  const scale = useStack ? 1 : above > 0 ? 1 / above : 0;
   const logX =
     w.domain * scale * Math.log(domain) +
     w.failure * scale * Math.log(failure) +

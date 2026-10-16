@@ -45,6 +45,16 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ fileOverrides: { pricing: { floor: 60 } } })).toThrow(/floor/);
   });
 
+  it("rejects rarity weights with nothing on the domain and failure levels", () => {
+    expect(() =>
+      loadConfig({
+        fileOverrides: {
+          pricing: { v2: { rarity: { weights: { domain: 0, failure: 0, stack: 1 } } } },
+        },
+      }),
+    ).toThrow(/domain \+ failure/);
+  });
+
   it("lets DATABASE_PATH and BLOB_DIR move the data, e.g. for end-to-end tests", () => {
     expect(loadConfig().storage.blobPath).toBe("data/blobs");
     const c = loadConfig({ env: { DATABASE_PATH: "data/e2e.db", BLOB_DIR: "data/e2e-blobs" } });

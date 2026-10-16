@@ -66,6 +66,18 @@ describe("marketTrends", () => {
     expect(t.domains.at(-1)!.status).toBe("quiet");
   });
 
+  it("leaves sessions of unknown domain out of the totals the rows are shares of", () => {
+    // Two listings the labeler couldn't place.
+    for (const row of db.select().from(schema.traceTraits).limit(2).all())
+      db.update(schema.traceTraits)
+        .set({ data: { ...(row.data as object), domain: "unknown" } })
+        .where(eq(schema.traceTraits.traceId, row.traceId))
+        .run();
+    const t = marketTrends(db, deps);
+    expect(t.domains.reduce((s, d) => s + d.supply, 0)).toBe(t.totalSupply);
+    expect(t.domains.reduce((s, d) => s + d.supplyShare, 0)).toBeCloseTo(1, 2);
+  });
+
   it("puts what buyers ask for and few sellers supply at the top", () => {
     for (let i = 0; i < 4; i++) {
       const b = { ...buyer, buyerOrgId: `${buyer.buyerOrgId}` };

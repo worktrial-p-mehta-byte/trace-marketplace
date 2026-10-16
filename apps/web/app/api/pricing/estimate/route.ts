@@ -14,24 +14,21 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return fail("Sign in first.", 401);
   const body = (await req.json().catch(() => null)) as {
-    items?: { key: string; traits: TraceTraits; tier: 0 | 1 }[];
+    items?: { key: string; traits: TraceTraits; tier: 0 | 1; selected?: boolean }[];
   } | null;
   if (!body?.items?.length || body.items.length > 200)
     return fail("Send between 1 and 200 sessions.");
   try {
     const config = getConfig();
-    // Sessions of the same shape shared together become near-duplicates of
-    // each other once listed, so each estimate counts its batch siblings.
-    const shapes = new Map<string, number>();
-    for (const it of body.items) {
-      const k = it.traits?.shapeKey;
-      if (k) shapes.set(k, (shapes.get(k) ?? 0) + 1);
-    }
+    // The sessions selected to share together join the market together, so
+    // each estimate counts the other selected ones as batch siblings (in the
+    // cohorts they share; same-shape ones as near-duplicates). An unselected
+    // session is priced as if it were added to the selection.
+    const selected = body.items.filter((it) => it.selected !== false);
     const quotes = body.items.map((it) => {
-      const k = it.traits?.shapeKey;
       const q = estimatePrice(getDb(), { config }, it.traits, it.tier === 1 ? 1 : 0, {
         sellerId: user.id,
-        pendingSameShape: k ? (shapes.get(k) ?? 1) - 1 : 0,
+        pendingSiblings: selected.filter((o) => o !== it).map((o) => o.traits),
       });
       const share = sellerShareFor(config, it.traits.domain);
       return {

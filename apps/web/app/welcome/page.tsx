@@ -40,6 +40,7 @@ export default async function WelcomePage({
       { config: getConfig(), search: getSearch() },
       prefs,
       6,
+      user.buyerOrgId,
     );
     const c = suggestedCampaign(prefs);
     return (

@@ -144,6 +144,15 @@ describe("intent search", () => {
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
 
+  it("names the tier filter among the reasons", async () => {
+    const r = await browseCatalog(db, deps, {
+      text: "clinical evaluations where the agent was corrected",
+      tier: 0,
+    });
+    expect(r.items.length).toBeGreaterThan(0);
+    for (const i of r.items) expect(i.reasons).toContain("Open source: full scrubbed content");
+  });
+
   it("never lets leftover words empty out what the facets asked for", async () => {
     const r = await browseCatalog(db, deps, { text: "medical zzzunknownword" });
     expect(r.total).toBeGreaterThan(0);
@@ -196,6 +205,8 @@ describe("saved searches", () => {
       SavedSearchError,
     );
     expect(() => saveSearch(db, deps, buyer, { query: {} })).toThrow(SavedSearchError);
+    // Whitespace isn't a search either.
+    expect(() => saveSearch(db, deps, buyer, { query: { text: "   " } })).toThrow(SavedSearchError);
     const s = saveSearch(db, deps, buyer, { query: { domain: "legal" } });
     expect(deleteSavedSearch(db, "org_other", s.id)).toBe(false);
   });

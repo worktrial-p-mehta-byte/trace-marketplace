@@ -2,13 +2,14 @@ import { randomBytes } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
+import { enrichTrace } from "@tm/enrich";
 import { matchesCriteria, type DemandCriteria } from "@tm/pricing";
 import { floodStacks, generateFlood, type Pattern } from "@tm/synth";
 import { acceptTerms, createUser, TERMS_VERSION, type PublicUser } from "../auth";
 import { DuplicateShareError, shareTrace, type CatalogDeps } from "../catalog";
 import { EventTypes, type EventBus } from "../events";
 import { buildMarket, priceHistory, recordDemandSignal, runPricingConsumer } from "../pricing";
-import { runCampaignConsumer } from "../campaigns";
+import { campaignFillsFor, runCampaignConsumer } from "../campaigns";
 import { runSearchConsumer } from "../search";
 
 /** The account that owns supply added by the simulator, so it can be removed again. */
@@ -175,16 +176,30 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
   const sim = await ensureAccount(db, SIMULATOR_SELLER_EMAIL, "seller", "Market simulator");
   const now = deps.now ?? new Date();
   const seed = input.seed ?? Math.floor(now.getTime() / 1000) % 1_000_000;
-  const traces = generateFlood(seed, Math.min(100, Math.max(1, input.count)), now, input);
+  const count = Math.min(100, Math.max(1, input.count));
+  // The labeler occasionally reads a generated session as another domain or
+  // language (a science session that looks like code). Those would not be
+  // the supply asked for, so they are dropped and the flood draws extra.
+  const traces = generateFlood(seed, count * 2, now, input)
+    .filter((t) => {
+      const traits = enrichTrace(t, { now }).traits;
+      return (
+        (!input.domain || traits.domain === input.domain) &&
+        (!input.language || traits.language === input.language)
+      );
+    })
+    .slice(0, count);
   let added = 0;
+  const listingIds: string[] = [];
   for (const trace of traces) {
     try {
-      await shareTrace(
+      const r = await shareTrace(
         db,
         deps,
         { sellerId: sim.id, trace, tier: 0 },
         { allowSynthetic: true, deferMarket: true },
       );
+      listingIds.push(r.listingId);
       added++;
     } catch (err) {
       // A rare duplicate from the generator is skipped. Anything else (a blob
@@ -195,7 +210,9 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
   if (deps.search) await runSearchConsumer(db, deps.bus, deps.blobs, deps.search);
   // Open campaigns buy matching new supply, as they would any seller's.
-  const bought = runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+  runCampaignConsumer(db, { config: deps.config, bus: deps.bus, now });
+  // Only this flood's listings: the consumer may also clear older backlog.
+  const bought = listingIds.reduce((n, id) => n + campaignFillsFor(db, id), 0);
   return { added, bought, moves: moves(before, pricesMatching(db, deps.config, criteria)) };
 }
 

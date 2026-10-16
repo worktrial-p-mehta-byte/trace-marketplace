@@ -104,7 +104,9 @@ export default async function CartPage({
                         ? "You already hold this licence"
                         : l.excluded === "own_listing"
                           ? "Your own trace"
-                          : "No longer for sale"}
+                          : l.excluded === "license_not_offered"
+                            ? "Not offered under this licence"
+                            : "No longer for sale"}
                     </span>
                   )}
                 </div>

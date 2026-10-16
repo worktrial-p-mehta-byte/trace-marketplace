@@ -138,8 +138,12 @@ export function marketTrends(
     .all()
     .map((x) => ({ criteria: x.criteria as DemandCriteria, bid: x.maxPriceCents }));
 
-  const totalDemand = [...demand.values()].reduce((s, v) => s + v, 0);
-  const totalSupply = active.length;
+  // Shares are of what the board shows: supply and demand the labeler could
+  // place in a domain. Unknown-domain sessions would otherwise dilute every
+  // row while appearing in none.
+  const known = (k: string) => !k.startsWith("unknown|");
+  const totalDemand = [...demand].filter(([k]) => known(k)).reduce((s, [, v]) => s + v, 0);
+  const totalSupply = [...supply].filter(([k]) => known(k)).reduce((s, [, v]) => s + v, 0);
 
   const row = (
     key: string,

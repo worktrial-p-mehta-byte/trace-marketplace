@@ -132,6 +132,30 @@ class LevelCounts {
     const sumSq = base.sumSq + (n * n - c * c);
     return { count: Math.max(1, n), typical: sum > 0 ? sumSq / sum : 1 };
   }
+  /**
+   * This key's cohort once `pending` not-yet-listed traces join (this trace
+   * and its upload siblings, each with its own key and group). Every pending
+   * trace moves the typical size, even one in another cohort; only those
+   * with this key add to this cohort's count. With `group`, only pending
+   * traces in that group count, as for the stored sums.
+   */
+  cohortWith(key: string, pending: { key: string; group: string }[], group?: string): Cohort {
+    const joining = new Map<string, number>();
+    for (const p of pending) {
+      if (group !== undefined && p.group !== group) continue;
+      joining.set(p.key, (joining.get(p.key) ?? 0) + 1);
+    }
+    const base = group === undefined ? this : (this.groups.get(group) ?? { sum: 0, sumSq: 0 });
+    let sum = base.sum;
+    let sumSq = base.sumSq;
+    for (const [k, d] of joining) {
+      const c = this.count(k);
+      sum += d;
+      sumSq += (c + d) * (c + d) - c * c;
+    }
+    const n = this.count(key) + (joining.get(key) ?? 0);
+    return { count: Math.max(1, n), typical: sum > 0 ? sumSq / sum : 1 };
+  }
 }
 
 /** Demand factor from the newest snapshot at least `changeWindowHours` old. */
@@ -242,19 +266,31 @@ export function buildMarket(db: Db, deps: PricingDeps) {
   /** V2 market context for a trace; `listed` false prices it as if it were about to be. */
   function contextV2(
     traits: TraceTraits,
-    o: { sellerId?: string; tier: Tier; listed: boolean; pendingSameShape?: number },
+    o: { sellerId?: string; tier: Tier; listed: boolean; pendingSiblings?: TraceTraits[] },
   ): MarketContextV2 {
     const keys = cohortKeys(traits);
-    // An estimate counts the trace itself and its same-shape batch siblings,
-    // which will join the same cohorts once shared.
-    const extra = o.listed ? 0 : 1 + Math.max(0, o.pendingSameShape ?? 0);
+    // An estimate counts the trace itself, plus each other session in the
+    // same upload that will join the same cohort once shared (siblings only
+    // count where they share the cohort, not everywhere).
+    const siblings = o.listed ? [] : (o.pendingSiblings ?? []);
+    const siblingKeys = siblings.map(cohortKeys);
+    const extraAt = (l: Level) =>
+      o.listed ? 0 : 1 + siblingKeys.filter((k) => k[l] === keys[l]).length;
     // The model's scarcity is judged against other models in the same domain.
-    const cohort = (l: Level) =>
-      levels[l].cohort(keys[l], extra, l === "model" ? keys.domain : undefined);
+    const groupOf = (l: Level, k: Record<Level, string>) => (l === "model" ? k.domain : "");
+    const cohort = (l: Level) => {
+      const group = l === "model" ? keys.domain : undefined;
+      if (o.listed) return levels[l].cohort(keys[l], 0, group);
+      const pending = [keys, ...siblingKeys].map((k) => ({ key: k[l], group: groupOf(l, k) }));
+      return levels[l].cohortWith(keys[l], pending, group);
+    };
+    const sameShape = traits.shapeKey
+      ? siblings.filter((t) => t.shapeKey === traits.shapeKey).length
+      : 0;
     const shapeCount =
       (o.sellerId && traits.shapeKey
         ? (shapes.get(`${o.sellerId}|${traits.shapeKey}`)?.size ?? 0)
-        : 0) + Math.max(0, o.pendingSameShape ?? 0);
+        : 0) + sameShape;
     const anchor = bounties
       .filter((b) => matchesCriteria(traits, b.criteria))
       .reduce((m, b) => Math.max(m, b.perTraceCents), 0);
@@ -269,8 +305,8 @@ export function buildMarket(db: Db, deps: PricingDeps) {
       niche: {
         domainDemand: domainDemand.get(d) ?? 0,
         totalDemand,
-        domainSupply: domainSupply(d) + extra,
-        totalSupply: totalSupply() + extra,
+        domainSupply: domainSupply(d) + extraAt("domain"),
+        totalSupply: totalSupply() + (o.listed ? 0 : 1 + siblings.length),
       },
       duplicates: Math.max(0, shapeCount - (o.listed ? 1 : 0)),
       bountyAnchorCents: anchor || undefined,
@@ -296,8 +332,8 @@ export function buildMarket(db: Db, deps: PricingDeps) {
       o: {
         sellerId?: string;
         tier: Tier;
-        /** Other sessions of the same shape being shared in the same batch. */
-        pendingSameShape?: number;
+        /** The other sessions being shared in the same upload. */
+        pendingSiblings?: TraceTraits[];
       },
     ) {
       return v2 ? contextV2(traits, { ...o, listed: false }) : undefined;

@@ -36,6 +36,13 @@
       "when": 1792134892637,
       "tag": "0004_seller_interests",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792169822041,
+      "tag": "0005_preferences_kind",
+      "breakpoints": true
     }
   ]
 }
