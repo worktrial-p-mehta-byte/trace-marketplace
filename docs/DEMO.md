@@ -21,6 +21,8 @@ pnpm build && pnpm start # production mode: every page is fast on first click
   (`seller@example.com` / `demo-password`): it follows Medical and Data and
   querying, so it is told about campaigns there.
 - Close other tabs; zoom to 110% for a projector.
+- **Audience following along?** Send them [FOLLOW-ALONG.md](FOLLOW-ALONG.md)
+  ten minutes before: one line sets up their own copy (`scripts/try-it.sh`).
 
 What the seed sets up: the buyer team has its demo credits, three past
 purchases, and an open campaign, **"Clinical evaluations with corrections"**

@@ -23,7 +23,17 @@ version is uploaded.
 
 ## Quick start
 
-Requirements: Node.js 22.12 or newer and pnpm 10 (`corepack enable`, or
+**Just want to try it?** On macOS or Linux (or WSL), one line downloads it,
+creates a demo market, builds the site and opens it. No setup is needed
+first, not even Node.js:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/worktrial-p-mehta-byte/trace-marketplace/main/scripts/try-it.sh | bash
+```
+
+Following a live demo? See [docs/FOLLOW-ALONG.md](docs/FOLLOW-ALONG.md).
+
+**To work on it:** requirements: Node.js 22.12 or newer and pnpm 10 (`corepack enable`, or
 `npm install -g pnpm@10`).
 
 ```bash

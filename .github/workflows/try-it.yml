@@ -1,0 +1,41 @@
+name: Try-it script
+
+# The one-line local setup attendees run (scripts/try-it.sh), on a clean
+# macOS and Ubuntu machine with no Node.js or pnpm set up: it must download
+# its own Node.js, install, seed, build and serve the site.
+on:
+  pull_request:
+    paths:
+      - scripts/try-it.sh
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/try-it.yml
+  workflow_dispatch:
+
+jobs:
+  try-it:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up from scratch with a private Node.js
+        run: TM_LOCAL_NODE=1 TM_NO_START=1 bash scripts/try-it.sh
+
+      - name: Start the site and check it answers
+        run: |
+          TM_LOCAL_NODE=1 TM_NO_OPEN=1 bash scripts/try-it.sh > try-it.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:3000/api/health; then break; fi
+            sleep 5
+          done
+          curl -fs http://localhost:3000/api/health | grep '"ok":true'
+          curl -fs http://localhost:3000/ | grep -q "What a trace is worth"
+          ls demo/seller-sessions/10-domain-medical.jsonl
+
+      - name: Show the script output
+        if: always()
+        run: cat try-it.log || true
