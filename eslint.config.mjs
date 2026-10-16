@@ -5,7 +5,6 @@ export default tseslint.config(
   {
     ignores: [
       "**/node_modules/**",
-      ".tools/**",
       "**/.next/**",
       "**/dist/**",
       "packages/db/drizzle/**",

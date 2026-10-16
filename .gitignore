@@ -1,9 +1,6 @@
 # dependencies
 node_modules/
 
-# private Node.js/pnpm copies downloaded by scripts/try-it.sh
-.tools/
-
 # build output
 .next/
 out/

@@ -15,8 +15,9 @@ On **Windows**, paste the same line into WSL (Ubuntu).
 
 Your browser opens on the marketplace when it's ready. You don't need to
 install anything first: if your Node.js is missing or old, the script
-downloads a private copy into the project folder (`~/trace-marketplace`).
-Nothing is installed elsewhere, and no admin password is needed.
+downloads a private copy into `~/.cache/trace-marketplace`. Nothing is
+installed system-wide, and no admin password is needed. The project itself
+goes in `~/trace-marketplace`.
 
 Leave the Terminal window open while you follow along. **Ctrl+C** stops the
 site. Paste the same line again to start over with a fresh demo.

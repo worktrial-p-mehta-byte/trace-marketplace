@@ -7,9 +7,9 @@
 # It downloads the code to ~/trace-marketplace, fills a local database with
 # a synthetic demo market, starts the site and opens it in your browser.
 # Nothing needs installing first except curl: if your Node.js is missing or
-# too old, a private copy is downloaded into the project folder (no sudo,
-# nothing changed elsewhere). Run it again any time to update and reset the
-# demo. Stop the site with Ctrl+C.
+# too old, a private copy is downloaded into ~/.cache/trace-marketplace (no
+# sudo, nothing installed system-wide). Run it again any time to update and
+# reset the demo. Stop the site with Ctrl+C.
 #
 # Settings (optional environment variables):
 #   TM_DIR=~/somewhere   where to put the project (default ~/trace-marketplace)
@@ -18,11 +18,13 @@
 #   TM_NO_START=1        set everything up but don't start the site
 #   TM_NO_OPEN=1         don't open a browser
 #   TM_LOCAL_NODE=1      always use the private Node.js copy
+#   TM_NODE_MIRROR=url   where to download Node.js from (default nodejs.org)
 set -euo pipefail
 
 REPO="worktrial-p-mehta-byte/trace-marketplace"
 REF="${TM_REF:-main}"
 NODE_VERSION="22.22.0" # any 22.12+ works; this is the one downloaded if needed
+NODE_MIRROR="${TM_NODE_MIRROR:-https://nodejs.org/dist}"
 PORT="${TM_PORT:-3000}"
 
 if [ -t 1 ]; then
@@ -93,13 +95,15 @@ have_git() {
   command -v git >/dev/null || return 1
   [ "$OS" != darwin ] || xcode-select -p >/dev/null 2>&1
 }
-TOOLS="$DIR/.tools"
+# Private Node.js and pnpm copies live in a cache, not the project folder,
+# which may not exist yet (and must be empty for the download).
+TOOLS="${XDG_CACHE_HOME:-$HOME/.cache}/trace-marketplace"
 if [ "${TM_LOCAL_NODE:-0}" = 1 ] || ! node_ok; then
   NODE_HOME="$TOOLS/node-v$NODE_VERSION-$OS-$ARCH"
   if [ ! -x "$NODE_HOME/bin/node" ]; then
     note "Node.js 22.12+ not found; downloading a private copy (about 30 MB)…"
     mkdir -p "$TOOLS"
-    curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-$OS-$ARCH.tar.gz" |
+    curl -fsSL "$NODE_MIRROR/v$NODE_VERSION/node-v$NODE_VERSION-$OS-$ARCH.tar.gz" |
       tar -xz -C "$TOOLS" || fail "couldn't download Node.js." "Check your internet connection, or install Node.js 22 from https://nodejs.org and try again."
   fi
   export PATH="$NODE_HOME/bin:$PATH"
@@ -111,12 +115,17 @@ step "Getting the code"
 if [ "$IN_CHECKOUT" = 1 ]; then
   note "Using this checkout: $DIR"
 elif [ -d "$DIR/.git" ] && have_git; then
+  # Update only by fast-forward: local changes or commits are never touched.
+  branch="$(git -C "$DIR" symbolic-ref --short -q HEAD || true)"
   if [ -n "$(git -C "$DIR" status --porcelain --untracked-files=no)" ]; then
     note "You have local changes in $DIR; keeping them and not updating."
-  else
-    quietly git -C "$DIR" fetch --depth 1 origin "$REF"
-    quietly git -C "$DIR" checkout -q -B "$REF" FETCH_HEAD
+  elif [ "$branch" != "$REF" ]; then
+    note "$DIR is on ${branch:-a detached commit}, not $REF; not updating."
+  elif git -C "$DIR" fetch -q origin "$REF" >/dev/null 2>&1 &&
+    git -C "$DIR" merge -q --ff-only FETCH_HEAD >/dev/null 2>&1; then
     note "${G}✓${X} Updated $DIR"
+  else
+    note "Couldn't update $DIR by fast-forward (offline, or it has its own commits); using it as it is."
   fi
 elif [ -e "$DIR" ] && [ ! -f "$DIR/package.json" ]; then
   fail "$DIR already exists and isn't this project." "Move it away, or choose another folder: TM_DIR=~/tm-demo, before bash."
@@ -135,16 +144,16 @@ cd "$DIR"
 # pnpm: the version the project pins, used straight from a private copy if
 # yours is missing or different (no global install, no corepack prompts).
 PNPM_VERSION="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
-if command -v pnpm >/dev/null && [ "$(pnpm --version 2>/dev/null)" = "$PNPM_VERSION" ]; then
-  PNPM=(pnpm)
-else
-  if [ ! -x "$TOOLS/pnpm/node_modules/.bin/pnpm" ] ||
-    [ "$("$TOOLS/pnpm/node_modules/.bin/pnpm" --version)" != "$PNPM_VERSION" ]; then
+if ! command -v pnpm >/dev/null || [ "$(pnpm --version 2>/dev/null)" != "$PNPM_VERSION" ]; then
+  PNPM_DIR="$TOOLS/pnpm-$PNPM_VERSION"
+  if [ ! -x "$PNPM_DIR/node_modules/.bin/pnpm" ]; then
     note "Getting pnpm $PNPM_VERSION…"
-    quietly npm install --silent --no-audit --no-fund --prefix "$TOOLS/pnpm" "pnpm@$PNPM_VERSION"
+    quietly npm install --silent --no-audit --no-fund --prefix "$PNPM_DIR" "pnpm@$PNPM_VERSION"
   fi
-  PNPM=("$TOOLS/pnpm/node_modules/.bin/pnpm")
+  # On PATH, because the project's own scripts call pnpm too.
+  export PATH="$PNPM_DIR/node_modules/.bin:$PATH"
 fi
+PNPM=(pnpm)
 note "${G}✓${X} pnpm $PNPM_VERSION"
 
 # ---------------------------------------------------------------------------
