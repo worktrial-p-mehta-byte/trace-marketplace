@@ -1,14 +1,17 @@
 import { eq } from "drizzle-orm";
 import { loadServerConfig } from "@tm/config/server";
 import {
+  Accounts,
   createCampaign,
   createDbEventBus,
   createLocalBlobStore,
   createSqliteSearchIndex,
   ensureAccount,
+  creditBalance,
   ensureWelcomeCredits,
   EventTypes,
   placeOrder,
+  postTransaction,
   quoteCart,
   rebuildSearchIndex,
   recordDemandSignal,
@@ -161,6 +164,21 @@ async function main() {
   // demo session 10 sells it the moment it is listed.
   const checkoutDeps = { config, bus, now };
   ensureWelcomeCredits(db, config, buyer.buyerOrgId!);
+  // The seed's own buying is funded here, whatever the welcome credits are
+  // configured to (they can be 0): three purchases and a $150 campaign.
+  const SEED_SPEND = 25_000;
+  const short = SEED_SPEND - creditBalance(db, buyer.buyerOrgId!);
+  if (short > 0) {
+    postTransaction(db, {
+      kind: "credit_grant",
+      refType: "seed",
+      refId: buyer.buyerOrgId!,
+      lines: [
+        { account: Accounts.creditIssuer, amountCents: -short },
+        { account: Accounts.buyer(buyer.buyerOrgId!), amountCents: short },
+      ],
+    });
+  }
   const pastBuys = db
     .select({ id: schema.listings.id, tier: schema.listings.tier, traits: schema.traceTraits.data })
     .from(schema.listings)
