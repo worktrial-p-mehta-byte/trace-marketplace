@@ -5,18 +5,14 @@
 #   docker run -p 3000:3000 -v tm-data:/app/data -e SEED_DEMO=1 trace-marketplace
 
 FROM node:22.12-bookworm-slim AS base
-ENV PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH \
-    COREPACK_HOME=/corepack \
-    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# pnpm comes from corepack, pinned to the version in package.json
-# ("packageManager"), and is baked into the image so the container never
-# downloads it at start-up.
+# pnpm at the version pinned in package.json ("packageManager"), installed
+# with npm and baked into the image, so the container never downloads it at
+# start-up. (Not corepack: the one bundled with this Node release fails
+# signature checks for recent pnpm releases.)
 COPY package.json /tmp/package.json
-RUN corepack enable \
-  && corepack install -g "$(node -p "require('/tmp/package.json').packageManager")" \
-  && chmod -R a+rX /corepack \
-  && rm /tmp/package.json
+RUN npm install -g "$(node -p "require('/tmp/package.json').packageManager")" \
+  && rm /tmp/package.json \
+  && pnpm --version
 WORKDIR /app
 
 # ---------------------------------------------------------------- build

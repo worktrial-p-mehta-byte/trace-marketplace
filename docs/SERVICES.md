@@ -12,7 +12,7 @@ pieces in production. Keep it current when adding a service.
 | ------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `pnpm install`           | npm registry for packages; GitHub releases for the prebuilt `better-sqlite3` binary | Needed once; without the prebuilt binary it compiles locally        |
 | `pnpm dev`, `pnpm build` | Next.js anonymous telemetry (on by default)                                         | `pnpm exec next telemetry disable`, or `NEXT_TELEMETRY_DISABLED=1`  |
-| `docker build`           | Docker Hub (`node:22.12-bookworm-slim`), npm registry, corepack fetches pnpm        | Needed to build the image; the running container needs none of them |
+| `docker build`           | Docker Hub (`node:22.12-bookworm-slim`), npm registry (packages and pnpm itself)    | Needed to build the image; the running container needs none of them |
 | Running the app          | **None.** Fonts are bundled from npm; no analytics, CDNs or external APIs           | —                                                                   |
 
 ## Dependencies

@@ -46,7 +46,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t trace-marketplace:ci .
+        run: |
+          set -o pipefail
+          if ! docker build --progress=plain -t trace-marketplace:ci . 2>&1 | tee build.log; then
+            # Surface the end of the log as an annotation (readable via the API).
+            echo "::error title=docker build failed::$(tail -n 40 build.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            exit 1
+          fi
 
       - name: Start container with the demo market
         run: docker run -d --name tm -p 3000:3000 -e SEED_DEMO=1 trace-marketplace:ci
