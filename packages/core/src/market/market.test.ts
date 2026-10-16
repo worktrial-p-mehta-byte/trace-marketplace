@@ -176,6 +176,9 @@ describe("floodSupply by domain", () => {
     await expect(
       floodSupply(db, deps, { domain: "medical", language: "Rust", pattern: "clean", count: 1 }),
     ).rejects.toThrow(FloodError);
+    await expect(
+      floodSupply(db, deps, { domain: "medical", pattern: "test_tampering", count: 1 }),
+    ).rejects.toThrow(/only happens in coding/);
   });
 });
 

@@ -104,8 +104,8 @@ export default async function Home() {
         <h2 className="text-2xl font-bold tracking-tight">What a trace is worth</h2>
         <p className="mt-3 max-w-2xl leading-relaxed text-ink-2">
           Price follows what buyers learn from a session: failures, especially ones the agent
-          recovered from, unusual domains, languages and frameworks, and what buyers are searching
-          for right now. Every price comes with its reasons.
+          recovered from, unusual languages and frameworks, and what buyers are searching for right
+          now. Every price comes with its reasons.
         </p>
         <div className="mt-8 grid gap-px overflow-hidden rounded-lg border border-rule bg-rule md:grid-cols-2">
           <div className="bg-surface p-6">

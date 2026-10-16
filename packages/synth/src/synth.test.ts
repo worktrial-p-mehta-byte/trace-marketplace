@@ -62,8 +62,13 @@ describe("synthetic generator", () => {
         { now: NOW, index: 1 },
       ),
     ).toThrow(/no tests to tamper with/);
-    const flood = generateFlood(3, 4, NOW, { domain: "medical", pattern: "test_tampering" });
-    for (const t of flood) expect(enrichTrace(t).traits.failureCategory).toBe("tool_error");
+    // A flood never quietly swaps in another pattern.
+    expect(() =>
+      generateFlood(3, 4, NOW, { domain: "medical", pattern: "test_tampering" }),
+    ).toThrow(/only happens in coding/);
+    // Python spans coding and science; a tampering flood keeps to the coding stacks.
+    for (const t of generateFlood(3, 6, NOW, { language: "Python", pattern: "test_tampering" }))
+      expect(enrichTrace(t).traits.failureCategory).toBe("test_tampering");
   });
 
   it("detects each stack's framework", () => {

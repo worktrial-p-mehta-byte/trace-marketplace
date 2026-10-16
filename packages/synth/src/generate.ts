@@ -295,8 +295,12 @@ export interface FloodWant {
   pattern: Pattern;
 }
 
-/** The stacks a flood draws from, narrowest match first. */
-export function floodStacks(want: Omit<FloodWant, "pattern">): Stack[] {
+/**
+ * The stacks a flood draws from, narrowest match first. Only stacks whose
+ * pack can produce the pattern are kept (test tampering needs code and
+ * tests), so a flood never adds sessions of a different kind than asked.
+ */
+export function floodStacks(want: Omit<FloodWant, "pattern"> & { pattern?: Pattern }): Stack[] {
   let pool = STACKS;
   if (want.domain) {
     const pack = PACK_BY_DOMAIN[want.domain];
@@ -316,6 +320,10 @@ export function floodStacks(want: Omit<FloodWant, "pattern">): Stack[] {
       `No stack for flood: ${[want.domain, want.language, want.framework].filter(Boolean).join(" ")}`,
     );
   }
+  if (want.pattern === "test_tampering") {
+    pool = pool.filter((s) => packOf(s).tampering);
+    if (!pool.length) throw new Error("Test tampering only happens in coding sessions.");
+  }
   return pool;
 }
 
@@ -325,12 +333,9 @@ export function generateFlood(seed: number, count: number, now: Date, want: Floo
   const pool = floodStacks(want);
   return Array.from({ length: count }, (_, i) => {
     const stack = rng.weighted(pool);
-    const pack = packOf(stack);
-    const pattern =
-      want.pattern === "test_tampering" && !pack.tampering ? "tool_error" : want.pattern;
     return generateTrace(
       rng,
-      { ...randomSpec(rng), stack, pattern, ageDays: rng.int(0, 7) },
+      { ...randomSpec(rng), stack, pattern: want.pattern, ageDays: rng.int(0, 7) },
       { now, index: seed * 1000 + i },
     );
   });
