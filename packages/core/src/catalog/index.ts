@@ -3,6 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { sellerShareFor, type MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import {
+  checkAuthenticity,
   comboKeyOf,
   DOMAIN_IDS,
   enrichTrace,
@@ -244,13 +245,20 @@ export async function shareTrace(
   let labels: Label[];
   let traits: TraceTraits;
   if (tier === 0) {
-    const e = enrichTrace(stored, { redactionDensity: placeholderDensity(stored) });
+    const e = enrichTrace(stored, { redactionDensity: placeholderDensity(stored), now });
     labels = e.labels;
     traits = e.traits;
   } else {
-    const e = enrichTrace(stored);
+    const e = enrichTrace(stored, { now });
     traits = mergeSignalsTraits(e.traits, input.clientTraits ?? {});
     labels = (input.clientLabels ?? e.labels).filter((l) => l.source === "heuristic");
+    // The structure is all the server has: check the browser's labels and
+    // traits against it.
+    traits.authenticity = checkAuthenticity(stored, {
+      now,
+      labels,
+      reported: input.clientTraits ?? {},
+    });
   }
   const comboKey = comboKeyOf(traits);
 

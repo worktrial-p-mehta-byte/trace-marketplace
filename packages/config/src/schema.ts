@@ -122,6 +122,18 @@ export const PricingConfig = z.object({
       /** The pull is at most this multiple of the unanchored price. */
       maxLift: positive,
     }),
+    authenticity: z.object({
+      /** Price factor by authenticity level (tiers 1–2). */
+      consistent: positive,
+      well_formed: positive,
+      flagged: positive,
+      /**
+       * Signals-only domains are the seller's claim: domain rarity and the
+       * niche factor are raised to this power (1 = trusted fully, 0 = ignored),
+       * more trusted when the upload passed the consistency checks.
+       */
+      claimedTrust: z.object({ consistent: share, other: share }),
+    }),
     band: z.object({
       /** Half-width of the price band as a share of price: base, plus extra for uncertainty. */
       base: share,

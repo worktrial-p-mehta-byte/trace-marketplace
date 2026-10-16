@@ -419,6 +419,32 @@ describe("domains", () => {
   });
 });
 
+describe("authenticity facet", () => {
+  it("filters by authenticity level, with listings from before the checks as unchecked", async () => {
+    const flagged = await add({
+      title: "Spliced log",
+      t: traits({
+        language: "Go",
+        authenticity: {
+          level: "flagged",
+          score: 0.8,
+          checks: [
+            { id: "tool_pairs", tier: 1, passed: false, detail: "1 tool result has no call" },
+          ],
+        },
+      }),
+      labels: [],
+    });
+    repriceAll(db, { config, reason: "test" });
+    const r = await browseCatalog(db, { config, search }, { authenticity: "flagged" });
+    expect(r.items.map((i) => i.listingId)).toEqual([flagged]);
+    expect(r.facets.authenticity).toEqual([
+      { value: "unchecked", count: 4 },
+      { value: "flagged", count: 1 },
+    ]);
+  });
+});
+
 describe("buyer interest as demand", () => {
   it("records specific buyer searches as demand and reprices", async () => {
     const before = (await browseCatalog(db, { config, search }, {})).items.find(

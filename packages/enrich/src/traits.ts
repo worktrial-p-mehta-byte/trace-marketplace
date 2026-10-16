@@ -1,5 +1,6 @@
 import type { Label, Trace } from "@tm/schema";
 import { detectFramework, detectLanguage } from "./detect";
+import { checkAuthenticity, type Authenticity } from "./authenticity";
 import { detectDomains, type DomainId, type DomainScore } from "./domains";
 import { analyzeTrace, type FailureCode } from "./labels";
 
@@ -42,6 +43,11 @@ export interface TraceTraits {
    * can discount a seller listing the same session many times over.
    */
   shapeKey: string;
+  /**
+   * Authenticity tiers 1–2 (authenticity.ts): well-formed and internally
+   * consistent. Absent on traits stored before the checks existed.
+   */
+  authenticity?: Authenticity;
   model: string;
   modelDeprecated: boolean;
   capturedAt: string;
@@ -54,6 +60,8 @@ export interface ExtractOptions {
   redactionDensity?: number;
   /** Model ids considered deprecated (lowers freshness in pricing). */
   deprecatedModels?: string[];
+  /** "Now" for the authenticity checks (a session can't end in the future). */
+  now?: Date;
 }
 
 export interface Enrichment {
@@ -161,5 +169,6 @@ export function enrichTrace(trace: Trace, opts: ExtractOptions = {}): Enrichment
       evidence: domain.evidence,
     },
   ];
+  traits.authenticity = checkAuthenticity(trace, { now: opts.now, labels });
   return { labels, traits, comboKey: comboKeyOf(traits) };
 }

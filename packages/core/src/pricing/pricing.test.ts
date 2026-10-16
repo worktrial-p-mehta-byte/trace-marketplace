@@ -220,7 +220,8 @@ describe("quoteListing", () => {
     const l = addListing(rust());
     const research = quoteListing(db, l, "research", { config, now: NOW })!;
     const training = quoteListing(db, l, "training", { config, now: NOW })!;
-    expect(training.priceCents).toBe(research.priceCents * 2);
+    // Each license is rounded to the cent on its own.
+    expect(Math.abs(training.priceCents - research.priceCents * 2)).toBeLessThanOrEqual(1);
     expect(priceHistory(db, l)).toHaveLength(0);
     expect(quoteListing(db, "missing", "research", { config, now: NOW })).toBeUndefined();
   });

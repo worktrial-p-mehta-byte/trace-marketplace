@@ -31,6 +31,8 @@ export {
   duplicatesFactor,
   bountyAnchor,
   bandWidth,
+  authenticityFactor,
+  trustClaim,
   type FailureEvidence,
 } from "./factors-v2";
 export {

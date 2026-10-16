@@ -244,10 +244,18 @@ export function generateTrace(
       : `I couldn't get the ${noun} to pass the check.`,
   });
 
-  const STEP_MS = 45_000;
-  events.forEach((e, i) => {
-    e.ts = new Date(end.getTime() - (events.length - 1 - i) * STEP_MS).toISOString();
-  });
+  // Uneven gaps, like a recorded session: tool results come back in seconds,
+  // people and the model take longer. A separate generator per session, so
+  // timing never shifts the content of the sessions generated after it.
+  const clock = createRng(opts.index * 7919 + 17);
+  const gaps = events.map((e) =>
+    e.type === "tool_result" ? clock.int(1, 20) * 1000 : clock.int(8, 95) * 1000,
+  );
+  let t = end.getTime();
+  for (let i = events.length - 1; i >= 0; i--) {
+    events[i]!.ts = new Date(t).toISOString();
+    t -= gaps[i]!;
+  }
 
   return {
     schemaVersion: TRACE_SCHEMA_VERSION,

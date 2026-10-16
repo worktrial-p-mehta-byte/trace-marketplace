@@ -45,6 +45,21 @@ export const SOURCE_NAMES: Record<string, string> = {
 
 export const TIER_NAMES: Record<string, string> = { "0": "Open source", "1": "Signals only" };
 
+/** Authenticity levels (tiers 1–2), as buyers see them. */
+export const AUTHENTICITY_NAMES: Record<string, string> = {
+  consistent: "Consistent",
+  well_formed: "Well-formed",
+  flagged: "Flagged",
+  unchecked: "Not checked",
+};
+
+export const AUTHENTICITY_DESCRIPTIONS: Record<string, string> = {
+  consistent: "Well-formed, and its timing, labels and reported traits agree with each other.",
+  well_formed: "Well-formed, but at least one consistency check did not pass.",
+  flagged: "The log is not well-formed: it may have been edited or put together by hand.",
+  unchecked: "Listed before authenticity checks existed.",
+};
+
 /** Names of the price factors in "why this price". */
 export const FACTOR_NAMES: Record<string, string> = {
   quality: "Quality",
@@ -55,6 +70,7 @@ export const FACTOR_NAMES: Record<string, string> = {
   demand: "Demand",
   bounty: "Bounty",
   duplicates: "Near-duplicates",
+  authenticity: "Authenticity",
   freshness: "Freshness",
 };
 

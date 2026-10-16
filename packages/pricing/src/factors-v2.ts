@@ -146,3 +146,25 @@ export function bandWidth(
       (ctx.claimed ? b.claimed : 0),
   );
 }
+
+/** A: authenticity tiers 1–2. Traits stored before the checks count as well-formed. */
+export function authenticityFactor(
+  t: Partial<Pick<TraceTraits, "authenticity">>,
+  v2: V2,
+): { value: number; level: "consistent" | "well_formed" | "flagged" } {
+  const level = t.authenticity?.level ?? "well_formed";
+  return { value: v2.authenticity[level], level };
+}
+
+/**
+ * How much to trust a domain-driven factor: fully for verified (open-source)
+ * domains; for a signals-only claim, the factor is raised to a power below
+ * one, pulling it towards 1.
+ */
+export function trustClaim(factor: number, claimed: boolean, consistent: boolean, v2: V2): number {
+  if (!claimed) return factor;
+  const p = consistent
+    ? v2.authenticity.claimedTrust.consistent
+    : v2.authenticity.claimedTrust.other;
+  return factor ** p;
+}

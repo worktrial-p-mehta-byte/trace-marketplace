@@ -10,6 +10,8 @@ import { SignalsView } from "@/components/share/SignalsView";
 import { Timeline } from "@/components/share/Timeline";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import {
+  AUTHENTICITY_DESCRIPTIONS,
+  AUTHENTICITY_NAMES,
   DOMAIN_DESCRIPTIONS,
   DOMAIN_NAMES,
   FAILURE_DESCRIPTIONS,
@@ -139,6 +141,44 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
                   ))}
                 </span>
               )}
+            </p>
+          </section>
+
+          <section aria-labelledby="authenticity">
+            <h2 id="authenticity" className="text-lg font-semibold">
+              Authenticity
+            </h2>
+            <p className="mt-2 text-ink-2">
+              <span
+                className={`rounded px-1.5 py-0.5 text-sm font-semibold ${
+                  t.authenticity?.level === "consistent"
+                    ? "bg-cobalt/10 text-cobalt"
+                    : t.authenticity?.level === "flagged"
+                      ? "bg-brick/10 text-brick"
+                      : "bg-ink/10 text-ink-2"
+                }`}
+              >
+                {AUTHENTICITY_NAMES[t.authenticity?.level ?? "unchecked"]}
+              </span>{" "}
+              <span className="text-sm">
+                {AUTHENTICITY_DESCRIPTIONS[t.authenticity?.level ?? "unchecked"]}
+              </span>
+            </p>
+            {t.authenticity && (
+              <ul className="mt-2 space-y-1 text-sm" aria-label="Authenticity checks">
+                {t.authenticity.checks.map((c) => (
+                  <li key={c.id} className={c.passed ? "text-ink-2" : "text-brick"}>
+                    <span aria-hidden>{c.passed ? "✓" : "✕"}</span>{" "}
+                    <span className="sr-only">{c.passed ? "Passed:" : "Failed:"}</span>
+                    {c.detail}
+                    <span className="text-ink-3"> (tier {c.tier})</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-ink-3">
+              Tier 1 checks the log is well-formed; tier 2 that its parts agree. Replaying the
+              session in a sandbox (tiers 3–4) comes later.
             </p>
           </section>
 

@@ -150,6 +150,24 @@ describe("shareTrace", () => {
     expect(db.select().from(schema.assets).all()[0]!.kind).toBe("signals");
   });
 
+  it("checks a signals-only upload's reported traits against its structure", async () => {
+    const full = scrubbed();
+    const e = enrichTrace(full);
+    const r = await shareTrace(db, deps, {
+      sellerId,
+      trace: toSignalsOnly(full),
+      tier: 1,
+      clientTraits: { ...e.traits, userCorrections: 999, preferencePairs: 999 },
+      clientLabels: e.labels,
+    });
+    const traits = db.select().from(schema.traceTraits).all()[0]!.data as {
+      authenticity: { level: string; checks: { id: string; passed: boolean }[] };
+    };
+    expect(traits.authenticity.checks.find((c) => c.id === "reported_traits")!.passed).toBe(false);
+    expect(traits.authenticity.level).not.toBe("consistent");
+    expect(r.priceCents).toBeGreaterThan(0);
+  });
+
   it("keeps a signals-only upload's domain as a bounded claim", async () => {
     const full = scrubbed();
     const e = enrichTrace(full);

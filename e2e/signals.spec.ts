@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { E2E_SESSIONS_DIR } from "../playwright.config";
 
 /**
- * The seller demo walkthrough (demo/seller-sessions/README.md): load all twelve
+ * The seller demo walkthrough (demo/seller-sessions/README.md): load all thirteen
  * demo sessions at once and share them as signals only, the default. Then the
  * owner's view of a signals-only listing, which must match the buyer's.
  */
@@ -33,9 +33,9 @@ async function signIn(page: Page, who: { email: string; password: string }) {
 test.describe.serial("signals-only sharing", () => {
   let listingUrl = "";
 
-  test("a seller shares all twelve demo sessions at once as signals only", async ({ page }) => {
+  test("a seller shares all thirteen demo sessions at once as signals only", async ({ page }) => {
     const sessions = sessionFiles();
-    expect(sessions).toHaveLength(12);
+    expect(sessions).toHaveLength(13);
     await page.goto("/signup");
     await page.getByLabel("Name", { exact: true }).fill(SELLER.name);
     await page.getByLabel("Email").fill(SELLER.email);
@@ -48,15 +48,15 @@ test.describe.serial("signals-only sharing", () => {
     await page.locator('input[accept=".jsonl"]').setInputFiles(sessions);
     // 04a and 04b are the same story in two languages: with the text stripped
     // they look identical, and one used to be refused as a duplicate.
-    const share = page.getByRole("button", { name: "Share 12 sessions" });
+    const share = page.getByRole("button", { name: "Share 13 sessions" });
     await expect(share).toBeEnabled();
     await share.click();
-    await expect(page.getByRole("heading", { name: "12 sessions shared" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "13 sessions shared" })).toBeVisible();
     await expect(page.getByText("Not shared")).toHaveCount(0);
 
     await page.goto("/me/traces");
-    await expect(page.getByText("On sale", { exact: true })).toHaveCount(12);
-    await expect(page.getByRole("cell", { name: "Signals only" })).toHaveCount(12);
+    await expect(page.getByText("On sale", { exact: true })).toHaveCount(13);
+    await expect(page.getByRole("cell", { name: "Signals only" })).toHaveCount(13);
   });
 
   test("the owner of a signals-only listing sees what buyers see", async ({ page }) => {
@@ -81,5 +81,16 @@ test.describe.serial("signals-only sharing", () => {
     await expect(page.getByRole("list", { name: "Session steps" })).toBeVisible();
     await expect(page.getByText("[signals only]")).toHaveCount(0);
     await expect(page.getByText("This is your trace")).toHaveCount(0);
+  });
+
+  test("the spliced demo session is flagged, and buyers can see why", async ({ page }) => {
+    await signIn(page, BUYER);
+    await page.goto("/traces?authenticity=flagged");
+    const result = page.locator("section[aria-label=Results] a[href^='/traces/']").first();
+    await expect(result).toContainText("Flagged");
+    await result.click();
+    const checks = page.getByRole("list", { name: "Authenticity checks" });
+    await expect(checks).toContainText("1 tool result has no call");
+    await expect(checks).toContainText("every step is the same length apart");
   });
 });

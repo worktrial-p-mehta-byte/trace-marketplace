@@ -9,6 +9,7 @@ import {
   type FacetValue,
 } from "@tm/core";
 import {
+  AUTHENTICITY_NAMES,
   DOMAIN_NAMES,
   FAILURE_NAMES,
   money,
@@ -34,6 +35,7 @@ type Params = Record<string, string | undefined>;
 const PAGE = 20;
 const FILTER_KEYS = [
   "domain",
+  "authenticity",
   "language",
   "framework",
   "failure",
@@ -47,6 +49,7 @@ function toQuery(p: Params): BrowseQuery {
   return {
     text: p.q || undefined,
     domain: p.domain,
+    authenticity: p.authenticity,
     language: p.language,
     framework: p.framework,
     failure: p.failure,
@@ -70,6 +73,7 @@ function href(p: Params, change: Params): string {
 
 function nameFor(key: string, value: string): string {
   if (key === "domain") return DOMAIN_NAMES[value] ?? value;
+  if (key === "authenticity") return AUTHENTICITY_NAMES[value] ?? value;
   if (key === "failure") return FAILURE_NAMES[value] ?? value;
   if (key === "outcome") return OUTCOME_NAMES[value] ?? value;
   if (key === "source") return SOURCE_NAMES[value] ?? value;
@@ -178,6 +182,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       <div className="mt-8 grid gap-8 lg:grid-cols-[14rem_1fr]">
         <aside className="space-y-4 lg:space-y-6" aria-label="Filters">
           <FacetGroup title="Domain" k="domain" values={r.facets.domain} p={p} max={16} />
+          <FacetGroup title="Authenticity" k="authenticity" values={r.facets.authenticity} p={p} />
           <FacetGroup title="What went wrong" k="failure" values={r.facets.failure} p={p} />
           <FacetGroup title="Outcome" k="outcome" values={r.facets.outcome} p={p} />
           <FacetGroup title="Language" k="language" values={r.facets.language} p={p} />
@@ -268,6 +273,22 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                             {FAILURE_NAMES[f] ?? f}
                           </span>
                         ))}
+                        {i.authenticity === "consistent" && (
+                          <span
+                            className="rounded bg-cobalt/10 px-1.5 py-0.5 text-xs font-semibold text-cobalt"
+                            title="Well-formed and internally consistent"
+                          >
+                            ✓ Consistent
+                          </span>
+                        )}
+                        {i.authenticity === "flagged" && (
+                          <span
+                            className="rounded border border-brick/50 px-1.5 py-0.5 text-xs font-semibold text-brick"
+                            title="The log is not well-formed"
+                          >
+                            Flagged
+                          </span>
+                        )}
                         {i.outcomes.includes("recovered") && (
                           <span className="rounded bg-moss/10 px-1.5 py-0.5 text-xs font-semibold text-moss">
                             Recovered

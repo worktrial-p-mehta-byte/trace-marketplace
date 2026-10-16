@@ -80,6 +80,8 @@ class Session {
       cwd: string;
       endsAgoMs: number;
       stepSeconds?: number;
+      /** Every step exactly the same length apart, as a fabricated log would be. */
+      uniformTiming?: boolean;
     },
   ) {}
 
@@ -131,6 +133,25 @@ class Session {
     return this;
   }
 
+  /** A tool result whose call is not in the log (a spliced or edited file). */
+  orphanResult(out: string, error = false): this {
+    this.rows.push({
+      ...this.base("user"),
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: `toolu_gone${this.toolN++}`,
+            content: out,
+            is_error: error,
+          },
+        ],
+      },
+    });
+    return this;
+  }
+
   interrupt(): this {
     this.rows.push({
       ...this.base("user"),
@@ -155,10 +176,17 @@ class Session {
   toJsonl(): string {
     const end = NOW - this.o.endsAgoMs;
     const step = (this.o.stepSeconds ?? 25) * 1000;
-    const lines = this.rows.map((r, i) => ({
-      ...r,
-      timestamp: new Date(end - (this.rows.length - 1 - i) * step).toISOString(),
-    }));
+    // Uneven gaps (between half and one and a half steps), like a recorded
+    // session; deterministic per session so estimates are repeatable.
+    let h = [...this.id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+    const jitter = () => (h = (h * 1103515245 + 12345) >>> 0) / 2 ** 32 + 0.5;
+    const at: number[] = [];
+    let t = end;
+    for (let i = this.rows.length - 1; i >= 0; i--) {
+      at[i] = t;
+      t -= this.o.uniformTiming ? step : Math.round(step * jitter());
+    }
+    const lines = this.rows.map((r, i) => ({ ...r, timestamp: new Date(at[i]!).toISOString() }));
     const title = { type: "ai-title", sessionId: this.id, aiTitle: this.o.title };
     return [title, ...lines].map((l) => JSON.stringify(l)).join("\n") + "\n";
   }
@@ -807,6 +835,44 @@ function dataQuerying() {
   return s;
 }
 
+/**
+ * 12 · Authenticity: a log that was put together rather than recorded. Every
+ * step is exactly 30 seconds apart and one tool result has no call. It is
+ * flagged, priced down, and shows why on its page.
+ */
+function suspect() {
+  const s = new Session(sid(), {
+    title: "Fix the CSV export encoding",
+    model: "claude-sonnet-4-5",
+    cwd: "/Users/sam/code/reports",
+    endsAgoMs: 5 * HOUR,
+    stepSeconds: 30,
+    uniformTiming: true,
+  });
+  s.user("The CSV export mangles accented names. Fix the encoding.");
+  s.say(
+    "Reading the exporter.",
+    read(
+      "src/export.py",
+      "import csv\n\ndef export(rows, path):\n    with open(path, 'w') as f:\n        csv.writer(f).writerows(rows)",
+    ),
+  );
+  s.orphanResult("UnicodeEncodeError: 'ascii' codec can't encode character '\\xe9'", true);
+  s.say(
+    "Opening the file as UTF-8 with a BOM so spreadsheets read it.",
+    edit("src/export.py", "open(path, 'w')", "open(path, 'w', encoding='utf-8-sig', newline='')"),
+  );
+  s.say("Running the tests.", bash("pytest -q tests/test_export.py", "......\n6 passed in 0.41s"));
+  for (let i = 0; i < 4; i++) {
+    s.say(
+      `Checking export case ${i + 1}.`,
+      read(`tests/fixtures/names_${i}.csv`, "José,Zoë,Ångström"),
+    );
+  }
+  s.say("Done: names with accents export correctly and the tests pass.");
+  return s;
+}
+
 const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
   {
     file: "01-everyday-baseline.jsonl",
@@ -870,6 +936,11 @@ const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
     shows: "Domain: a warehouse SQL investigation; labelled data and querying",
     build: dataQuerying,
   },
+  {
+    file: "12-authenticity-suspect.jsonl",
+    shows: "Authenticity: a spliced log with machine-regular timing; flagged",
+    build: suspect,
+  },
 ];
 
 // ---------------------------------------------------------------- write and price
@@ -913,6 +984,7 @@ function main() {
     return {
       file: file.replace(".jsonl", ""),
       domain: `${traits.domain} ${Math.round(traits.domainConfidence * 100)}%`,
+      authenticity: traits.authenticity?.level ?? "-",
       stack: [traits.language, traits.framework].filter(Boolean).join("/"),
       labels: labels
         .filter((l) => l.kind === "failure")

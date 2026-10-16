@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, loadConfig } from "@tm/config";
 import type { TraceTraits } from "@tm/enrich";
 import {
+  authenticityFactor,
+  trustClaim,
   bandWidth,
   bountyAnchor,
   cohortScore,
@@ -194,6 +196,47 @@ describe("V2 factors", () => {
   });
 });
 
+describe("authenticity in pricing", () => {
+  const auth = (level: "consistent" | "well_formed" | "flagged") => ({
+    level,
+    score: 1,
+    checks: [],
+  });
+
+  it("prices flagged sessions down and treats unchecked ones as well-formed", () => {
+    expect(authenticityFactor(traits({ authenticity: auth("consistent") }), v2).value).toBe(1);
+    expect(authenticityFactor(traits({ authenticity: auth("flagged") }), v2).value).toBe(
+      v2.authenticity.flagged,
+    );
+    expect(authenticityFactor(traits({ authenticity: undefined }), v2).level).toBe("well_formed");
+    const p = (a: ReturnType<typeof auth>) =>
+      price(traits({ authenticity: a }), market(ctx())).priceCents;
+    expect(p(auth("flagged"))).toBeLessThan(p(auth("well_formed")));
+    expect(p(auth("well_formed"))).toBeLessThan(p(auth("consistent")));
+  });
+
+  it("trusts a seller's domain claim less, and less still when the upload is inconsistent", () => {
+    expect(trustClaim(2, false, false, v2)).toBe(2);
+    expect(trustClaim(2, true, true, v2)).toBeLessThan(2);
+    expect(trustClaim(2, true, false, v2)).toBeLessThan(trustClaim(2, true, true, v2));
+    expect(trustClaim(0.7, true, false, v2)).toBeGreaterThan(0.7); // towards 1 from below too
+    const rare = ctx({
+      cohorts: {
+        domain: cohort(3, 60),
+        failure: cohort(2, 15),
+        stack: cohort(1, 4),
+        model: cohort(2, 30),
+      },
+    });
+    const verified = price(traits({ domain: "legal" }), market(rare)).priceCents;
+    const claimed = price(
+      traits({ domain: "legal" }),
+      market({ ...rare, claimed: true }),
+    ).priceCents;
+    expect(claimed).toBeLessThan(verified);
+  });
+});
+
 describe("demand V2", () => {
   const sig = (buyer: string, daysAgo = 0, weight = 1) => ({
     criteria: { domain: "medical" },
@@ -291,6 +334,7 @@ describe("trait-v2 policy", () => {
       "richness",
       "quality",
       "duplicates",
+      "authenticity",
       "freshness",
     ]);
     for (const d of q.drivers) expect(d.reason.length).toBeGreaterThan(3);

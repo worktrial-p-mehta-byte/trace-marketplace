@@ -93,7 +93,8 @@ warehouse) is in the design doc. What changes on the way there is in
 | M7   | Docs, deployment (Docker)                                                          | Done    |
 | M8   | Rehearse, polish, end-to-end test                                                  | Done    |
 | P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                        | Done    |
-| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel | This PR |
+| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel | Done    |
+| P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing | This PR |
 
 ## Session log adapters
 
@@ -203,6 +204,34 @@ checks, corrections, stacks) with a long-tail mix (coding 58%, data 12%,
 research 8%, support 6%, design 5%, medical 4%, …); a test checks the
 detector against the generator's ground truth (≥98% overall, ≥95% per
 domain on 1,500 sessions).
+
+### Authenticity (tiers 1–2)
+
+`checkAuthenticity(trace, { labels, reported })` (`packages/enrich/src/authenticity.ts`,
+browser-safe, structure only, so it works on signals-only traces):
+
+| Tier | Check             | Passes when                                                                                        |
+| ---- | ----------------- | -------------------------------------------------------------------------------------------------- |
+| 1    | `sequence`        | Events are numbered 0, 1, 2, … in order                                                            |
+| 1    | `timestamps`      | Every event has a timestamp, never going backwards                                                 |
+| 1    | `span`            | Events fall inside the session's start and end, which is in the past and under 14 days long        |
+| 1    | `tool_pairs`      | Every tool result follows its own call; no id is reused                                            |
+| 1    | `model_turns`     | The model replied or acted                                                                         |
+| 2    | `timing`          | Gaps between distinct timestamps vary (coefficient of variation > 2%); fabricated logs are regular |
+| 2    | `label_evidence`  | Each failure label's evidence points at the kind of event it describes                             |
+| 2    | `outcome_source`  | A test outcome comes from a test command in the session (open source)                              |
+| 2    | `reported_traits` | A signals-only upload's browser-reported traits fit the structure (corrections ≤ follow-ups, …)    |
+
+Level: **flagged** if any tier-1 check fails, **consistent** if every check
+passes, otherwise **well-formed**. Open-source uploads are checked on the
+server with the server's labels; signals-only uploads are checked on the
+server against the browser's labels and traits. The result is stored with the
+traits; it is a catalog facet and a badge, listed check by check on the trace
+page, and a V2 price factor (flagged 0.7×, well-formed 0.95×). It also sets
+how far a signals-only domain claim is trusted in pricing: domain rarity and
+the niche factor are raised to the power 0.75 when consistent, 0.5 otherwise.
+Tiers 3–4 (replaying a session in a sandbox; exporting it as a verifiable
+task) are post-demo.
 
 ## Accounts, onboarding and sharing (M4)
 
