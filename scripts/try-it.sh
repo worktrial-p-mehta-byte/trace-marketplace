@@ -19,6 +19,7 @@
 #   TM_NO_OPEN=1         don't open a browser
 #   TM_LOCAL_NODE=1      always use the private Node.js copy
 #   TM_NODE_MIRROR=url   where to download Node.js from (default nodejs.org)
+#   TM_NO_GIT=1          download the code as a tarball even if git is there
 set -euo pipefail
 
 REPO="worktrial-p-mehta-byte/trace-marketplace"
@@ -95,13 +96,17 @@ node_ok() {
 # A usable git: on a Mac without developer tools, "git" is a stub that
 # opens an installer dialog, so don't call it there.
 have_git() {
+  [ "${TM_NO_GIT:-0}" != 1 ] || return 1
   command -v git >/dev/null || return 1
   [ "$OS" != darwin ] || xcode-select -p >/dev/null 2>&1
 }
 # Private Node.js and pnpm copies live in a cache, not the project folder,
 # which may not exist yet (and must be empty for the download).
 TOOLS="${XDG_CACHE_HOME:-$HOME/.cache}/trace-marketplace"
-if [ "${TM_LOCAL_NODE:-0}" = 1 ] || ! node_ok; then
+# A system Node.js without npm (some distributions package them apart)
+# can't fetch pnpm, so it counts as missing unless the right pnpm is there.
+pnpm_or_npm() { command -v npm >/dev/null || command -v pnpm >/dev/null; }
+if [ "${TM_LOCAL_NODE:-0}" = 1 ] || ! node_ok || ! pnpm_or_npm; then
   NODE_HOME="$TOOLS/node-v$NODE_VERSION-$OS-$ARCH"
   if [ ! -x "$NODE_HOME/bin/node" ]; then
     note "Node.js 22.12+ not found; downloading a private copy (about 30 MB)…"
@@ -138,10 +143,21 @@ elif { [ ! -e "$DIR" ] || is_empty "$DIR"; } && have_git; then
   quietly git clone -q --depth 1 --branch "$REF" "https://github.com/$REPO.git" "$DIR"
   note "${G}✓${X} Downloaded to $DIR"
 else
-  # No git (a fresh Mac without developer tools): the same code as a tarball.
-  mkdir -p "$DIR"
-  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" | tar -xz -C "$DIR" --strip-components 1 ||
+  # No git (a fresh Mac without developer tools): the same code as a tarball,
+  # unpacked next to the target and moved into place only once complete, so
+  # an interrupted download never leaves a half-filled folder behind.
+  mkdir -p "$(dirname "$DIR")"
+  STAGE="$(mktemp -d "$(dirname "$DIR")/.trace-marketplace-download.XXXXXX")"
+  if ! curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" | tar -xz -C "$STAGE" --strip-components 1; then
+    rm -rf "$STAGE"
     fail "couldn't download the code." "Check your internet connection and try again."
+  fi
+  if [ -d "$DIR" ]; then
+    # This project already (a tarball install) or an empty folder: refresh it.
+    cp -R "$STAGE"/. "$DIR"/ && rm -rf "$STAGE"
+  else
+    mv "$STAGE" "$DIR"
+  fi
   note "${G}✓${X} Downloaded to $DIR"
 fi
 cd "$DIR"
