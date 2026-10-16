@@ -82,7 +82,11 @@ export default async function Home() {
       order: ["software_engineering"],
       limit: 1,
       where: (t, tier) =>
-        tier === 0 && t.failureCategory === "test_tampering" && t.recovered && t.testsPassedAtEnd,
+        t.domain === "software_engineering" &&
+        tier === 0 &&
+        t.failureCategory === "test_tampering" &&
+        t.recovered &&
+        t.testsPassedAtEnd,
     },
   );
   return (

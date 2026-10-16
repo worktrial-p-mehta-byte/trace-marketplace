@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { creditBalance, ensureWelcomeCredits, expireCampaigns, listCampaigns } from "@tm/core";
+import {
+  creditBalance,
+  ensureWelcomeCredits,
+  expireCampaigns,
+  listCampaigns,
+  hasCurrentTerms,
+} from "@tm/core";
 import { DOMAIN_NAMES, FAILURE_NAMES, money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
 import { cancelCampaignAction, createCampaignAction } from "./actions";
@@ -31,6 +37,8 @@ export default async function CampaignsPage({
       </main>
     );
   }
+  // Buying needs the current terms; accounts from before them accept first.
+  if (!hasCurrentTerms(user)) redirect("/onboarding");
   ensureWelcomeCredits(getDb(), getConfig(), user.buyerOrgId);
   expireCampaigns(getDb(), {});
   const campaigns = listCampaigns(getDb(), user.buyerOrgId);

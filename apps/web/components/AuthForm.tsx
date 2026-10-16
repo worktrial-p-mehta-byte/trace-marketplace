@@ -47,14 +47,10 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
     }
     // New accounts and anyone who hasn't accepted the terms see the terms
     // for their role; returning sellers go to sharing, buyers to the market.
-    const user = data.user as { termsAcceptedVersion: string | null; role: string };
+    const user = data.user as { role: string };
     const sells = user.role === "seller" || user.role === "both" || user.role === "admin";
     router.push(
-      mode === "signup" || !user.termsAcceptedVersion
-        ? "/onboarding"
-        : sells
-          ? "/share"
-          : "/market",
+      mode === "signup" || !data.termsCurrent ? "/onboarding" : sells ? "/share" : "/market",
     );
     router.refresh();
   }

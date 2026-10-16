@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ensureWelcomeCredits, getBuyerPreferences, viewCart } from "@tm/core";
+import { ensureWelcomeCredits, getBuyerPreferences, viewCart, hasCurrentTerms } from "@tm/core";
 import type { LicenseScope } from "@tm/schema";
 import { money } from "@/lib/labels";
 import { getBus, getConfig, getCurrentUser, getDb, refreshPrices } from "@/lib/server";
@@ -33,7 +33,9 @@ export default async function CartPage({
         </p>
       </main>
     );
-  }
+  } // Buying needs the current terms; accounts from before them accept first.
+  if (!hasCurrentTerms(user)) redirect("/onboarding");
+
   const config = getConfig();
   ensureWelcomeCredits(getDb(), config, user.buyerOrgId);
   refreshPrices();

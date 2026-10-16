@@ -25,7 +25,7 @@ function Terms({ rows }: { rows: Row[] }) {
   );
 }
 
-function sellerRows(share: number): Row[] {
+function sellerRows(earnings: string): Row[] {
   return [
     [
       "Stays on your machine",
@@ -49,7 +49,7 @@ function sellerRows(share: number): Row[] {
         </p>
       </>,
     ],
-    ["Your earnings", `You receive ${share}% of every sale of your sessions.`],
+    ["Your earnings", earnings],
     [
       "Withdrawing",
       "You can withdraw any session from sale at any time. Copies already sold stay with their buyers.",
@@ -57,7 +57,14 @@ function sellerRows(share: number): Row[] {
   ];
 }
 
-function buyerRows(welcome: number, share: number, lockMinutes: number): Row[] {
+/** How sellers are paid, in words: one share, or a usual share with exceptions. */
+function shareWords(share: number, byDomain: Record<string, number>): string {
+  return Object.keys(byDomain).length
+    ? `Sellers usually receive ${share}% of a sale; some domains pay sellers a different share.`
+    : `Sellers receive ${share}% of every sale.`;
+}
+
+function buyerRows(welcome: number, sellerTerms: string, lockMinutes: number): Row[] {
   return [
     [
       "What you get",
@@ -80,7 +87,7 @@ function buyerRows(welcome: number, share: number, lockMinutes: number): Row[] {
     ],
     [
       "Paying",
-      `Your team pays in credits and starts with ${money(welcome)}. Prices move with supply and demand; a quote holds its price for ${lockMinutes} minutes. Sellers receive ${share}% of every sale.`,
+      `Your team pays in credits and starts with ${money(welcome)}. Prices move with supply and demand; a quote holds its price for ${lockMinutes} minutes. ${sellerTerms}`,
     ],
     [
       "Checks are not guarantees",
@@ -122,11 +129,15 @@ export default async function OnboardingPage() {
       ? "I agree to these terms. I will use what I buy only within its licence, won't redistribute it, and won't try to identify the people in it."
       : "I agree to these terms. I will only share sessions I have the right to share, and I understand that sold copies can't be recalled.";
 
+  const byDomain = config.revenue.sellerShareByDomain;
   const buyer = buyerRows(
     config.checkout.welcomeCreditCents,
-    share,
+    shareWords(share, byDomain),
     config.pricing.quoteLockMinutes,
   );
+  const earnings = Object.keys(byDomain).length
+    ? `You usually receive ${share}% of every sale of your sessions; some domains pay a different share, shown with each estimate.`
+    : `You receive ${share}% of every sale of your sessions.`;
   return (
     <main className="mx-auto max-w-2xl px-6 py-14">
       <p className="text-sm font-semibold text-ink-3">Welcome, {user.displayName}</p>
@@ -136,13 +147,13 @@ export default async function OnboardingPage() {
       {both ? (
         <>
           <h2 className="mt-8 text-lg font-bold">When you share</h2>
-          <Terms rows={sellerRows(share)} />
+          <Terms rows={sellerRows(earnings)} />
           <h2 className="mt-8 text-lg font-bold">When you buy</h2>
           <Terms rows={buyer} />
         </>
       ) : (
         <div className="mt-4">
-          <Terms rows={buys ? buyer : sellerRows(share)} />
+          <Terms rows={buys ? buyer : sellerRows(earnings)} />
         </div>
       )}
 

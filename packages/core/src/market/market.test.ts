@@ -20,6 +20,7 @@ import {
   SIMULATOR_SELLER_EMAIL,
   watchList,
   type CatalogDeps,
+  TERMS_VERSION,
 } from "../index";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
@@ -73,7 +74,7 @@ describe("internal ingest", () => {
     const a = await ensureAccount(db, "seed@example.com", "seller", "Seed seller");
     const b = await ensureAccount(db, "seed@example.com", "seller", "Seed seller");
     expect(a.id).toBe(b.id);
-    expect(a.termsAcceptedVersion).toBe("2026-10-v0");
+    expect(a.termsAcceptedVersion).toBe(TERMS_VERSION);
   });
 });
 

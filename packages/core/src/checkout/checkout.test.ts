@@ -83,6 +83,13 @@ describe("credits", () => {
     expect(ledgerSums().every((s) => s === 0)).toBe(true);
   });
 
+  it("needs the current terms before quoting or paying", () => {
+    const old = { ...buyer, termsAcceptedVersion: "2026-10-v0" };
+    expect(() => quoteCart(db, deps, old, "research", [listings[0]!])).toThrow(/Accept the terms/);
+    const q = quoteCart(db, deps, buyer, "research", [listings[0]!]);
+    expect(() => placeOrder(db, deps, old, q.id)).toThrow(/Accept the terms/);
+  });
+
   it("refuses sellers", () => {
     expect(() => addDemoCredits(db, deps.config, seller)).toThrow(CheckoutError);
     expect(() => addToCart(db, seller, listings[0]!)).toThrow(CheckoutError);

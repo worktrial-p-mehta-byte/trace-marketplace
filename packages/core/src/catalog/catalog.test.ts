@@ -29,6 +29,7 @@ import {
   shareTrace,
   ShareError,
   type CatalogDeps,
+  TERMS_VERSION,
 } from "../index";
 
 const FIXTURE = fileURLToPath(
@@ -113,7 +114,7 @@ describe("shareTrace", () => {
     expect(r.labels).toContain("test_tampering");
     expect(deps.blobs.keys()).toEqual([`traces/${r.traceId}.json`]);
     const consent = db.select().from(schema.consents).all()[0]!;
-    expect(consent).toMatchObject({ tier: 0, termsVersion: "2026-10-v0", revokedAt: null });
+    expect(consent).toMatchObject({ tier: 0, termsVersion: TERMS_VERSION, revokedAt: null });
     expect(db.select().from(schema.listings).all()[0]!.status).toBe("active");
   });
 
