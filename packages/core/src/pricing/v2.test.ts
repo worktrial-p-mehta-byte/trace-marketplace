@@ -87,6 +87,41 @@ describe("Pricing V2 in the market", () => {
     expect(Math.abs(listingOf(r1.traceId).currentPriceCents! / before - 1)).toBeLessThan(0.1);
   });
 
+  it("estimates a batch of same-shape sessions at the price they list at together", async () => {
+    const [a] = generateFlood(78, 1, NOW, { domain: "legal", pattern: "tool_error" });
+    const twin = {
+      ...a!,
+      id: "twin2",
+      events: a!.events.map((e) =>
+        e.type === "user_message" ? { ...e, text: `${e.text} (b)` } : e,
+      ),
+    };
+    const { traits } = enrichTrace(a!);
+    const alone = estimatePrice(db, deps, traits, 0, { sellerId });
+    const batch = estimatePrice(db, deps, traits, 0, { sellerId, pendingSameShape: 1 });
+    expect(batch.priceCents).toBeLessThan(alone.priceCents);
+    const r = await shareTrace(db, deps, { sellerId, trace: a!, tier: 0 }, SYNTH);
+    await shareTrace(db, deps, { sellerId, trace: twin, tier: 0 }, SYNTH);
+    expect(Math.abs(listingOf(r.traceId).currentPriceCents! / batch.priceCents - 1)).toBeLessThan(
+      0.05,
+    );
+  });
+
+  it("judges the model's scarcity within the domain, not across the market", () => {
+    const m = buildMarket(db, deps);
+    const row = m.active.find((r) => r.traits.domain === "software_engineering")!;
+    const ctx = m.contextFor(row.traits, { tier: 0 })!;
+    // The typical model cohort in coding is far bigger than one in a small domain.
+    const small = m.active.find(
+      (r) => r.traits.domain === "education" || r.traits.domain === "legal",
+    );
+    if (small) {
+      const sctx = m.contextFor(small.traits, { tier: 0 })!;
+      expect(sctx.cohorts.model.typical).toBeLessThan(ctx.cohorts.model.typical);
+    }
+    expect(ctx.cohorts.model.typical).toBeLessThanOrEqual(ctx.cohorts.domain.count + 1);
+  });
+
   it("anchors matching prices to an open bounty's offer", async () => {
     const buyer = (await ensureAccount(db, "lab@example.com", "buyer", "Lab")).buyerOrgId!;
     const [t] = generateFlood(5, 1, NOW, { domain: "finance", pattern: "tool_error" });

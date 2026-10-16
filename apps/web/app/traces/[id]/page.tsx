@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
+import { sellerShareFor } from "@tm/config";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
 import { PriceChart } from "@/components/PriceChart";
@@ -252,7 +253,8 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
                 <p className="mt-1 text-ink-2">
                   You earn{" "}
                   {money(
-                    splitSale(d.quotes.research.priceCents, config.revenue.sellerShare).seller,
+                    splitSale(d.quotes.research.priceCents, sellerShareFor(config, d.traits.domain))
+                      .seller,
                   )}{" "}
                   per research-license sale.
                 </p>

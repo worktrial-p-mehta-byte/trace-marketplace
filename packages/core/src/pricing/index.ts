@@ -94,12 +94,17 @@ export function cohortKeys(t: TraceTraits): Record<Level, string> {
   };
 }
 
-/** Distinct content per key, with Σc and Σc² for the typical size Σc²/Σc. */
+/**
+ * Distinct content per key, with Σc and Σc² for the typical size Σc²/Σc.
+ * Sums are kept per group too, so a level can be compared within its
+ * domain (the model level) rather than across the whole market.
+ */
 class LevelCounts {
   private seen = new Map<string, Set<string>>();
+  private groups = new Map<string, { sum: number; sumSq: number }>();
   sum = 0;
   sumSq = 0;
-  add(key: string, hash: string) {
+  add(key: string, hash: string, group = "") {
     const set = this.seen.get(key) ?? new Set<string>();
     if (set.has(hash)) return;
     const c = set.size;
@@ -107,16 +112,24 @@ class LevelCounts {
     this.seen.set(key, set);
     this.sum += 1;
     this.sumSq += 2 * c + 1; // (c+1)² − c²
+    const g = this.groups.get(group) ?? { sum: 0, sumSq: 0 };
+    g.sum += 1;
+    g.sumSq += 2 * c + 1;
+    this.groups.set(group, g);
   }
   count(key: string) {
     return this.seen.get(key)?.size ?? 0;
   }
-  /** This key's cohort; `extra` adds one not-yet-listed trace to it first. */
-  cohort(key: string, extra = 0): Cohort {
+  /**
+   * This key's cohort; `extra` adds one not-yet-listed trace to it first.
+   * With `group`, the typical size is taken within that group only.
+   */
+  cohort(key: string, extra = 0, group?: string): Cohort {
     const c = this.count(key);
     const n = c + extra;
-    const sum = this.sum + extra;
-    const sumSq = this.sumSq + (n * n - c * c);
+    const base = group === undefined ? this : (this.groups.get(group) ?? { sum: 0, sumSq: 0 });
+    const sum = base.sum + extra;
+    const sumSq = base.sumSq + (n * n - c * c);
     return { count: Math.max(1, n), typical: sum > 0 ? sumSq / sum : 1 };
   }
 }
@@ -192,7 +205,7 @@ export function buildMarket(db: Db, deps: PricingDeps) {
     for (const r of active) {
       if (!c.rarity.includeSynthetic && r.source === "synthetic") continue;
       const keys = cohortKeys(r.traits);
-      for (const l of LEVELS) levels[l].add(keys[l], r.contentHash);
+      for (const l of LEVELS) levels[l].add(keys[l], r.contentHash, keys.domain);
     }
     for (const r of active) {
       if (!r.traits.shapeKey) continue;
@@ -229,15 +242,19 @@ export function buildMarket(db: Db, deps: PricingDeps) {
   /** V2 market context for a trace; `listed` false prices it as if it were about to be. */
   function contextV2(
     traits: TraceTraits,
-    o: { sellerId?: string; tier: Tier; listed: boolean },
+    o: { sellerId?: string; tier: Tier; listed: boolean; pendingSameShape?: number },
   ): MarketContextV2 {
     const keys = cohortKeys(traits);
-    const extra = o.listed ? 0 : 1;
-    const cohort = (l: Level) => levels[l].cohort(keys[l], extra);
+    // An estimate counts the trace itself and its same-shape batch siblings,
+    // which will join the same cohorts once shared.
+    const extra = o.listed ? 0 : 1 + Math.max(0, o.pendingSameShape ?? 0);
+    // The model's scarcity is judged against other models in the same domain.
+    const cohort = (l: Level) =>
+      levels[l].cohort(keys[l], extra, l === "model" ? keys.domain : undefined);
     const shapeCount =
-      o.sellerId && traits.shapeKey
+      (o.sellerId && traits.shapeKey
         ? (shapes.get(`${o.sellerId}|${traits.shapeKey}`)?.size ?? 0)
-        : 0;
+        : 0) + Math.max(0, o.pendingSameShape ?? 0);
     const anchor = bounties
       .filter((b) => matchesCriteria(traits, b.criteria))
       .reduce((m, b) => Math.max(m, b.perTraceCents), 0);
@@ -274,7 +291,15 @@ export function buildMarket(db: Db, deps: PricingDeps) {
       return demandPressure(traits, signals, supplyFor, now, c.demand.windowDays);
     },
     /** V2 context for traits not yet listed (estimates). */
-    contextFor(traits: TraceTraits, o: { sellerId?: string; tier: Tier }) {
+    contextFor(
+      traits: TraceTraits,
+      o: {
+        sellerId?: string;
+        tier: Tier;
+        /** Other sessions of the same shape being shared in the same batch. */
+        pendingSameShape?: number;
+      },
+    ) {
       return v2 ? contextV2(traits, { ...o, listed: false }) : undefined;
     },
     quote(row: ActiveListing, license: LicenseScope = "research"): PriceQuote {

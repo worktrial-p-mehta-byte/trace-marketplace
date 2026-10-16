@@ -506,7 +506,11 @@ export function estimatePrice(
   deps: { config: MarketplaceConfig; now?: Date },
   traits: TraceTraits,
   tier: Tier,
-  opts: { sellerId?: string } = {},
+  opts: {
+    sellerId?: string;
+    /** Other sessions of the same shape in the same upload batch (near-duplicates to be). */
+    pendingSameShape?: number;
+  } = {},
 ): PriceQuote {
   const market = buildMarket(db, deps);
   const comboKey = comboKeyOf(traits);
@@ -527,7 +531,11 @@ export function estimatePrice(
       medianComboCount,
       demandPressure: market.pressureFor(traits),
       now: market.now,
-      v2: market.contextFor(traits, { sellerId: opts.sellerId, tier }),
+      v2: market.contextFor(traits, {
+        sellerId: opts.sellerId,
+        tier,
+        pendingSameShape: opts.pendingSameShape,
+      }),
     },
   });
 }
