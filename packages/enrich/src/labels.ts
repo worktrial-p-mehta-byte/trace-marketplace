@@ -47,7 +47,9 @@ const TEST_NONE =
 
 const TEST_FILE =
   /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|[._-](?:test|spec)\.[a-z]+$|_test\.(?:go|py)$|^test_.*\.py$/i;
-const ASSERTION = /\b(?:expect|assert\w*|should|t\.Error|t\.Fatal|assert_eq!?)\b/;
+// Covers Jest/Vitest, pytest/unittest, Go, Rust, and should-style matchers
+// (Hspec `shouldBe`, RSpec `should_not`, Chai `.should`).
+const ASSERTION = /\b(?:expect|assert\w*|should\w*|t\.Error|t\.Fatal|assert_eq!?)\b/;
 
 export function isCorrection(text: string): boolean {
   return CORRECTION_START.test(text) || CORRECTION_ANYWHERE.test(text);

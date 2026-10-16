@@ -30,6 +30,10 @@ The whole script also runs as an automated test (`pnpm build && pnpm e2e`,
 [`e2e/demo.spec.ts`](../e2e/demo.spec.ts)), in CI on every pull request, so
 the steps below stay true.
 
+To show the pricing engine in depth, use the ten seller sessions from
+`pnpm demo:sessions`; [demo/seller-sessions](../demo/seller-sessions/README.md)
+has a five-minute pricing walkthrough.
+
 ## Script
 
 | Time | Step                  | What to do                                                                                                                                                                                           | What to say                                                                                                                                                     |

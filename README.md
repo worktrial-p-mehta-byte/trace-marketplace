@@ -104,21 +104,22 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Commands
 
-| Command                          | What it does                                                        |
-| -------------------------------- | ------------------------------------------------------------------- |
-| `pnpm bootstrap`                 | Install dependencies, apply migrations, build the search index      |
-| `pnpm dev`                       | Run the website in development mode                                 |
-| `pnpm build` / `pnpm start`      | Production build / serve it                                         |
-| `pnpm seed`                      | Fill an empty database with a synthetic market and price history    |
-| `pnpm demo:reset`                | Delete the database, re-create it and seed it                       |
-| `pnpm db:reset`                  | Delete and re-create the database, empty                            |
-| `pnpm db:migrate`                | Apply migrations                                                    |
-| `pnpm db:generate`               | Generate a migration after changing `packages/db/src/schema.ts`     |
-| `pnpm search:rebuild`            | Rebuild the full-text search index from the database                |
-| `pnpm reprice`                   | Reprice every listing now (prices also refresh on their own hourly) |
-| `pnpm inspect:sessions <folder>` | Parse session files locally and print their structure (no content)  |
-| `pnpm check`                     | Typecheck, lint, unit tests and secret scan, as CI runs them        |
-| `pnpm build && pnpm e2e`         | The demo flow end to end in a browser, on its own database          |
+| Command                          | What it does                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm bootstrap`                 | Install dependencies, apply migrations, build the search index                              |
+| `pnpm dev`                       | Run the website in development mode                                                         |
+| `pnpm build` / `pnpm start`      | Production build / serve it                                                                 |
+| `pnpm seed`                      | Fill an empty database with a synthetic market and price history                            |
+| `pnpm demo:reset`                | Delete the database, re-create it and seed it                                               |
+| `pnpm demo:sessions`             | Write ten seller sessions that each show one pricing dimension (see `demo/seller-sessions`) |
+| `pnpm db:reset`                  | Delete and re-create the database, empty                                                    |
+| `pnpm db:migrate`                | Apply migrations                                                                            |
+| `pnpm db:generate`               | Generate a migration after changing `packages/db/src/schema.ts`                             |
+| `pnpm search:rebuild`            | Rebuild the full-text search index from the database                                        |
+| `pnpm reprice`                   | Reprice every listing now (prices also refresh on their own hourly)                         |
+| `pnpm inspect:sessions <folder>` | Parse session files locally and print their structure (no content)                          |
+| `pnpm check`                     | Typecheck, lint, unit tests and secret scan, as CI runs them                                |
+| `pnpm build && pnpm e2e`         | The demo flow end to end in a browser, on its own database                                  |
 
 ## Repository layout
 

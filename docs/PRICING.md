@@ -65,3 +65,10 @@ Known limits are tracked in [LIMITATIONS.md](LIMITATIONS.md).
 All of these are configurable: see [config/README.md](../config/README.md) and
 `packages/config/src/defaults.ts`. The weights are starting guesses, not market
 data; a learned model replaces them once there are real sales.
+
+## Superseded models
+
+Freshness is lowered a further 0.7× for traces made with a model on
+`pricing.freshness.deprecatedModels` (by default the Claude 3 family). The
+list is checked when pricing, not when a trace is shared, so adding a model
+reprices traces that are already listed.

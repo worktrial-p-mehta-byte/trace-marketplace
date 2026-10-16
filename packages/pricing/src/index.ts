@@ -14,6 +14,7 @@ export {
   rarityFactor,
   demandFactor,
   freshnessFactor,
+  isModelDeprecated,
   licenseFactor,
 } from "./factors";
 export { traitPolicyV1 } from "./policy";

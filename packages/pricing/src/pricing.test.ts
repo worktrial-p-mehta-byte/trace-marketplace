@@ -236,6 +236,18 @@ describe("individual factors", () => {
       5,
     );
   });
+
+  it("treats models on the configured deprecated list as superseded, at pricing time", () => {
+    const old = {
+      capturedAt: daysAgo(0),
+      modelDeprecated: false,
+      model: "claude-3-5-sonnet-20241022",
+    };
+    expect(freshnessFactor(old, NOW, c)).toBeCloseTo(0.7, 5);
+    expect(freshnessFactor({ ...old, model: "claude-sonnet-4-5" }, NOW, c)).toBeCloseTo(1, 5);
+    const cfg = { ...c, freshness: { ...c.freshness, deprecatedModels: ["claude-sonnet-4-5"] } };
+    expect(freshnessFactor({ ...old, model: "claude-sonnet-4-5" }, NOW, cfg)).toBeCloseTo(0.7, 5);
+  });
 });
 
 describe("demand matching", () => {

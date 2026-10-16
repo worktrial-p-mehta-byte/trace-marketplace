@@ -36,15 +36,16 @@ where the limit lives and what would lift it.
 
 ## Pricing — M3
 
-| Limitation                                                                         | Impact                                                                  | Lifted by                                             |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
-| All weights are hand-set guesses                                                   | Prices are illustrative, not market-tested                              | A learned model on real sales, behind `PricingPolicy` |
-| Small catalogs make rarity noisy                                                   | One upload can swing rarity a lot                                       | Minimum catalog size; smoothing                       |
-| Synthetic traces count toward rarity in the demo (`rarity.includeSynthetic: true`) | Demo prices react to synthetic supply                                   | Set `false` in production                             |
-| No per-seller cap on rarity yet; dedup is by exact content hash                    | One seller can still create volume with near-duplicates                 | Near-duplicate detection; per-seller caps             |
-| Demand-swing limit only applies against a snapshot older than 24 hours             | Within a demo session, demand can move freely (by design, for the demo) | Works as intended once prices have history            |
-| Whole catalog is repriced on any relevant event                                    | Fine for thousands of listings, slow beyond                             | Reprice only affected combinations                    |
-| `no_model_output` traces still get a price                                         | Low-value traces can be listed                                          | Eligibility check at listing time (M4)                |
+| Limitation                                                                                                        | Impact                                                                  | Lifted by                                                                              |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| All weights are hand-set guesses                                                                                  | Prices are illustrative, not market-tested                              | A learned model on real sales, behind `PricingPolicy`                                  |
+| Small catalogs make rarity noisy                                                                                  | One upload can swing rarity a lot                                       | Minimum catalog size; smoothing                                                        |
+| Synthetic traces count toward rarity in the demo (`rarity.includeSynthetic: true`)                                | Demo prices react to synthetic supply                                   | Set `false` in production                                                              |
+| No per-seller cap on rarity yet; dedup is by exact content hash                                                   | One seller can still create volume with near-duplicates                 | Near-duplicate detection; per-seller caps                                              |
+| Demand-swing limit only applies against a snapshot older than 24 hours                                            | Within a demo session, demand can move freely (by design, for the demo) | Works as intended once prices have history                                             |
+| Whole catalog is repriced on any relevant event                                                                   | Fine for thousands of listings, slow beyond                             | Reprice only affected combinations                                                     |
+| `no_model_output` traces still get a price                                                                        | Low-value traces can be listed                                          | Eligibility check at listing time (M4)                                                 |
+| In a market where most combinations appear once (like the seeded demo), rarity can lower a price but not raise it | The 3× rarity bonus is unreachable; rare traces score 1.0×              | Measure rarity at a coarser level (e.g. without the model), or against category totals |
 
 ## Accounts, onboarding and sharing — M4
 
