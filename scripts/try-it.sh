@@ -59,7 +59,10 @@ HERE=""
 if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
   HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
-if [ -n "$HERE" ] && grep -q '"name": "trace-marketplace"' "$HERE/package.json" 2>/dev/null; then
+# This project's folder: its package.json names it.
+is_ours() { grep -q '"name": "trace-marketplace"' "$1/package.json" 2>/dev/null; }
+is_empty() { [ -d "$1" ] && [ -z "$(ls -A "$1")" ]; }
+if [ -n "$HERE" ] && is_ours "$HERE"; then
   DIR="$HERE"
   IN_CHECKOUT=1
 else
@@ -114,6 +117,10 @@ note "${G}✓${X} Node.js $(node --version)"
 step "Getting the code"
 if [ "$IN_CHECKOUT" = 1 ]; then
   note "Using this checkout: $DIR"
+elif [ -e "$DIR" ] && ! is_ours "$DIR" && ! is_empty "$DIR"; then
+  # Anything already there must be this project: never update, overwrite or
+  # pull into someone else's folder or repository.
+  fail "$DIR already exists and isn't this project." "Move it away, or choose another folder: TM_DIR=~/tm-demo, before bash."
 elif [ -d "$DIR/.git" ] && have_git; then
   # Update only by fast-forward: local changes or commits are never touched.
   branch="$(git -C "$DIR" symbolic-ref --short -q HEAD || true)"
@@ -127,9 +134,7 @@ elif [ -d "$DIR/.git" ] && have_git; then
   else
     note "Couldn't update $DIR by fast-forward (offline, or it has its own commits); using it as it is."
   fi
-elif [ -e "$DIR" ] && [ ! -f "$DIR/package.json" ]; then
-  fail "$DIR already exists and isn't this project." "Move it away, or choose another folder: TM_DIR=~/tm-demo, before bash."
-elif [ ! -e "$DIR" ] && have_git; then
+elif { [ ! -e "$DIR" ] || is_empty "$DIR"; } && have_git; then
   quietly git clone -q --depth 1 --branch "$REF" "https://github.com/$REPO.git" "$DIR"
   note "${G}✓${X} Downloaded to $DIR"
 else
