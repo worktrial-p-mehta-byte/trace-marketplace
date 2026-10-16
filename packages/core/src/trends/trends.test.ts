@@ -15,6 +15,7 @@ import {
   markAllRead,
   recordBuyerInterest,
   repriceAll,
+  sellerSuggestions,
   setInterest,
   shareTrace,
   unreadCount,
@@ -177,5 +178,83 @@ describe("following domains", () => {
     expect(unreadCount(db, seller.id)).toBeGreaterThan(0);
     markAllRead(db, seller.id);
     expect(unreadCount(db, seller.id)).toBe(0);
+  });
+});
+
+describe("sellerSuggestions", () => {
+  const ask = (criteria: Record<string, string>, times = 4) => {
+    for (let i = 0; i < times; i++) recordBuyerInterest(db, deps, buyer, "search", criteria);
+  };
+
+  it("tells a new seller what the market wants, in words, and why", async () => {
+    ask({ domain: "medical", failure: "user_correction" });
+    const fresh = await ensureAccount(db, "new@example.com", "seller", "New");
+    const s = sellerSuggestions(db, deps, fresh.id);
+    expect(s.length).toBeGreaterThan(0);
+    expect(s.length).toBeLessThanOrEqual(deps.config.discovery.sellerSuggestions.limit);
+    const med = s.find((x) => x.domain === "medical")!;
+    expect(med.label).toBe(
+      "Medical and clinical evaluation sessions where the person corrected the agent",
+    );
+    expect(med.relation).toBe("market");
+    expect(med.reason).toMatch(/^Wanted across the market: .*(supply|none are listed)/);
+    // One per domain.
+    expect(new Set(s.map((x) => x.domain)).size).toBe(s.length);
+  });
+
+  it("puts the seller's own and followed domains first, and names campaign bids", async () => {
+    ask({ domain: "medical", failure: "user_correction" });
+    createCampaign(db, deps, buyer, {
+      describe: "legal",
+      license: "research",
+      maxPriceCents: 4200,
+      quantity: 3,
+      days: 7,
+    });
+    const other = await ensureAccount(db, "o@example.com", "seller", "O");
+    setInterest(db, other.id, "legal", true);
+    const s = sellerSuggestions(db, deps, other.id);
+    const legal = s.find((x) => x.domain === "legal")!;
+    expect(legal.relation).toBe("followed");
+    expect(legal.reason).toMatch(/^You follow Legal.*bidding up to \$42/);
+    // The demo seller shares medical sessions: those are "yours".
+    const mine = sellerSuggestions(db, deps, seller.id).find((x) => x.domain === "medical")!;
+    expect(mine.relation).toBe("yours");
+    expect(mine.reason).toMatch(/^You share Medical and clinical evaluation sessions \(\d+ listed\)/);
+  });
+
+  it("ignores expired campaigns and ones that need more than a suggestion can name", async () => {
+    const other = await ensureAccount(db, "o2@example.com", "seller", "O");
+    setInterest(db, other.id, "legal", true);
+    const rust = createCampaign(db, deps, buyer, {
+      describe: "legal sessions in Rust",
+      license: "research",
+      maxPriceCents: 4300,
+      quantity: 3,
+      days: 7,
+    });
+    expect(rust.campaign.criteria).toMatchObject({ domain: "legal", language: "Rust" });
+    const reasons = () => sellerSuggestions(db, deps, other.id).map((x) => x.reason).join(" ");
+    expect(reasons()).not.toMatch(/\$43/);
+    createCampaign(db, deps, buyer, {
+      describe: "legal",
+      license: "research",
+      maxPriceCents: 4200,
+      quantity: 3,
+      days: 7,
+    });
+    expect(reasons()).toMatch(/\$42/);
+    // Eight days on, the week-long campaign has ended even if nothing expired it.
+    const later = { ...deps, now: new Date(NOW.getTime() + 8 * 86_400_000) };
+    expect(
+      sellerSuggestions(db, later, other.id)
+        .map((x) => x.reason)
+        .join(" "),
+    ).not.toMatch(/\$42/);
+  });
+
+  it("suggests nothing when nobody is asking and no campaign is open", async () => {
+    const fresh = await ensureAccount(db, "quiet@example.com", "seller", "Q");
+    expect(sellerSuggestions(db, deps, fresh.id)).toEqual([]);
   });
 });

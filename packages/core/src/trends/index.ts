@@ -138,6 +138,8 @@ export function marketTrends(
     .from(schema.campaigns)
     .where(eq(schema.campaigns.status, "open"))
     .all()
+    // Still "open" until something expires it; one past its end buys nothing.
+    .filter((x) => x.expiresAt.getTime() > now.getTime())
     .map((x) => ({ criteria: x.criteria as DemandCriteria, bid: x.maxPriceCents }));
 
   // Shares are of what the board shows: supply and demand the labeler could
@@ -297,3 +299,5 @@ export function notifyCampaignFollowers(
   }
   return followers.length;
 }
+
+export * from "./suggestions";

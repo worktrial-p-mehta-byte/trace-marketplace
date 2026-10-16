@@ -372,7 +372,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                           {DOMAIN_NAMES[i.domain]} ·{" "}
                           {i.failures.map((f) => FAILURE_NAMES[f]).join(", ") || "no failures"}
                         </span>
-                        <span className="block truncate text-xs text-cobalt">{i.pickReason}</span>
+                        <span className="block text-xs text-cobalt">{i.pickReason}</span>
                       </span>
                       <span className="shrink-0 font-semibold">{money(i.priceCents)}</span>
                     </Link>
@@ -381,6 +381,20 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               </ul>
             </section>
           )}
+
+          {picks.length === 0 &&
+            user?.buyerOrgId &&
+            !p.q &&
+            active.length === 0 &&
+            page === 1 && (
+              <p className="mt-4 rounded-lg border border-rule bg-surface p-4 text-sm text-ink-2">
+                Picks appear here as your team searches, views and buys, or straight away if you{" "}
+                <Link href="/welcome" className="font-semibold text-cobalt">
+                  tell us what you need
+                </Link>
+                .
+              </p>
+            )}
 
           {r.intent && (r.intent.chips.length > 0 || r.intent.rest) && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Read as">

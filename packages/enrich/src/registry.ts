@@ -84,3 +84,18 @@ export function labelDescription(kind: LabelKindId, code: string): string | unde
 export function labelsOfKind(kind: LabelKindId): LabelDef[] {
   return [...registry.values()].filter((d) => d.kind === kind);
 }
+
+/** Each failure as a clause, for sentences like "sessions where …". */
+const FAILURE_CLAUSES: Record<string, string> = {
+  test_tampering: "the agent tampered with a test",
+  retry_loop: "the agent got stuck retrying",
+  user_correction: "the person corrected the agent",
+  tool_rejected: "the person refused an action",
+  user_interrupt: "the person interrupted the agent",
+  tool_error: "tools failed",
+  harness_error: "the harness hit API errors",
+};
+
+export function failureClause(code: string): string {
+  return FAILURE_CLAUSES[code] ?? `there was ${labelName("failure", code).toLowerCase()}`;
+}

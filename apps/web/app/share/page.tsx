@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { canSell, TERMS_VERSION } from "@tm/core";
+import { canSell, sellerSuggestions, TERMS_VERSION } from "@tm/core";
 import { ShareFlow } from "@/components/share/ShareFlow";
-import { getConfig, getCurrentUser } from "@/lib/server";
+import { SellerSuggestions } from "@/components/trends/SellerSuggestions";
+import { getConfig, getCurrentUser, getDb } from "@/lib/server";
 
 export const metadata: Metadata = { title: "Share sessions" };
 
@@ -36,6 +37,11 @@ export default async function SharePage() {
         Your sessions are read and scrubbed in this browser tab. Review each one, choose how to
         share it, and only what you approve is uploaded.
       </p>
+      <div className="mt-6">
+        <SellerSuggestions
+          suggestions={sellerSuggestions(getDb(), { config: getConfig() }, user.id)}
+        />
+      </div>
       <ShareFlow sellerShare={getConfig().revenue.sellerShare} />
     </main>
   );
