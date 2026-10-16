@@ -252,4 +252,33 @@ describe("picks that learn from behaviour", () => {
     expect(domains.has("data_querying")).toBe(true);
     expect(picks.find((p) => p.domain === "medical")!.pickReason).toMatch(/^You said you need/);
   });
+
+  it("picks across every domain when the team only searched a language", async () => {
+    const org = buyer.buyerOrgId!;
+    const lang = db
+      .select({ l: schema.traces.language })
+      .from(schema.traces)
+      .all()
+      .find((r) => r.l)!.l!;
+    recordDemandSignal(db, deps.bus, {
+      kind: "search",
+      criteria: { language: lang },
+      weight: 0.05,
+      buyerOrgId: org,
+      now: NOW,
+    });
+    const picks = await recommendFor(db, deps, undefined, 6, org);
+    expect(picks.length).toBeGreaterThan(0);
+    expect(picks[0]!.language).toBe(lang);
+  });
+
+  it("lets a domain the team keeps viewing outrank its onboarding answers", async () => {
+    const org = buyer.buyerOrgId!;
+    const prefs = setBuyerPreferences(db, deps, buyer, {
+      domains: ["medical", "legal", "finance"],
+    });
+    for (let k = 0; k < 5; k++) view(org, { domain: "data_querying" });
+    const picks = await recommendFor(db, deps, prefs, 50, org);
+    expect(picks.some((p) => p.domain === "data_querying")).toBe(true);
+  });
 });

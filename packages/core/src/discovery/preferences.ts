@@ -8,6 +8,7 @@ import { browseCatalog, type CatalogItem } from "../catalog/browse";
 import {
   addInterest,
   emptyProfile,
+  INTEREST_DIMS,
   interestProfile,
   interestWeight,
   type Interest,
@@ -172,11 +173,16 @@ export async function recommendFor(
   const ranked = (dim: InterestDim) =>
     [...profile.dims[dim]].sort((a, b) => interestWeight(b[1]) - interestWeight(a[1]));
   const maxOf = (dim: InterestDim) => interestWeight(ranked(dim)[0]?.[1]);
-  // The team's domains: what it said, then what it does, at most three.
-  const domains = [
-    ...new Set([...(prefs?.domains ?? []), ...ranked("domain").map(([d]) => d)]),
-  ].slice(0, Math.max(3, prefs?.domains.length ?? 0));
-  if (!domains.length) return [];
+  // The team's strongest domains by combined weight (stated answers count as
+  // one strong signal, so repeated behaviour elsewhere can outrank them), at
+  // most three or as many as it named. With interests but no domain (only a
+  // language or failure searched), every domain is a candidate.
+  const ranks = ranked("domain").map(([d]) => d);
+  const hasInterest = INTEREST_DIMS.some((dim) => profile.dims[dim].size > 0);
+  if (!ranks.length && !hasInterest) return [];
+  const domains: (string | undefined)[] = ranks.length
+    ? ranks.slice(0, Math.max(3, prefs?.domains.length ?? 0))
+    : [undefined];
   const license = prefs?.license ?? "research";
 
   const members = buyerOrgId ? orgMemberIds(db, buyerOrgId) : new Set<string>();
