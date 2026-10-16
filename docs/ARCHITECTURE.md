@@ -29,6 +29,49 @@ This file summarises what the code implements.
 | D10 Vendor model with bounty board                  | `bounties`, `bounty_submissions` tables                            |
 | D11 Everything emits events                         | `packages/core/src/events` (outbox table, per-consumer cursors)    |
 
+## As built (v0)
+
+One Next.js process does everything; the seller's browser does the parsing,
+scrubbing and labelling. Dashed boxes are the interfaces where production
+services plug in ([SERVICES.md](SERVICES.md)).
+
+```mermaid
+flowchart TB
+  subgraph browser["Seller's browser"]
+    share["/share: adapters, scrub, enrich (packages, browser-safe)"]
+  end
+  subgraph buyer["Buyer's browser"]
+    pages["/traces, /traces/[id], /market"]
+  end
+  subgraph server["Next.js server (apps/web)"]
+    api["API routes: auth, onboarding, pricing estimate, traces, revoke"]
+    rsc["Server pages and actions"]
+    core["packages/core: catalog, pricing, search, market, auth, ledger"]
+    bus{{"EventBus: events outbox"}}
+    consumers["Consumers: pricing, search (run in-process)"]
+  end
+  subgraph data["data/ (one disk)"]
+    db[("SQLite: 25 tables")]
+    fts[("FTS5: listing_search")]
+    blobs[("Trace files: BlobStore")]
+  end
+  share -- "scrubbed trace, traits, consent" --> api
+  pages --> rsc
+  api --> core
+  rsc --> core
+  core --> db
+  core --> blobs
+  core -- emit --> bus
+  bus --> consumers
+  consumers --> db
+  consumers --> fts
+  cli["scripts: seed, reprice, migrate, search:rebuild"] --> core
+```
+
+The target-state diagram (separate services, queue, object storage,
+warehouse) is in the design doc. What changes on the way there is in
+[DEPLOYING.md](DEPLOYING.md#path-to-production).
+
 ## Data conventions
 
 - IDs are prefixed random strings (`trc_…`, `ltx_…`).
@@ -46,8 +89,8 @@ This file summarises what the code implements.
 | M3  | Pricing engine                                             | Done    |
 | M4  | Onboarding + sharing                                       | Done    |
 | M5  | Catalog + trace viewer                                     | Done    |
-| M6  | Market simulator + seed data + failure lab                 | This PR |
-| M7  | Docs                                                       |         |
+| M6  | Market simulator + seed data + failure lab                 | Done    |
+| M7  | Docs, deployment (Docker)                                  | This PR |
 | M8  | Rehearse + polish                                          |         |
 
 ## Session log adapters

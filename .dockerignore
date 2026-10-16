@@ -1,0 +1,16 @@
+# Keep the build context small and free of local data.
+.git
+**/node_modules
+**/.next
+data/*
+!data/.gitkeep
+*.db
+*.db-*
+coverage
+test-results
+playwright-report
+**/__pycache__
+.env
+.env.*
+# Raw agent sessions never go into an image.
+*.raw.jsonl

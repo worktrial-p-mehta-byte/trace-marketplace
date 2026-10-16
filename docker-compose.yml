@@ -1,0 +1,19 @@
+# Run the marketplace on one machine:  docker compose up --build
+# Open http://localhost:3000. Data persists in the tm-data volume.
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # 1 = fill an empty database with the synthetic demo market.
+      SEED_DEMO: "1"
+      # Optional overrides; see config/README.md.
+      # SELLER_SHARE: "0.7"
+      # TM_CONFIG_OVERRIDES: '{"pricing":{"refreshIntervalMinutes":30}}'
+    volumes:
+      - tm-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  tm-data:
