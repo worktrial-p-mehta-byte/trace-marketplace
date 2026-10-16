@@ -44,6 +44,7 @@ export {
 } from "./traits";
 export {
   checkAuthenticity,
+  finalCheck,
   type Authenticity,
   type AuthenticityCheck,
   type AuthenticityLevel,

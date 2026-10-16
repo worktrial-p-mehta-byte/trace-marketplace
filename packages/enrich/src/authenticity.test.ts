@@ -150,6 +150,42 @@ describe("checkAuthenticity", () => {
     expect(failed(clean, { reported: { recovered: true, hadFailure: false } })).toContain(
       "reported_traits",
     );
+    // A claimed passing check needs a final call with its own, successful result.
+    const dangling = {
+      ...t,
+      events: [
+        ...t.events,
+        {
+          seq: t.events.length,
+          type: "tool_call" as const,
+          callId: "z",
+          tool: "Bash",
+          input: {},
+          ts: t.endedAt,
+        },
+      ],
+    };
+    // The last call never got a result: the final check never came back.
+    expect(
+      failed(dangling, { reported: { testsRanAtEnd: true, testsPassedAtEnd: true } }),
+    ).toContain("reported_traits");
+    expect(failed(t, { reported: { testsRanAtEnd: true, testsPassedAtEnd: true } })).toEqual([]);
+    const noResults = {
+      ...t,
+      events: t.events.filter((e) => e.type !== "tool_result").map((e, i) => ({ ...e, seq: i })),
+    };
+    expect(
+      failed(noResults, { reported: { testsRanAtEnd: true, testsPassedAtEnd: true } }),
+    ).toContain("reported_traits");
+    const lastFails = {
+      ...t,
+      events: t.events.map((e) =>
+        e.type === "tool_result" && e.callId === "c" ? { ...e, isError: true } : e,
+      ),
+    };
+    expect(
+      failed(lastFails, { reported: { testsRanAtEnd: true, testsPassedAtEnd: true } }),
+    ).toContain("reported_traits");
     const a = checkAuthenticity(t, { now: NOW, reported: { userCorrections: 5 } });
     expect(a.checks.find((c) => c.id === "reported_traits")!.detail).toMatch(/more corrections/);
   });

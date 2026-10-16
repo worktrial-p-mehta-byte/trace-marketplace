@@ -168,6 +168,34 @@ describe("shareTrace", () => {
     expect(r.priceCents).toBeGreaterThan(0);
   });
 
+  it("doesn't believe a passing final check the structure can't show", async () => {
+    const full = scrubbed();
+    const e = enrichTrace(full);
+    // Drop every tool result: the calls are left dangling.
+    const stripped = toSignalsOnly(full);
+    const dangling = {
+      ...stripped,
+      events: stripped.events
+        .filter((x) => x.type !== "tool_result")
+        .map((x, i) => ({ ...x, seq: i })),
+    };
+    await shareTrace(db, deps, {
+      sellerId,
+      trace: dangling,
+      tier: 1,
+      clientTraits: { ...e.traits, testsRanAtEnd: true, testsPassedAtEnd: true },
+      clientLabels: [],
+    });
+    const traits = db.select().from(schema.traceTraits).all().at(-1)!.data as {
+      testsRanAtEnd: boolean;
+      testsPassedAtEnd: boolean;
+      authenticity: { level: string };
+    };
+    expect(traits.testsRanAtEnd).toBe(false);
+    expect(traits.testsPassedAtEnd).toBe(false);
+    expect(traits.authenticity.level).not.toBe("consistent");
+  });
+
   it("keeps a signals-only upload's domain as a bounded claim", async () => {
     const full = scrubbed();
     const e = enrichTrace(full);

@@ -49,6 +49,22 @@ function check(id: string, tier: 1 | 2, passed: boolean, ok: string, bad: string
   return { id, tier, passed, detail: passed ? ok : bad };
 }
 
+/**
+ * The session's last tool call and its result: the most a signals-only trace
+ * can say about a final check. A call left without a result means the check
+ * never came back.
+ */
+export function finalCheck(trace: Trace): { hasResult: boolean; ok: boolean } {
+  let lastCall: string | undefined;
+  for (const e of trace.events) if (e.type === "tool_call") lastCall = e.callId;
+  if (!lastCall) return { hasResult: false, ok: false };
+  const result = trace.events.find((e) => e.type === "tool_result" && e.callId === lastCall);
+  return {
+    hasResult: Boolean(result),
+    ok: Boolean(result && result.type === "tool_result" && !result.isError),
+  };
+}
+
 export function checkAuthenticity(
   trace: Trace,
   opts: {
@@ -213,12 +229,12 @@ export function checkAuthenticity(
       problems.push("more preference pairs than corrections and rejections");
     if (r.recovered && !(r.hadFailure || errors || interrupts))
       problems.push("a recovery with no failure");
-    // A checked outcome needs a tool call that could have run the check near the end.
-    const lastCall = [...ev].reverse().find((e) => e.type === "tool_call");
-    const lastResult = [...ev].reverse().find((e) => e.type === "tool_result");
-    if (r.testsRanAtEnd && !lastCall) problems.push("a final check with no tool call");
-    if (r.testsPassedAtEnd && lastResult?.type === "tool_result" && lastResult.isError)
-      problems.push("a passing final check whose last result is an error");
+    // A checked outcome needs a final tool call with its own result; a
+    // passing one needs that result not to be an error.
+    const fc = finalCheck(trace);
+    if (r.testsRanAtEnd && !fc.hasResult) problems.push("a final check with no result");
+    if (r.testsPassedAtEnd && !fc.ok)
+      problems.push("a passing final check whose result is an error");
     checks.push(
       check(
         "reported_traits",
