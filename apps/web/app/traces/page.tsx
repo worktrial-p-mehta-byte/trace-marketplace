@@ -201,11 +201,12 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     return c ? { value: c.value, phrase: c.phrase } : undefined;
   };
   const saved = user?.buyerOrgId ? listSavedSearches(getDb(), user.buyerOrgId) : [];
-  // A buyer who told us what they need sees picks first when just browsing.
+  // A buyer team sees picks first when just browsing: from what it said it
+  // needs and what it has viewed, searched, saved and bought.
   const prefs = user?.buyerOrgId ? getBuyerPreferences(getDb(), user.buyerOrgId) : undefined;
   const picks =
-    prefs && !p.q && active.length === 0 && Number(p.page ?? 1) === 1
-      ? await recommendFor(getDb(), { config, search }, prefs, 4, user?.buyerOrgId ?? undefined)
+    user?.buyerOrgId && !p.q && active.length === 0 && Number(p.page ?? 1) === 1
+      ? await recommendFor(getDb(), { config, search }, prefs, 4, user.buyerOrgId)
       : [];
   const canSave = Boolean(user?.buyerOrgId) && (Boolean(p.q) || active.length > 0);
   const page = Number(p.page ?? 1);
@@ -353,7 +354,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="font-semibold">Picked for you</h2>
                 <Link href="/welcome" className="text-sm text-cobalt">
-                  Change what you need
+                  {prefs ? "Change what you need" : "Tell us what you need"}
                 </Link>
               </div>
               <ul className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -371,6 +372,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                           {DOMAIN_NAMES[i.domain]} ·{" "}
                           {i.failures.map((f) => FAILURE_NAMES[f]).join(", ") || "no failures"}
                         </span>
+                        <span className="block truncate text-xs text-cobalt">{i.pickReason}</span>
                       </span>
                       <span className="shrink-0 font-semibold">{money(i.priceCents)}</span>
                     </Link>

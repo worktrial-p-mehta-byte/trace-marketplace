@@ -25,6 +25,8 @@ test("a new buyer says what they need and gets traces picked for them", async ({
   await expect(page.getByRole("heading", { name: "Picked for you" })).toBeVisible();
   const picks = page.getByRole("list", { name: "Picked for you" });
   await expect(picks.locator("li").first()).toContainText("Data and querying");
+  // Each pick says why it was picked.
+  await expect(picks.locator("li").first()).toContainText(/You said you need|your team/);
   await expect(page.getByRole("link", { name: "Set up a campaign" })).toHaveAttribute(
     "href",
     /describe=data%20querying%20retry%20loop&maxPrice=12.00&license=eval/,

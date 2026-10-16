@@ -11,8 +11,12 @@ import {
   getBuyerPreferences,
   listSavedSearches,
   PreferencesError,
+  ensureWelcomeCredits,
+  placeOrder,
+  quoteCart,
   quoteListing,
   recommendFor,
+  recordDemandSignal,
   saveSearch,
   repriceAll,
   setBuyerPreferences,
@@ -185,5 +189,67 @@ describe("buyer preferences", () => {
       maxPrice: "9.00",
       license: "training",
     });
+  });
+});
+
+describe("picks that learn from behaviour", () => {
+  const view = (orgId: string, criteria: Record<string, string>, daysAgo = 0) =>
+    recordDemandSignal(db, deps.bus, {
+      kind: "view",
+      criteria,
+      weight: 0.05,
+      buyerOrgId: orgId,
+      now: new Date(NOW.getTime() - daysAgo * 86_400_000),
+    });
+
+  it("picks from what a team views, with no onboarding answers, and says why", async () => {
+    const org = buyer.buyerOrgId!;
+    expect(await recommendFor(db, deps, undefined, 6, org)).toEqual([]);
+    view(org, { domain: "medical", failure: "user_correction" });
+    view(org, { domain: "medical" });
+    const picks = await recommendFor(db, deps, undefined, 6, org);
+    expect(picks.length).toBeGreaterThan(0);
+    expect(picks[0]!.domain).toBe("medical");
+    expect(picks[0]!.pickReason).toMatch(/^Because your team viewed/);
+  });
+
+  it("weighs a purchase above views, and never picks what the team holds", async () => {
+    const org = buyer.buyerOrgId!;
+    ensureWelcomeCredits(db, deps.config, buyer.buyerOrgId!);
+    for (let k = 0; k < 2; k++) view(org, { domain: "medical" });
+    const research = await recommendFor(db, deps, undefined, 50, org);
+    // Buy one data-querying session.
+    const all = await recommendFor(
+      db,
+      deps,
+      { domains: ["data_querying"], failures: [], license: "research", contentNeeded: false },
+      50,
+    );
+    const target = all[0]!;
+    placeOrder(db, deps, buyer, quoteCart(db, deps, buyer, "research", [target.listingId]).id);
+    const picks = await recommendFor(db, deps, undefined, 50, org);
+    expect(picks.map((p) => p.listingId)).not.toContain(target.listingId);
+    expect(picks[0]!.domain).toBe("data_querying");
+    expect(picks.find((p) => p.domain === "data_querying")!.pickReason).toMatch(/your team bought/);
+    expect(research.every((p) => p.domain === "medical")).toBe(true);
+  });
+
+  it("lets old behaviour fade", async () => {
+    const org = buyer.buyerOrgId!;
+    for (let k = 0; k < 3; k++) view(org, { domain: "legal" }, 60);
+    view(org, { domain: "finance" });
+    const picks = await recommendFor(db, deps, undefined, 6, org);
+    expect(picks[0]!.domain).toBe("finance");
+  });
+
+  it("combines what a team said with what it does", async () => {
+    const org = buyer.buyerOrgId!;
+    const prefs = setBuyerPreferences(db, deps, buyer, { domains: ["medical"] });
+    view(org, { domain: "data_querying" });
+    const picks = await recommendFor(db, deps, prefs, 50, org);
+    const domains = new Set(picks.map((p) => p.domain));
+    expect(domains.has("medical")).toBe(true);
+    expect(domains.has("data_querying")).toBe(true);
+    expect(picks.find((p) => p.domain === "medical")!.pickReason).toMatch(/^You said you need/);
   });
 });

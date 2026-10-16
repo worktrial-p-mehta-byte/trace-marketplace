@@ -109,6 +109,21 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
     topUpCents: 25_000,
     maxOrderLines: 100,
   },
+  discovery: {
+    /** "Picked for you": a buyer team's interest profile from what it does. */
+    picks: {
+      /** Only behaviour this recent counts. */
+      windowDays: 90,
+      /** A signal counts half as much after this many days. */
+      halfLifeDays: 21,
+      /** How much one action says about what a team wants. */
+      weights: { purchase: 8, save: 4, view: 2, search: 1 },
+      /** What one onboarding answer (a stated domain or behaviour) is worth. */
+      stated: 6,
+      /** Score added for a listing matching the strongest interest in each dimension. */
+      match: { domain: 5, failure: 3, language: 1.5, framework: 1 },
+    },
+  },
   database: {
     path: "data/trace-marketplace.db",
   },

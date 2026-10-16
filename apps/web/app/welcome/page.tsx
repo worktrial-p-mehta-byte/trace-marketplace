@@ -73,6 +73,7 @@ export default async function WelcomePage({
                       {DOMAIN_NAMES[i.domain]} ·{" "}
                       {i.failures.map((f) => FAILURE_NAMES[f]).join(", ") || "no failures"}
                     </span>
+                    <span className="block text-xs text-cobalt">{i.pickReason}</span>
                   </span>
                   <span className="shrink-0 font-semibold">{money(i.priceCents)}</span>
                 </Link>

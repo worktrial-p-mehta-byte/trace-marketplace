@@ -167,6 +167,26 @@ export const MarketplaceConfig = z
       /** Most listings in one order. */
       maxOrderLines: z.number().int().positive(),
     }),
+    /** Personalised discovery. */
+    discovery: z.object({
+      picks: z.object({
+        windowDays: positive,
+        halfLifeDays: positive,
+        weights: z.object({
+          purchase: z.number().min(0),
+          save: z.number().min(0),
+          view: z.number().min(0),
+          search: z.number().min(0),
+        }),
+        stated: z.number().min(0),
+        match: z.object({
+          domain: z.number().min(0),
+          failure: z.number().min(0),
+          language: z.number().min(0),
+          framework: z.number().min(0),
+        }),
+      }),
+    }),
     database: z.object({ path: z.string().min(1) }),
     storage: z.object({ blobPath: z.string().min(1) }),
   })

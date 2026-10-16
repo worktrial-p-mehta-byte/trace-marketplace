@@ -17,3 +17,4 @@ export * from "./notifications";
 export * from "./campaigns";
 export * from "./trends";
 export * from "./discovery/preferences";
+export * from "./discovery/behaviour";

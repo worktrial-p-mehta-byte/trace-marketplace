@@ -382,7 +382,18 @@ searches) and records them as save-strength demand per domain.
 
 `recommendFor` picks listings deterministically: in the chosen domains,
 the wanted behaviours first, then recoveries, verified outcomes, consistent
-sessions and rarity, within budget, at most two of one session shape. The
+sessions and rarity, within budget, at most two of one session shape. **Picks learn from behaviour too.** `interestProfile`
+(`packages/core/src/discovery/behaviour.ts`) builds a per-team profile over
+domain, failure, language and framework from the team's own views and
+searches (demand signals), saved searches and purchases, weighted
+(purchase 8, stated answer 6, save 4, view 2, search 1) and decayed with a
+21-day half-life over a 90-day window (`discovery.picks` in config).
+`recommendFor` combines it with the onboarding answers (either alone is
+enough), searches the team's top domains, skips listings it already holds,
+scores each listing by how well it matches the team's strongest interest in
+each dimension plus quality, and gives every pick its reason ("Like the 3
+data and querying traces your team bought", "Because your team viewed
+medical sessions", "You said you need Medical"). The
 answers then personalise the marketplace: a "Picked for you" row tops the
 catalog when browsing, price cards open on the stated licence, and the
 welcome page suggests a campaign prefilled with the buyer's domain,
