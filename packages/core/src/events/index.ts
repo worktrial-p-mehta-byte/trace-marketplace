@@ -34,11 +34,19 @@ export interface EventBus {
   emit(type: EventType, payload: unknown): number;
   /** Deliver events after this consumer's cursor, then advance it. Returns how many were handled. */
   poll(consumer: string, handler: (e: StoredEvent) => void, limit?: number): number;
+  /**
+   * Read events after this consumer's cursor without advancing it. Pair with
+   * `ack` once the work they trigger has succeeded, so a failure part-way
+   * leaves the events to be delivered again (at-least-once).
+   */
+  peek(consumer: string, limit?: number): StoredEvent[];
+  /** Advance this consumer's cursor to `seq`. Never moves it backwards. */
+  ack(consumer: string, seq: number): void;
 }
 
 /** v0 implementation: an outbox table in the main database, polled in-process. */
 export function createDbEventBus(db: Db): EventBus {
-  return {
+  const bus: EventBus = {
     emit(type, payload) {
       const [row] = db
         .insert(schema.events)
@@ -48,35 +56,45 @@ export function createDbEventBus(db: Db): EventBus {
       return row!.seq;
     },
 
+    peek(consumer, limit = 100) {
+      const cursor = db
+        .select({ lastSeq: schema.eventCursors.lastSeq })
+        .from(schema.eventCursors)
+        .where(eq(schema.eventCursors.consumer, consumer))
+        .get();
+      return db
+        .select({
+          seq: schema.events.seq,
+          type: schema.events.type,
+          payload: schema.events.payload,
+        })
+        .from(schema.events)
+        .where(gt(schema.events.seq, cursor?.lastSeq ?? 0))
+        .orderBy(asc(schema.events.seq))
+        .limit(limit)
+        .all();
+    },
+
+    ack(consumer, seq) {
+      db.insert(schema.eventCursors)
+        .values({ consumer, lastSeq: seq })
+        .onConflictDoUpdate({
+          target: schema.eventCursors.consumer,
+          set: { lastSeq: sql`max(${schema.eventCursors.lastSeq}, ${seq})` },
+        })
+        .run();
+    },
+
     poll(consumer, handler, limit = 100) {
-      return db.transaction((tx) => {
-        tx.insert(schema.eventCursors).values({ consumer, lastSeq: 0 }).onConflictDoNothing().run();
-        const cursor = tx
-          .select()
-          .from(schema.eventCursors)
-          .where(eq(schema.eventCursors.consumer, consumer))
-          .get()!;
-        const batch = tx
-          .select({
-            seq: schema.events.seq,
-            type: schema.events.type,
-            payload: schema.events.payload,
-          })
-          .from(schema.events)
-          .where(gt(schema.events.seq, cursor.lastSeq))
-          .orderBy(asc(schema.events.seq))
-          .limit(limit)
-          .all();
+      // One transaction: if a handler throws, the cursor stays put.
+      return db.transaction(() => {
+        const batch = bus.peek(consumer, limit);
         for (const e of batch) handler(e);
         const last = batch.at(-1);
-        if (last) {
-          tx.update(schema.eventCursors)
-            .set({ lastSeq: sql`${last.seq}` })
-            .where(eq(schema.eventCursors.consumer, consumer))
-            .run();
-        }
+        if (last) bus.ack(consumer, last.seq);
         return batch.length;
       });
     },
   };
+  return bus;
 }

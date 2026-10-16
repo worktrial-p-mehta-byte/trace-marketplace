@@ -114,15 +114,13 @@ export async function runSearchConsumer(
 ): Promise<number> {
   const created: string[] = [];
   const delistedTraces: string[] = [];
-  bus.poll(
-    "search",
-    (e) => {
-      const p = e.payload as { listingId?: string; traceId?: string };
-      if (e.type === EventTypes.ListingCreated && p.listingId) created.push(p.listingId);
-      if (e.type === EventTypes.ListingDelisted && p.traceId) delistedTraces.push(p.traceId);
-    },
-    10_000,
-  );
+  // Acknowledged at the end, so an indexing failure leaves the events for the next run.
+  const batch = bus.peek("search", 10_000);
+  for (const e of batch) {
+    const p = e.payload as { listingId?: string; traceId?: string };
+    if (e.type === EventTypes.ListingCreated && p.listingId) created.push(p.listingId);
+    if (e.type === EventTypes.ListingDelisted && p.traceId) delistedTraces.push(p.traceId);
+  }
   for (const id of created) {
     const doc = await searchDocument(db, blobs, id);
     if (doc) await index.index(id, doc);
@@ -135,6 +133,8 @@ export async function runSearchConsumer(
       .all();
     for (const { id } of ids) await index.remove(id);
   }
+  const last = batch.at(-1);
+  if (last) bus.ack("search", last.seq);
   return created.length + delistedTraces.length;
 }
 

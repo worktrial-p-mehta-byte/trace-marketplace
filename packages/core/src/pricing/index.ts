@@ -291,14 +291,15 @@ export const PRICING_TRIGGERS = new Set<string>([
  * would reprice only affected combinations.
  */
 export function runPricingConsumer(db: Db, bus: EventBus, deps: PricingDeps): RepriceResult | null {
-  const triggers = new Set<string>();
-  bus.poll(
-    "pricing",
-    (e) => {
-      if (PRICING_TRIGGERS.has(e.type)) triggers.add(e.type);
-    },
-    10_000,
-  );
-  if (!triggers.size) return refreshStalePrices(db, bus, deps);
-  return repriceAll(db, { ...deps, bus, reason: [...triggers].sort().join(",") });
+  // Acknowledge only after repricing succeeds: if it throws, the triggers stay
+  // in the outbox and the very next run (e.g. the next page load) retries,
+  // rather than waiting for the scheduled refresh.
+  const batch = bus.peek("pricing", 10_000);
+  const triggers = new Set(batch.map((e) => e.type).filter((t) => PRICING_TRIGGERS.has(t)));
+  const result = triggers.size
+    ? repriceAll(db, { ...deps, bus, reason: [...triggers].sort().join(",") })
+    : refreshStalePrices(db, bus, deps);
+  const last = batch.at(-1);
+  if (last) bus.ack("pricing", last.seq);
+  return result;
 }

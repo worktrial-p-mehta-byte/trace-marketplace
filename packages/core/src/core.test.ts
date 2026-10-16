@@ -76,6 +76,31 @@ describe("event bus", () => {
     bus.poll("search", (e) => seenB.push(e.type));
     expect(seenB).toHaveLength(2);
   });
+
+  it("redelivers peeked events until they are acknowledged", () => {
+    const bus = createDbEventBus(db);
+    const a = bus.emit(EventTypes.TraceIngested, { traceId: "t1" });
+    const b = bus.emit(EventTypes.ListingCreated, { listingId: "l1" });
+
+    expect(bus.peek("pricing").map((e) => e.seq)).toEqual([a, b]);
+    expect(bus.peek("pricing").map((e) => e.seq)).toEqual([a, b]);
+    bus.ack("pricing", a);
+    expect(bus.peek("pricing").map((e) => e.seq)).toEqual([b]);
+    bus.ack("pricing", b);
+    bus.ack("pricing", a); // never moves backwards
+    expect(bus.peek("pricing")).toEqual([]);
+  });
+
+  it("leaves the cursor in place when a poll handler throws", () => {
+    const bus = createDbEventBus(db);
+    bus.emit(EventTypes.TraceIngested, { traceId: "t1" });
+    expect(() =>
+      bus.poll("pricing", () => {
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+    expect(bus.peek("pricing")).toHaveLength(1);
+  });
 });
 
 describe("policy", () => {

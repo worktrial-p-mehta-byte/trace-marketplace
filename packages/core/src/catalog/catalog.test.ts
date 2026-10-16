@@ -226,7 +226,11 @@ describe("shareTrace when downstream work fails", () => {
     const real = createDbEventBus(db);
     const broken = {
       emit: real.emit,
+      ack: real.ack,
       poll: () => {
+        throw new Error("repricer down");
+      },
+      peek: () => {
         throw new Error("repricer down");
       },
     };
@@ -247,6 +251,35 @@ describe("shareTrace when downstream work fails", () => {
 
     // The events were committed with the listing, so the next run prices it.
     runPricingConsumer(db, real, { config: deps.config, now: NOW });
+    const listing = db
+      .select()
+      .from(schema.listings)
+      .where(eq(schema.listings.id, r.listingId))
+      .get()!;
+    expect(listing.currentPriceCents).toBeGreaterThan(0);
+  });
+});
+
+describe("runPricingConsumer after a failed reprice", () => {
+  it("retries on the next run instead of waiting for the scheduled refresh", async () => {
+    // A recent full reprice exists, so the stale-price fallback would not fire.
+    runPricingConsumer(db, deps.bus, { config: deps.config, now: NOW });
+
+    // Repricing fails transiently while the share commits.
+    db.$client.exec("ALTER TABLE price_snapshots RENAME TO price_snapshots_down");
+    const quiet = console.error;
+    console.error = () => {};
+    const r = await shareTrace(db, deps, {
+      sellerId,
+      trace: scrubTrace(raw).trace,
+      tier: 0,
+    }).finally(() => (console.error = quiet));
+    db.$client.exec("ALTER TABLE price_snapshots_down RENAME TO price_snapshots");
+    expect(r.pricePending).toBe(true);
+
+    // Same logical time, so only the unacknowledged events can trigger this.
+    const result = runPricingConsumer(db, deps.bus, { config: deps.config, now: NOW });
+    expect(result?.changed).toBe(1);
     const listing = db
       .select()
       .from(schema.listings)
