@@ -44,6 +44,16 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Discovery V2 — phase 2
+
+| Limitation                                                                       | Impact                                                              | Lifted by                                                                |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| The intent parser knows only its curated aliases (English)                       | Synonyms it lacks fall through to plain word search                 | Local embeddings behind the `SearchIndex` port (post-demo); more aliases |
+| No negation ("without corrections", "not coding")                                | Negated words are read as asking for the thing                      | Negation handling in the parser                                          |
+| Short language names (Go, C, R) need their long form ("golang") or a facet click | "Go retry loops" doesn't set the language                           | Context-aware disambiguation                                             |
+| Grouping folds exact shape matches only                                          | Near-identical sessions that differ by a step are listed separately | Shape similarity, as for near-duplicate pricing                          |
+| Saved searches don't notify yet                                                  | A buyer has to come back to see new matches                         | Campaign and saved-search notifications (milestone 6)                    |
+
 ## Authenticity tiers 1–2 — phase 2
 
 | Limitation                                                 | Impact                                                                                                                                          | Lifted by                                                              |

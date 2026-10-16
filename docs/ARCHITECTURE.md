@@ -81,20 +81,21 @@ warehouse) is in the design doc. What changes on the way there is in
 
 ## Milestones
 
-| #    | Milestone                                                                          | Status  |
-| ---- | ---------------------------------------------------------------------------------- | ------- |
-| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI                         | Done    |
-| M1   | Canonical schema + Claude Code adapter                                             | Done    |
-| M2   | Scrubber + labeler + trait extractor                                               | Done    |
-| M3   | Pricing engine                                                                     | Done    |
-| M4   | Onboarding + sharing                                                               | Done    |
-| M5   | Catalog + trace viewer                                                             | Done    |
-| M6   | Market simulator + seed data + failure lab                                         | Done    |
-| M7   | Docs, deployment (Docker)                                                          | Done    |
-| M8   | Rehearse, polish, end-to-end test                                                  | Done    |
-| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                        | Done    |
-| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel | Done    |
-| P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing | This PR |
+| #    | Milestone                                                                                     | Status  |
+| ---- | --------------------------------------------------------------------------------------------- | ------- |
+| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI                                    | Done    |
+| M1   | Canonical schema + Claude Code adapter                                                        | Done    |
+| M2   | Scrubber + labeler + trait extractor                                                          | Done    |
+| M3   | Pricing engine                                                                                | Done    |
+| M4   | Onboarding + sharing                                                                          | Done    |
+| M5   | Catalog + trace viewer                                                                        | Done    |
+| M6   | Market simulator + seed data + failure lab                                                    | Done    |
+| M7   | Docs, deployment (Docker)                                                                     | Done    |
+| M8   | Rehearse, polish, end-to-end test                                                             | Done    |
+| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                                   | Done    |
+| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel            | Done    |
+| P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing            | Done    |
+| P2.4 | Discovery V2: intent parser, behaviour search, ranking with reasons, grouping, saved searches | This PR |
 
 ## Session log adapters
 
@@ -232,6 +233,38 @@ how far a signals-only domain claim is trusted in pricing: domain rarity and
 the niche factor are raised to the power 0.75 when consistent, 0.5 otherwise.
 Tiers 3–4 (replaying a session in a sandbox; exporting it as a verifiable
 task) are post-demo.
+
+## Discovery V2
+
+Buyers describe what they need in a sentence. `parseIntent`
+(`packages/core/src/discovery/intent.ts`) reads it with curated aliases —
+domain names and synonyms ("clinical", "warehouse", "contracts"), failure
+phrasings ("stuck in a loop", "pushback", "reward hacking"), outcomes
+("got past it", "tests passing"), languages and frameworks the detectors
+know, sharing tier, authenticity and shape **behaviours** (repeats the same
+call, many tools, long or short session, context compaction, preference
+pairs) — longest phrase first, plurals folded, one value per facet. Words it
+does not recognise, minus stop words, stay as free text. No model, no
+network, so it is instant and never claims what it did not recognise.
+
+`browseCatalog` merges the chips into the query (filters the buyer set
+explicitly win; overridden chips are shown struck through). Chips are hard
+filters; behaviours filter on the session's traits. Leftover words filter
+lexically (FTS5) only when nothing was recognised; with chips they only
+rank, so text similarity never overrides or empties the facets. Results are
+ranked by a score — domain match weighted by detection confidence, failure
+match plus its evidence count, stack, behaviours, recovery, authenticity
+(consistent +, flagged −), lexical position — and each result lists **why it
+matched** in words, with evidence event numbers. Sessions with the same
+shape fold into one result with "+N similar" (toggle to show all).
+Signed-out searches still match only titles and tags.
+
+The page shows how the search was read as removable chips (removing one
+takes its words out of the query) and highlights the facets the text set.
+An intent search is demand for what it asks (`criteriaOf` resolves the
+chips). Buyers can **save** a search (a `query` collection); saving records
+"save"-strength demand. Embeddings remain a later, local-only option behind
+the `SearchIndex` port.
 
 ## Accounts, onboarding and sharing (M4)
 

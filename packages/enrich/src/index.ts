@@ -13,7 +13,14 @@ export {
   type Labeler,
   type TraceAnalysis,
 } from "./labels";
-export { detectLanguage, detectFramework, filePathsOf, commandsOf } from "./detect";
+export {
+  detectLanguage,
+  detectFramework,
+  filePathsOf,
+  commandsOf,
+  KNOWN_LANGUAGES,
+  KNOWN_FRAMEWORKS,
+} from "./detect";
 export {
   DOMAINS,
   DOMAIN_IDS,

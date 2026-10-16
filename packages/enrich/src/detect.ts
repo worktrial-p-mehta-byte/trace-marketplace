@@ -182,3 +182,9 @@ export function detectFramework(trace: Trace): string | undefined {
   if (counts.has("Next.js")) counts.delete("React");
   return topKey(counts, 2);
 }
+
+/** Every language and framework the detectors can name, for search vocabularies. */
+export const KNOWN_LANGUAGES: string[] = [
+  ...new Set([...Object.values(EXTENSIONS), ...COMMAND_HINTS.map(([, l]) => l)]),
+];
+export const KNOWN_FRAMEWORKS: string[] = [...new Set(FRAMEWORKS.map(([, f]) => f))];
