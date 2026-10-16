@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { canSell, cartListingIds, creditBalance, ensureWelcomeCredits } from "@tm/core";
+import {
+  canSell,
+  cartListingIds,
+  creditBalance,
+  ensureWelcomeCredits,
+  unreadCount,
+} from "@tm/core";
 import { money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
 import { SignOutButton } from "./SignOutButton";
@@ -9,12 +15,13 @@ export async function Header() {
   const user = await getCurrentUser();
   // A buyer team's welcome credits arrive the first time it is seen.
   if (user?.buyerOrgId) ensureWelcomeCredits(getDb(), getConfig(), user.buyerOrgId);
+  const unread = user ? unreadCount(getDb(), user.id) : 0;
   return (
     <header className="border-b border-rule bg-paper">
       {/* On phones the links wrap onto their own row under the wordmark. */}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-4 sm:px-6">
         <Wordmark />
-        <nav className="flex w-full items-center justify-between gap-3 text-sm font-medium whitespace-nowrap text-ink-2 sm:w-auto sm:justify-end sm:gap-5">
+        <nav className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm font-medium whitespace-nowrap text-ink-2 sm:w-auto sm:justify-end sm:gap-5">
           <Link href="/traces" className="hover:text-ink">
             Browse<span className="hidden sm:inline"> traces</span>
           </Link>
@@ -47,8 +54,23 @@ export async function Header() {
                   </Link>
                 </>
               )}
+              <Link href="/trends" className="hover:text-ink">
+                Trends
+              </Link>
               <Link href="/market" className="hover:text-ink">
                 Market<span className="hidden lg:inline"> simulator</span>
+              </Link>
+              <Link
+                href="/notifications"
+                className="hover:text-ink"
+                aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
+              >
+                <span aria-hidden>🔔</span>
+                {unread > 0 && (
+                  <span className="ml-0.5 rounded-full bg-brick px-1.5 text-xs font-semibold text-paper">
+                    {unread}
+                  </span>
+                )}
               </Link>
               <span className="hidden text-ink-3 sm:inline">{user.email}</span>
               <SignOutButton />

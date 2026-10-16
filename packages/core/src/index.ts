@@ -15,3 +15,4 @@ export * from "./discovery/saved";
 export * from "./checkout";
 export * from "./notifications";
 export * from "./campaigns";
+export * from "./trends";

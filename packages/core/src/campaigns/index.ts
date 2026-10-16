@@ -16,6 +16,7 @@ import { resolveQuery } from "../catalog/browse";
 import { EventTypes, type EventBus } from "../events";
 import { Accounts, balanceOf, postTransaction } from "../ledger";
 import { buildMarket, recordDemandSignal, runPricingConsumer } from "../pricing";
+import { notifyCampaignFollowers } from "../trends";
 
 /**
  * Campaigns: a buyer's standing bid. "Up to 50 medical traces where the
@@ -163,6 +164,14 @@ export function createCampaign(
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
   const filled = clearCampaign(db, deps, id);
   const campaign = db.select().from(schema.campaigns).where(eq(schema.campaigns.id, id)).get()!;
+  // Sellers who follow the domain hear that a buyer is standing ready.
+  if (campaign.status === "open") {
+    notifyCampaignFollowers(
+      db,
+      { ...campaign, criteria: campaign.criteria as DemandCriteria },
+      now,
+    );
+  }
   return { campaign, filled };
 }
 

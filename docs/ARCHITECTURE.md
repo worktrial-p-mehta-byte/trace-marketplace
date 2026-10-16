@@ -320,6 +320,26 @@ escrow returns to the buyer. Creating a campaign is `campaign` demand
 (weighted like a bounty by its budget). Multi-bidder clearing, exclusivity
 and bid landscapes come after the demo.
 
+## Seller trends and notifications
+
+`marketTrends` (`packages/core/src/trends`) gives sellers the demand side of
+the market, per domain and per domain × failure segment: decayed,
+per-buyer-deduplicated demand (searches, views, saves, purchases,
+campaigns) attributed to the segments of the listings each signal matches
+(or to the domain it names, when nothing matches yet); supply; the gap
+(demand share ÷ supply share, smoothed, the same idea as the niche price
+factor); demand this week against last; median price; sales in the window;
+and open campaigns with their best bid. Rows read "Wanted, none listed",
+"Undersupplied", "Balanced", "Crowded" or "No demand or supply yet". The
+`/trends` page shows the three most wanted segments, the domain table and
+the segments buyers ask for.
+
+Sellers **follow** domains (`seller_interests`, migration 0004). When a
+buyer starts a campaign in a domain, its followers get a notification
+("A buyer wants Legal and compliance traces … up to $X each"); sellers are
+also notified of every sale, by checkout or campaign. Notifications are a
+table read by the header bell and `/notifications`.
+
 ## Accounts, onboarding and sharing (M4)
 
 **Flow:** sign up (email, password, role) → onboarding (data terms, versioned
