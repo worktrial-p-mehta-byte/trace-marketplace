@@ -15,6 +15,13 @@ import { buildMarket, runPricingConsumer } from "../pricing";
 
 export class ShareError extends Error {}
 
+/** The seller already shared this exact session. */
+export class DuplicateShareError extends ShareError {
+  constructor() {
+    super("You have already shared this session.");
+  }
+}
+
 export interface CatalogDeps {
   config: MarketplaceConfig;
   bus: EventBus;
@@ -159,7 +166,7 @@ export async function shareTrace(
       )
       .get();
   // Fast path: refuse before writing anything.
-  if (findDuplicate(db)) throw new ShareError("You have already shared this session.");
+  if (findDuplicate(db)) throw new DuplicateShareError();
 
   const traceId = newId("trc");
   const assetId = newId("ast");
@@ -174,7 +181,7 @@ export async function shareTrace(
     // (Postgres will also need a partial unique index: see LIMITATIONS.md.)
     db.transaction((tx) => {
       if (findDuplicate(tx as unknown as Db)) {
-        throw new ShareError("You have already shared this session.");
+        throw new DuplicateShareError();
       }
       tx.insert(schema.traces)
         .values({

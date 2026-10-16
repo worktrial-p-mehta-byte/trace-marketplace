@@ -117,6 +117,28 @@ describe("floodSupply", () => {
     // The new supply is searchable straight away.
     expect((await deps.search!.search({ text: "retry" })).ids.length).toBeGreaterThan(0);
   });
+
+  it("skips duplicates but surfaces any other failure", async () => {
+    const input = { language: "Rust", framework: "Tokio", pattern: "retry_loop" as const };
+    await floodSupply(db, deps, { ...input, count: 3, seed: 9 });
+    // The same seed again: every trace is a duplicate, which is not an error.
+    await expect(floodSupply(db, deps, { ...input, count: 3, seed: 9 })).resolves.toMatchObject({
+      added: 0,
+    });
+
+    const broken = {
+      ...deps,
+      blobs: {
+        ...deps.blobs,
+        put: async () => {
+          throw new Error("blob store down");
+        },
+      },
+    };
+    await expect(floodSupply(db, broken, { ...input, count: 3, seed: 10 })).rejects.toThrow(
+      "blob store down",
+    );
+  });
 });
 
 describe("resetSimulation", () => {
