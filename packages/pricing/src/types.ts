@@ -17,6 +17,8 @@ export interface PriceFactors {
   duplicates?: number;
   /** V2: how far an open bounty pulled the price up (1 when none). */
   bounty?: number;
+  /** V2: A, the authenticity level's factor (tiers 1–2). */
+  authenticity?: number;
   /** Product Q·R·F·X·D·T (and N·U in V2) before the cap. */
   rawMultiplier: number;
   /** After applying the multiplier cap. */
@@ -34,6 +36,7 @@ export type FactorKey =
   | "demand"
   | "bounty"
   | "duplicates"
+  | "authenticity"
   | "freshness";
 
 /** One line of the price explanation. */

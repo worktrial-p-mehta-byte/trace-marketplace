@@ -3,7 +3,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { sellerShareFor, type MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import {
+  checkAuthenticity,
   comboKeyOf,
+  finalCheck,
   DOMAIN_IDS,
   enrichTrace,
   type DomainId,
@@ -156,7 +158,11 @@ function claimedDomain(
  * from the seller's browser. Structure-derived traits (turns, tool calls,
  * errors, interrupts) are recomputed here; reported ones are bounded by them.
  */
-function mergeSignalsTraits(server: TraceTraits, client: ClientTraits): TraceTraits {
+function mergeSignalsTraits(
+  server: TraceTraits,
+  client: ClientTraits,
+  final: { hasResult: boolean; ok: boolean },
+): TraceTraits {
   const userMessages = server.turns; // upper bound
   const corrections = Math.min(Math.max(0, client.userCorrections ?? 0), userMessages);
   const pairs = Math.min(Math.max(0, client.preferencePairs ?? 0), corrections + server.toolErrors);
@@ -167,8 +173,10 @@ function mergeSignalsTraits(server: TraceTraits, client: ClientTraits): TraceTra
     preferencePairs: pairs,
     hadFailure,
     recovered: hadFailure && Boolean(client.recovered),
-    testsRanAtEnd: Boolean(client.testsRanAtEnd),
-    testsPassedAtEnd: Boolean(client.testsRanAtEnd && client.testsPassedAtEnd),
+    // A final check is only believed if the structure shows a last call
+    // with its own result, and a pass only if that result succeeded.
+    testsRanAtEnd: Boolean(client.testsRanAtEnd && final.hasResult),
+    testsPassedAtEnd: Boolean(client.testsRanAtEnd && client.testsPassedAtEnd && final.ok),
     failureCategory: client.failureCategory ?? server.failureCategory,
     language: client.language ?? server.language,
     framework: client.framework ?? server.framework,
@@ -244,13 +252,20 @@ export async function shareTrace(
   let labels: Label[];
   let traits: TraceTraits;
   if (tier === 0) {
-    const e = enrichTrace(stored, { redactionDensity: placeholderDensity(stored) });
+    const e = enrichTrace(stored, { redactionDensity: placeholderDensity(stored), now });
     labels = e.labels;
     traits = e.traits;
   } else {
-    const e = enrichTrace(stored);
-    traits = mergeSignalsTraits(e.traits, input.clientTraits ?? {});
+    const e = enrichTrace(stored, { now });
+    traits = mergeSignalsTraits(e.traits, input.clientTraits ?? {}, finalCheck(stored));
     labels = (input.clientLabels ?? e.labels).filter((l) => l.source === "heuristic");
+    // The structure is all the server has: check the browser's labels and
+    // traits against it.
+    traits.authenticity = checkAuthenticity(stored, {
+      now,
+      labels,
+      reported: input.clientTraits ?? {},
+    });
   }
   const comboKey = comboKeyOf(traits);
 

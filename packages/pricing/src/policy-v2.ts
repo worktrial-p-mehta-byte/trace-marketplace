@@ -10,8 +10,10 @@ import {
   qualityFactor,
 } from "./factors";
 import {
+  authenticityFactor,
   bandWidth,
   bountyAnchor,
+  trustClaim,
   duplicatesFactor,
   failureFactorV2,
   nicheFactor,
@@ -98,15 +100,29 @@ export const traitPolicyV2: PricingPolicy<TraceTraits> = {
     const quality = qualityFactor(t, c);
     const richness = richnessFactorV2(t, v2);
     const fail = failureFactorV2(t, v2);
-    const rar = rarityFactorV2(ctx.cohorts, v2);
-    const niche = nicheFactor(domain, ctx.niche, v2);
+    const auth = authenticityFactor(t, v2);
+    const consistent = auth.level === "consistent";
+    // A signals-only domain is the seller's claim: its domain-driven
+    // factors count for less, more so when the upload looks inconsistent.
+    const rarRaw = rarityFactorV2(ctx.cohorts, v2);
+    const rar = { ...rarRaw, value: trustClaim(rarRaw.value, ctx.claimed, consistent, v2) };
+    const nicheRaw = nicheFactor(domain, ctx.niche, v2);
+    const niche = { ...nicheRaw, value: trustClaim(nicheRaw.value, ctx.claimed, consistent, v2) };
     const demand = demandFactor(market.demandPressure, c, market.baselineDemand);
     const duplicates = duplicatesFactor(ctx.duplicates, v2);
     const freshness = freshnessFactor(t, market.now, c);
     const lic = licenseFactor(license, c);
 
     const rawMultiplier =
-      quality * richness * fail.value * rar.value * niche.value * demand * duplicates * freshness;
+      quality *
+      richness *
+      fail.value *
+      rar.value *
+      niche.value *
+      demand *
+      duplicates *
+      auth.value *
+      freshness;
     const multiplier = Math.min(c.multiplierCap, rawMultiplier);
     const unanchored = base * multiplier;
     const anchored = bountyAnchor(unanchored, ctx.bountyAnchorCents, v2);
@@ -124,6 +140,7 @@ export const traitPolicyV2: PricingPolicy<TraceTraits> = {
       demand,
       duplicates,
       bounty,
+      authenticity: auth.value,
       freshness,
       license: lic,
       rawMultiplier,
@@ -192,7 +209,9 @@ function drivers(
             ? `; ${t.preferencePairs} preference pair${t.preferencePairs > 1 ? "s" : ""}`
             : ""
         }`,
-    rarity: rarityParts.join("; "),
+    rarity:
+      rarityParts.join("; ") +
+      (ctx.claimed ? "; domain reported by the seller, so it counts for less" : ""),
     niche:
       t.domain === "unknown"
         ? "domain unclear, so no niche adjustment"
@@ -211,6 +230,13 @@ function drivers(
         : ctx.bountyAnchorCents
           ? "an open bounty matches; the price is already near its offer"
           : "no open bounty matches",
+    authenticity: (() => {
+      const a = t.authenticity;
+      if (!a) return "checked before authenticity checks existed";
+      const failed = a.checks.filter((x) => !x.passed).map((x) => x.detail);
+      if (a.level === "consistent") return "well-formed and internally consistent";
+      return failed.length ? failed.slice(0, 2).join("; ") : "well-formed";
+    })(),
     duplicates: ctx.duplicates
       ? `the seller lists ${ctx.duplicates} more session${ctx.duplicates > 1 ? "s" : ""} of this exact shape`
       : "no near-duplicates from this seller",
@@ -225,6 +251,7 @@ function drivers(
     "richness",
     "quality",
     "duplicates",
+    "authenticity",
     "freshness",
   ];
   return order.map((key) => {

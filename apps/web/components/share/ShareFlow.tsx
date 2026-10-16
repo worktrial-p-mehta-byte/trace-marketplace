@@ -6,7 +6,7 @@ import { detectAdapter } from "@tm/adapters";
 import { enrichTrace } from "@tm/enrich";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
-import { DOMAIN_NAMES, FACTOR_NAMES } from "@/lib/labels";
+import { AUTHENTICITY_NAMES, DOMAIN_NAMES, FACTOR_NAMES } from "@/lib/labels";
 import { redactionLabel } from "../Redacted";
 import { SignalsView } from "./SignalsView";
 import { Timeline } from "./Timeline";
@@ -473,6 +473,23 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
               {active.enrich.traits.toolCalls} tool calls,{" "}
               {Math.round(active.enrich.traits.durationMinutes)} min
             </p>
+            {active.enrich.traits.authenticity && (
+              <p className="mt-1 text-sm text-ink-2">
+                <span className="font-semibold text-ink">Authenticity: </span>
+                {AUTHENTICITY_NAMES[active.enrich.traits.authenticity.level]}
+                {active.enrich.traits.authenticity.level !== "consistent" && (
+                  <span className="text-brick">
+                    {" "}
+                    (
+                    {active.enrich.traits.authenticity.checks
+                      .filter((c) => !c.passed)
+                      .map((c) => c.detail)
+                      .join("; ")}
+                    )
+                  </span>
+                )}
+              </p>
+            )}
             <p className="mt-1 text-sm text-ink-2">
               <span className="font-semibold text-ink">Domain: </span>
               {DOMAIN_NAMES[active.enrich.traits.domain] ?? "Unknown domain"}

@@ -92,6 +92,12 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       duplicates: { step: 0.5, floor: 0.4 },
       demand: { halfLifeDays: 7, repeatWeight: 0.5 },
       bounty: { anchorShare: 0.6, maxLift: 1.5 },
+      authenticity: {
+        consistent: 1.0,
+        well_formed: 0.95,
+        flagged: 0.7,
+        claimedTrust: { consistent: 0.75, other: 0.5 },
+      },
       band: { base: 0.08, domainUncertainty: 0.12, thinCohort: 0.08, claimed: 0.05, max: 0.35 },
     },
     quoteLockMinutes: 15,

@@ -194,6 +194,13 @@ describe("domains", () => {
     }
   });
 
+  it("passes the authenticity checks like a recorded session would", () => {
+    for (const t of generateCatalog(8, 150, NOW)) {
+      const { traits } = enrichTrace(t, { now: NOW });
+      expect(traits.authenticity?.level, t.title).toBe("consistent");
+    }
+  });
+
   it("records the harness each kind of work came from", () => {
     const harnesses = new Set(generateCatalog(5, 300, NOW).map((t) => t.provenance.harness.name));
     expect(harnesses.has("claude-code")).toBe(true);

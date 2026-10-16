@@ -42,3 +42,11 @@ export {
   type ExtractOptions,
   type TraceTraits,
 } from "./traits";
+export {
+  checkAuthenticity,
+  finalCheck,
+  type Authenticity,
+  type AuthenticityCheck,
+  type AuthenticityLevel,
+  type ReportedTraits,
+} from "./authenticity";

@@ -150,6 +150,52 @@ describe("shareTrace", () => {
     expect(db.select().from(schema.assets).all()[0]!.kind).toBe("signals");
   });
 
+  it("checks a signals-only upload's reported traits against its structure", async () => {
+    const full = scrubbed();
+    const e = enrichTrace(full);
+    const r = await shareTrace(db, deps, {
+      sellerId,
+      trace: toSignalsOnly(full),
+      tier: 1,
+      clientTraits: { ...e.traits, userCorrections: 999, preferencePairs: 999 },
+      clientLabels: e.labels,
+    });
+    const traits = db.select().from(schema.traceTraits).all()[0]!.data as {
+      authenticity: { level: string; checks: { id: string; passed: boolean }[] };
+    };
+    expect(traits.authenticity.checks.find((c) => c.id === "reported_traits")!.passed).toBe(false);
+    expect(traits.authenticity.level).not.toBe("consistent");
+    expect(r.priceCents).toBeGreaterThan(0);
+  });
+
+  it("doesn't believe a passing final check the structure can't show", async () => {
+    const full = scrubbed();
+    const e = enrichTrace(full);
+    // Drop every tool result: the calls are left dangling.
+    const stripped = toSignalsOnly(full);
+    const dangling = {
+      ...stripped,
+      events: stripped.events
+        .filter((x) => x.type !== "tool_result")
+        .map((x, i) => ({ ...x, seq: i })),
+    };
+    await shareTrace(db, deps, {
+      sellerId,
+      trace: dangling,
+      tier: 1,
+      clientTraits: { ...e.traits, testsRanAtEnd: true, testsPassedAtEnd: true },
+      clientLabels: [],
+    });
+    const traits = db.select().from(schema.traceTraits).all().at(-1)!.data as {
+      testsRanAtEnd: boolean;
+      testsPassedAtEnd: boolean;
+      authenticity: { level: string };
+    };
+    expect(traits.testsRanAtEnd).toBe(false);
+    expect(traits.testsPassedAtEnd).toBe(false);
+    expect(traits.authenticity.level).not.toBe("consistent");
+  });
+
   it("keeps a signals-only upload's domain as a bounded claim", async () => {
     const full = scrubbed();
     const e = enrichTrace(full);

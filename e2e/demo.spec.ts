@@ -90,6 +90,8 @@ test.describe.serial("demo flow", () => {
     // Labels link to the events that triggered them.
     await page.locator("a[href^='#e-']").first().click();
     await expect(page.getByText("Why this price")).toBeVisible();
+    // Authenticity tiers 1–2: the checks are listed on the page.
+    await expect(page.getByRole("list", { name: "Authenticity checks" })).toBeVisible();
     // Pricing V2: the domain's niche is a factor, and the price comes with a range.
     const card = page.getByRole("region", { name: "Price" });
     await expect(card.getByRole("cell", { name: "Domain niche" })).toBeVisible();

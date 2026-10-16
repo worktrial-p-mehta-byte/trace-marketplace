@@ -44,6 +44,15 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Authenticity tiers 1–2 — phase 2
+
+| Limitation                                                 | Impact                                                                                                                                          | Lifted by                                                              |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Checks read structure only; nothing replays the session    | A careful forger who writes a well-formed log with varied timing passes                                                                         | Tier 3: sandbox replay of the session's commands                       |
+| The timing check is a single statistic (variation of gaps) | Jittered fabrications pass; very regular real sessions (scripted runs) are marked inconsistent                                                  | More signals: token usage vs text length, harness version fingerprints |
+| Outcome checks only know test commands                     | A domain's own check (a rubric grader, a reconciliation) isn't recognised as verifying a recovery, so non-coding recoveries price as "inferred" | Domain plugins declaring their check tools                             |
+| Flagged sessions are listed (at 0.7×), not refused         | Buyers must use the filter to avoid them                                                                                                        | A refusal threshold once false positives are measured                  |
+
 ## Pricing V2 — phase 2
 
 | Limitation                                                                                                                          | Impact                                                                                                          | Lifted by                                                                          |

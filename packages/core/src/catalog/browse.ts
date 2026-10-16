@@ -20,6 +20,8 @@ export interface BrowseQuery {
   includeContent?: boolean;
   /** A domain id from @tm/enrich ("medical", "data_querying", ...). */
   domain?: string;
+  /** Authenticity level: consistent, well_formed or flagged. */
+  authenticity?: string;
   language?: string;
   framework?: string;
   failure?: string;
@@ -42,6 +44,8 @@ export interface CatalogItem {
   domain: string;
   /** Share of evidence per domain, top three (a session can span domains). */
   domains: { domain: string; share: number }[];
+  /** Authenticity tiers 1–2; "unchecked" for listings from before the checks. */
+  authenticity: string;
   language: string | null;
   framework: string | null;
   turns: number;
@@ -63,7 +67,15 @@ export interface BrowseResult {
   total: number;
   items: CatalogItem[];
   facets: Record<
-    "domain" | "language" | "framework" | "failure" | "outcome" | "model" | "tier" | "source",
+    | "domain"
+    | "authenticity"
+    | "language"
+    | "framework"
+    | "failure"
+    | "outcome"
+    | "model"
+    | "tier"
+    | "source",
     FacetValue[]
   >;
 }
@@ -83,6 +95,8 @@ function dimValues(i: CatalogItem, d: Dim): string[] {
   switch (d) {
     case "domain":
       return [i.domain];
+    case "authenticity":
+      return [i.authenticity];
     case "language":
       return i.language ? [i.language] : [];
     case "framework":
@@ -103,6 +117,7 @@ function dimValues(i: CatalogItem, d: Dim): string[] {
 function matches(i: CatalogItem, q: BrowseQuery, skip?: Dim): boolean {
   const want: [Dim, string | undefined][] = [
     ["domain", q.domain],
+    ["authenticity", q.authenticity],
     ["language", q.language],
     ["framework", q.framework],
     ["failure", q.failure],
@@ -165,6 +180,7 @@ function loadCatalog(db: Db, config: MarketplaceConfig): CatalogItem[] {
       model: r.model,
       domain: traits.domain ?? "unknown",
       domains: traits.domains ?? [],
+      authenticity: traits.authenticity?.level ?? "unchecked",
       language: r.language,
       framework: r.framework,
       turns: r.turns,
@@ -216,6 +232,7 @@ export async function browseCatalog(
   }
   const facets = {
     domain: facet(items, q, "domain"),
+    authenticity: facet(items, q, "authenticity"),
     language: facet(items, q, "language"),
     framework: facet(items, q, "framework"),
     failure: facet(items, q, "failure"),
