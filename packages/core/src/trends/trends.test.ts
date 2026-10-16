@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "@tm/config";
-import { openDb, runMigrations, type Db } from "@tm/db";
+import { eq } from "drizzle-orm";
+import { openDb, runMigrations, schema, type Db } from "@tm/db";
 import { generateCatalog, generateFlood } from "@tm/synth";
 import {
   createCampaign,
@@ -96,6 +97,40 @@ describe("marketTrends", () => {
     // Nothing legal listed at all and a campaign waiting: wanted, none listed.
     const productivity = marketTrends(db, deps).domains.find((d) => d.domain === "productivity")!;
     if (!productivity.supply) expect(productivity.status).toBe("quiet");
+  });
+});
+
+describe("trends over time", () => {
+  it("keeps sales of withdrawn listings, and segments an open campaign names", async () => {
+    const { placeOrder, quoteCart, revokeTrace } = await import("../index");
+    const medical = db
+      .select({
+        id: schema.listings.id,
+        traceId: schema.listings.traceId,
+        traits: schema.traceTraits.data,
+      })
+      .from(schema.listings)
+      .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.listings.traceId))
+      .all()
+      .find((r) => (r.traits as { domain: string }).domain === "medical")!;
+    placeOrder(db, deps, buyer, quoteCart(db, deps, buyer, "research", [medical.id]).id);
+    await revokeTrace(db, deps, seller.id, medical.traceId);
+    expect(marketTrends(db, deps).domains.find((d) => d.domain === "medical")!.sales).toBe(1);
+
+    // A campaign whose demand has aged out of the window, for a segment nothing supplies.
+    createCampaign(db, deps, buyer, {
+      describe: "legal reward hacking",
+      license: "research",
+      maxPriceCents: 10,
+      quantity: 2,
+      days: 60,
+    });
+    db.update(schema.demandSignals)
+      .set({ createdAt: new Date(NOW.getTime() - 30 * 86_400_000) })
+      .run();
+    const seg = marketTrends(db, deps).segments.find((x) => x.key === "legal|test_tampering");
+    expect(seg?.openCampaigns).toBe(1);
+    expect(seg?.status).toBe("unsupplied");
   });
 });
 

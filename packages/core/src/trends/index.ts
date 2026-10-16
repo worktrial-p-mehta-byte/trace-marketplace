@@ -115,18 +115,20 @@ export function marketTrends(
     prices.set(k, [...(prices.get(k) ?? []), a.currentPriceCents ?? 0]);
   }
 
+  // Sales in the window, classified by the sold trace's own traits, so a
+  // listing withdrawn after it sold still counts.
   const salesBy = new Map<string, number>();
   const sold = db
-    .select({ listingId: schema.orderLines.listingId })
+    .select({ traits: schema.traceTraits.data })
     .from(schema.orderLines)
+    .innerJoin(schema.listings, eq(schema.listings.id, schema.orderLines.listingId))
+    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.listings.traceId))
     .where(gte(schema.orderLines.createdAt, since))
     .all();
-  const segOfListing = new Map(
-    active.map((a) => [a.listingId, segOf(a.traits.domain ?? "unknown", a.traits.failureCategory)]),
-  );
   for (const s of sold) {
-    const k = segOfListing.get(s.listingId);
-    if (k) salesBy.set(k, (salesBy.get(k) ?? 0) + 1);
+    const t = s.traits as { domain?: string; failureCategory?: string };
+    const k = segOf(t.domain ?? "unknown", t.failureCategory);
+    salesBy.set(k, (salesBy.get(k) ?? 0) + 1);
   }
 
   const campaigns = db
@@ -195,7 +197,12 @@ export function marketTrends(
     .map((d) => row(d, d, undefined, (k) => k.startsWith(`${d}|`)))
     .sort((a, b) => rank(b) - rank(a) || b.demand - a.demand);
 
-  const segKeys = new Set([...supply.keys(), ...demand.keys()]);
+  // Open campaigns name segments too: one can outlive its demand signal's
+  // window while nothing is listed there yet.
+  const campaignKeys = campaigns
+    .filter((x) => x.criteria.domain && x.criteria.failure)
+    .map((x) => segOf(x.criteria.domain!, x.criteria.failure));
+  const segKeys = new Set([...supply.keys(), ...demand.keys(), ...campaignKeys]);
   const segments = [...segKeys]
     .filter((k) => !k.startsWith("unknown|") && !k.endsWith("|none"))
     .map((k) => {
