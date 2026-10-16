@@ -28,6 +28,8 @@ import {
   shareTrace,
   type CatalogDeps,
   type PublicUser,
+  auctionListing,
+  campaignFillsFor,
 } from "../index";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
@@ -255,6 +257,47 @@ describe("campaigns", () => {
     expect(listNotifications(db, lab2.id).some((n) => n.kind === "outbid")).toBe(true);
     expect(listNotifications(db, lab3.id).some((n) => n.kind === "outbid")).toBe(true);
     expect(ledgerBalanced()).toBe(true);
+  });
+
+  it("auctions a listing once, even if its event is delivered again", async () => {
+    const lab2 = await ensureAccount(db, "lab2@example.com", "buyer", "Lab 2");
+    ensureWelcomeCredits(db, deps.config, lab2.buyerOrgId!);
+    const base = { describe: "finance", license: "research" as const, quantity: 3, days: 7 };
+    createCampaign(db, deps, buyer, { ...base, maxPriceCents: 4000 });
+    createCampaign(db, deps, lab2, { ...base, maxPriceCents: 3500 });
+    const other = await ensureAccount(db, "o5@example.com", "seller", "O5");
+    const [t] = generateFlood(62, 1, NOW, { domain: "finance", pattern: "tool_error" });
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    expect(campaignFillsFor(db, r.listingId)).toBe(1);
+    // A retry (the batch was not acknowledged): the runner-up must not buy it.
+    expect(auctionListing(db, deps, r.listingId)).toBeUndefined();
+    expect(campaignFillsFor(db, r.listingId)).toBe(1);
+    expect(ledgerBalanced()).toBe(true);
+  });
+
+  it("tells the loser of an equal bid that it lost a tie", async () => {
+    const lab2 = await ensureAccount(db, "lab2@example.com", "buyer", "Lab 2");
+    ensureWelcomeCredits(db, deps.config, lab2.buyerOrgId!);
+    const base = { describe: "finance", license: "research" as const, quantity: 3, days: 7 };
+    createCampaign(db, deps, buyer, { ...base, maxPriceCents: 4000 });
+    createCampaign(db, deps, lab2, { ...base, maxPriceCents: 4000 });
+    const other = await ensureAccount(db, "o6@example.com", "seller", "O6");
+    const [t] = generateFlood(63, 1, NOW, { domain: "finance", pattern: "retry_loop" });
+    await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    const n = listNotifications(db, lab2.id).find((x) => x.kind === "outbid")!;
+    expect(n.title).toMatch(/^Lost a tie/);
+    expect(n.body).toMatch(/bid the same/);
+    expect(n.body).not.toMatch(/bid more/);
   });
 
   it("clears at the list price with a single bidder", async () => {

@@ -392,6 +392,13 @@ function bidFor(
   if (!a || !matchesCriteria(a.traits, c.criteria as DemandCriteria)) return undefined;
   if (orgMemberIds(db, c.buyerOrgId).has(a.sellerId)) return undefined;
   if (licensesHeld(db, c.buyerOrgId, listingId).includes(c.license)) return undefined;
+  // Only under a licence the seller offers.
+  const allowed = db
+    .select({ allowed: schema.listings.allowedLicenses })
+    .from(schema.listings)
+    .where(eq(schema.listings.id, listingId))
+    .get()?.allowed;
+  if (!allowed?.includes(c.license)) return undefined;
   const list = market.quote(a, c.license).priceCents;
   if (list > c.maxPriceCents || list > balanceOf(db, Accounts.escrow(c.id))) return undefined;
   return list;
@@ -421,6 +428,10 @@ export function auctionListing(
   listingId: string,
 ): AuctionResult | undefined {
   const now = deps.now ?? new Date();
+  // Each new listing is auctioned once. A listing with a fill already went
+  // to auction (a new listing only gets fills here), so a retried event, e.g.
+  // after a later listing in the same batch failed, never sells it again.
+  if (campaignFillsFor(db, listingId) > 0) return undefined;
   const market = buildMarket(db, { config: deps.config, now });
   const open = db
     .select()
@@ -450,11 +461,17 @@ export function auctionListing(
   });
   if (!filled) return undefined;
   for (const lost of eligible.slice(1)) {
+    // Equal bids go to the earlier campaign: say so, rather than "bid more".
+    const tie = lost.c.maxPriceCents === win!.c.maxPriceCents;
     for (const userId of orgMemberIds(db, lost.c.buyerOrgId)) {
       notify(db, userId, {
         kind: "outbid",
-        title: `Outbid on a trace for “${lost.c.title}”`,
-        body: `Another campaign bid more. It paid $${(price / 100).toFixed(2)}; your bid was $${(lost.c.maxPriceCents / 100).toFixed(2)}. Raise your maximum to win the next one.`,
+        title: tie
+          ? `Lost a tie on a trace for “${lost.c.title}”`
+          : `Outbid on a trace for “${lost.c.title}”`,
+        body: tie
+          ? `Another campaign bid the same, $${(lost.c.maxPriceCents / 100).toFixed(2)}, and started earlier, so it won the tie and paid $${(price / 100).toFixed(2)}. Raise your maximum to win the next one.`
+          : `Another campaign bid more. It paid $${(price / 100).toFixed(2)}; your bid was $${(lost.c.maxPriceCents / 100).toFixed(2)}. Raise your maximum to win the next one.`,
         href: `/traces/${listingId}`,
         now,
       });
