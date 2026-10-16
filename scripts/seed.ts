@@ -1,6 +1,5 @@
-import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { findRepoRoot, loadServerConfig } from "@tm/config/server";
+import { loadServerConfig } from "@tm/config/server";
 import {
   createDbEventBus,
   createLocalBlobStore,
@@ -66,7 +65,7 @@ async function main() {
     process.exit(EXIT_NOT_EMPTY);
   }
   const bus = createDbEventBus(db);
-  const blobs = createLocalBlobStore(join(findRepoRoot(), "data", "blobs"));
+  const blobs = createLocalBlobStore(config.storage.blobPath);
   const search = createSqliteSearchIndex(db);
   const now = new Date();
   const rng = createRng(seed + 1);

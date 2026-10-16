@@ -30,6 +30,9 @@ export function loadServerConfig(opts: { fresh?: boolean } = {}): MarketplaceCon
   if (!isAbsolute(config.database.path)) {
     config.database.path = join(root, config.database.path);
   }
+  if (!isAbsolute(config.storage.blobPath)) {
+    config.storage.blobPath = join(root, config.storage.blobPath);
+  }
   cached = config;
   return config;
 }

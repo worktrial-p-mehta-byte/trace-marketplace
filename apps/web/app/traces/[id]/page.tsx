@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingDetail, recordBuyerInterest } from "@tm/core";
+import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
 import { PriceChart } from "@/components/PriceChart";
@@ -35,13 +35,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const d = await getListingDetail(
-    getDb(),
-    { config: getConfig(), blobs: getBlobs() },
-    id,
-    undefined,
-  );
-  return { title: d?.title ?? "Trace" };
+  return { title: listingTitle(getDb(), id) ?? "Trace" };
 }
 
 export default async function TracePage({ params }: { params: Promise<{ id: string }> }) {

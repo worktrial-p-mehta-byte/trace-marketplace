@@ -32,6 +32,7 @@ function envOverrides(env: Env): DeepPartial<MarketplaceConfig> {
   const sellerShare = num(env, "SELLER_SHARE");
   if (sellerShare !== undefined) o.revenue = { sellerShare };
   if (env.DATABASE_PATH) o.database = { path: env.DATABASE_PATH };
+  if (env.BLOB_DIR) o.storage = { blobPath: env.BLOB_DIR };
   if (env.TM_CONFIG_OVERRIDES) {
     let parsed: unknown;
     try {

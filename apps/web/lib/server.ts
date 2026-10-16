@@ -1,7 +1,6 @@
 import "server-only";
-import { join } from "node:path";
 import { cookies } from "next/headers";
-import { findRepoRoot, loadServerConfig } from "@tm/config/server";
+import { loadServerConfig } from "@tm/config/server";
 import {
   createDbEventBus,
   createLocalBlobStore,
@@ -34,7 +33,7 @@ export function getBus(): EventBus {
 }
 
 export function getBlobs(): BlobStore {
-  if (!g.__tmBlobs) g.__tmBlobs = createLocalBlobStore(join(findRepoRoot(), "data", "blobs"));
+  if (!g.__tmBlobs) g.__tmBlobs = createLocalBlobStore(getConfig().storage.blobPath);
   return g.__tmBlobs;
 }
 

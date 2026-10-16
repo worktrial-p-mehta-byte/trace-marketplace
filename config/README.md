@@ -13,6 +13,7 @@ To change values, either:
 | --------------------- | ------------------------------------------------------------------ | ---------------------------------- |
 | `SELLER_SHARE`        | Fraction of each sale paid to the seller (platform keeps the rest) | `0.7`                              |
 | `DATABASE_PATH`       | SQLite file location (relative to repo root, or absolute)          | `data/trace-marketplace.db`        |
+| `BLOB_DIR`            | Folder for stored traces (relative to repo root, or absolute)      | `data/blobs`                       |
 | `TM_CONFIG_OVERRIDES` | Any deep override as JSON                                          | `{"pricing":{"multiplierCap":10}}` |
 
 The config is validated at startup; an invalid value (for example a seller

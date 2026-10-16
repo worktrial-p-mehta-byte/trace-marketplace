@@ -18,8 +18,8 @@ export default async function SharePage() {
       <main className="mx-auto max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight">Share sessions</h1>
         <p className="mt-4 text-ink-2">
-          {user.email} is a buyer account, so it can browse and license traces but not sell them.
-          To share your own sessions, sign out and create a seller account.
+          {user.email} is a buyer account, so it can browse and license traces but not sell them. To
+          share your own sessions, sign out and create a seller account.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/traces" className="btn">
