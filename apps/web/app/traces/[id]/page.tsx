@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingDetail, licensesHeld, listingTitle, recordBuyerInterest } from "@tm/core";
+import {
+  getBuyerPreferences,
+  getListingDetail,
+  licensesHeld,
+  listingTitle,
+  recordBuyerInterest,
+} from "@tm/core";
 import { sellerShareFor } from "@tm/config";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
@@ -321,7 +327,10 @@ export default async function TracePage({
               className="rounded-md border border-moss/40 bg-moss/5 px-3 py-2 text-sm"
             >
               Added to your{" "}
-              <Link href="/cart" className="font-semibold text-cobalt">
+              <Link
+                href={`/cart?license=${p.license ?? "research"}`}
+                className="font-semibold text-cobalt"
+              >
                 cart
               </Link>
               .
@@ -341,6 +350,11 @@ export default async function TracePage({
               listingId={d.listingId}
               buyer={user?.buyerOrgId ? "buyer" : user ? "seller" : "none"}
               held={user?.buyerOrgId ? licensesHeld(getDb(), user.buyerOrgId, d.listingId) : []}
+              defaultLicense={
+                user?.buyerOrgId
+                  ? getBuyerPreferences(getDb(), user.buyerOrgId)?.license
+                  : undefined
+              }
             />
           )}
           {d.history.length > 0 && (

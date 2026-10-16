@@ -8,7 +8,7 @@ const ROLES = [
   {
     value: "seller",
     title: "Share my sessions",
-    body: "Sell traces from your own coding-agent sessions.",
+    body: "Sell traces from your own AI agent sessions.",
   },
   { value: "buyer", title: "Buy traces", body: "Search the catalog for your team's research." },
   { value: "both", title: "Both", body: "Share your sessions and buy others'." },

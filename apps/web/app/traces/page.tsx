@@ -6,7 +6,9 @@ import {
   criteriaOf,
   describe as describeQuery,
   ensureSearchIndex,
+  getBuyerPreferences,
   intentWords,
+  recommendFor,
   listSavedSearches,
   recordBuyerInterest,
   type BrowseQuery,
@@ -199,6 +201,12 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     return c ? { value: c.value, phrase: c.phrase } : undefined;
   };
   const saved = user?.buyerOrgId ? listSavedSearches(getDb(), user.buyerOrgId) : [];
+  // A buyer who told us what they need sees picks first when just browsing.
+  const prefs = user?.buyerOrgId ? getBuyerPreferences(getDb(), user.buyerOrgId) : undefined;
+  const picks =
+    prefs && !p.q && active.length === 0 && Number(p.page ?? 1) === 1
+      ? await recommendFor(getDb(), { config, search }, prefs, 4)
+      : [];
   const canSave = Boolean(user?.buyerOrgId) && (Boolean(p.q) || active.length > 0);
   const page = Number(p.page ?? 1);
   const pages = Math.max(1, Math.ceil(r.total / PAGE));
@@ -336,6 +344,41 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               )}
             </nav>
           </div>
+
+          {picks.length > 0 && (
+            <section
+              className="mt-4 rounded-lg border border-cobalt/30 bg-cobalt/5 p-4"
+              aria-label="Picked for you"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="font-semibold">Picked for you</h2>
+                <Link href="/welcome" className="text-sm text-cobalt">
+                  Change what you need
+                </Link>
+              </div>
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                {picks.map((i) => (
+                  <li key={i.listingId}>
+                    <Link
+                      href={`/traces/${i.listingId}`}
+                      className="flex justify-between gap-3 rounded border border-rule bg-paper px-3 py-2 text-sm hover:border-cobalt"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">
+                          {i.title ?? "Signals-only session"}
+                        </span>
+                        <span className="block truncate text-xs text-ink-3">
+                          {DOMAIN_NAMES[i.domain]} ·{" "}
+                          {i.failures.map((f) => FAILURE_NAMES[f]).join(", ") || "no failures"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-semibold">{money(i.priceCents)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {r.intent && (r.intent.chips.length > 0 || r.intent.rest) && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Read as">
