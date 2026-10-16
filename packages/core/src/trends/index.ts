@@ -43,6 +43,8 @@ export interface TrendRow {
   sales: number;
   openCampaigns: number;
   bestBidCents: number;
+  /** The bid landscape: open campaigns' maximum prices, highest first. */
+  bids: number[];
 }
 
 export interface MarketTrends {
@@ -192,6 +194,7 @@ export function marketTrends(
       sales: sum(salesBy),
       openCampaigns: matching.length,
       bestBidCents: matching.reduce((m, x) => Math.max(m, x.bid), 0),
+      bids: matching.map((x) => x.bid).sort((a, b) => b - a),
     };
   };
 

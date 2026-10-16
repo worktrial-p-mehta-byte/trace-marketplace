@@ -38,6 +38,26 @@ function Gap({ r }: { r: TrendRow }) {
   }
 }
 
+/** The bid landscape: what each open campaign will pay, highest first. */
+function Bids({ bids }: { bids: number[] }) {
+  return (
+    <span
+      className="flex flex-wrap items-center gap-1"
+      title="Open campaigns' maximum prices. A new listing goes to the highest bid, which pays the second-highest (or the list price, if higher)."
+    >
+      {bids.slice(0, 4).map((b, i) => (
+        <span
+          key={i}
+          className={`rounded px-1.5 py-0.5 text-xs font-semibold ${i === 0 ? "bg-moss/10 text-moss" : "bg-ink/5 text-ink-2"}`}
+        >
+          {money(b)}
+        </span>
+      ))}
+      {bids.length > 4 && <span className="text-xs text-ink-3">+{bids.length - 4}</span>}
+    </span>
+  );
+}
+
 const ARROW = { rising: "↑ rising", steady: "→ steady", falling: "↓ falling" };
 
 export default async function TrendsPage() {
@@ -83,14 +103,15 @@ export default async function TrendsPage() {
                   ) : (
                     "None listed yet"
                   )}
-                  {s.openCampaigns > 0 && (
-                    <>
-                      {" "}
-                      · {s.openCampaigns} campaign{s.openCampaigns > 1 ? "s" : ""} bidding up to{" "}
-                      {money(s.bestBidCents)}
-                    </>
-                  )}
                 </p>
+                {s.bids.length > 0 && (
+                  <p className="mt-2 flex flex-wrap items-center gap-1 text-sm">
+                    <span className="text-ink-2">
+                      {s.bids.length} campaign{s.bids.length > 1 ? "s" : ""} bidding:
+                    </span>
+                    <Bids bids={s.bids} />
+                  </p>
+                )}
                 {seller && (
                   <Link href="/share" className="btn-quiet mt-3 text-sm">
                     Share a session like this
@@ -115,7 +136,7 @@ export default async function TrendsPage() {
                 <th className="px-4 py-2 font-semibold">Supply</th>
                 <th className="px-4 py-2 font-semibold">Gap</th>
                 <th className="px-4 py-2 text-right font-semibold">Typical price</th>
-                <th className="px-4 py-2 font-semibold">Campaigns</th>
+                <th className="px-4 py-2 font-semibold">Campaign bids</th>
                 {seller && <th className="px-4 py-2 font-semibold">Notify me</th>}
               </tr>
             </thead>
@@ -150,9 +171,7 @@ export default async function TrendsPage() {
                   <td className="px-4 py-2 text-right">
                     {d.supply ? money(d.medianPriceCents) : "—"}
                   </td>
-                  <td className="px-4 py-2">
-                    {d.openCampaigns ? `${d.openCampaigns}, up to ${money(d.bestBidCents)}` : "—"}
-                  </td>
+                  <td className="px-4 py-2">{d.bids.length ? <Bids bids={d.bids} /> : "—"}</td>
                   {seller && (
                     <td className="px-4 py-2">
                       <form action={followDomainAction}>

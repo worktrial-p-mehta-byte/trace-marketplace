@@ -209,6 +209,33 @@ async function main() {
   setInterest(db, demoSeller.id, "medical", true);
   setInterest(db, demoSeller.id, "data_querying", true);
   const campaign = createCampaign(db, checkoutDeps, buyer, campaignInput);
+  // A second lab competes for the same sessions at a lower bid, so a new
+  // medical session goes to auction: the $25 bid wins and pays $15. It is
+  // funded with exactly its campaign's escrow.
+  const rival = await ensureAccount(db, "buyer2@example.com", "buyer", "Second lab", DEMO_PASSWORD);
+  const rivalInput = {
+    title: "Medical corrections for our eval set",
+    describe: "medical evaluations where the agent was corrected",
+    license: "research" as const,
+    maxPriceCents: 1500,
+    quantity: 4,
+    days: 14,
+  };
+  ensureWelcomeCredits(db, config, rival.buyerOrgId!);
+  const rivalShort =
+    rivalInput.maxPriceCents * rivalInput.quantity - creditBalance(db, rival.buyerOrgId!);
+  if (rivalShort > 0) {
+    postTransaction(db, {
+      kind: "credit_grant",
+      refType: "seed",
+      refId: rival.buyerOrgId!,
+      lines: [
+        { account: Accounts.creditIssuer, amountCents: -rivalShort },
+        { account: Accounts.buyer(rival.buyerOrgId!), amountCents: rivalShort },
+      ],
+    });
+  }
+  createCampaign(db, checkoutDeps, rival, rivalInput);
 
   bus.poll("pricing", () => {}, 1_000_000); // seed already priced everything
   bus.poll("search", () => {}, 1_000_000);
@@ -232,7 +259,9 @@ async function main() {
   console.log(
     `Open campaign "${campaign.campaign.title}": bought ${campaign.filled} of ${campaign.campaign.quantity} so far.`,
   );
-  console.log(`Demo logins (password "${DEMO_PASSWORD}"): seller@example.com, buyer@example.com`);
+  console.log(
+    `Demo logins (password "${DEMO_PASSWORD}"): seller@example.com, buyer@example.com, buyer2@example.com`,
+  );
 }
 main().catch((err) => {
   console.error("Seed failed:", err);

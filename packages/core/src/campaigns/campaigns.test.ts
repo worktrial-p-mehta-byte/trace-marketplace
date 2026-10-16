@@ -225,6 +225,63 @@ describe("campaigns", () => {
     expect(r2.campaignFills).toBeUndefined();
   });
 
+  it("auctions a new listing: the highest bid wins and pays the second-highest", async () => {
+    const lab2 = await ensureAccount(db, "lab2@example.com", "buyer", "Lab 2");
+    const lab3 = await ensureAccount(db, "lab3@example.com", "buyer", "Lab 3");
+    for (const b of [lab2, lab3]) ensureWelcomeCredits(db, deps.config, b.buyerOrgId!);
+    const base = { describe: "finance", license: "research" as const, quantity: 2, days: 7 };
+    const high = createCampaign(db, deps, buyer, { ...base, maxPriceCents: 4000 }).campaign;
+    createCampaign(db, deps, lab2, { ...base, maxPriceCents: 3500 });
+    createCampaign(db, deps, lab3, { ...base, maxPriceCents: 3000 });
+    const before = (id: string) => getCampaign(db, buyer, id)!.filled;
+    const filledBefore = before(high.id);
+
+    const other = await ensureAccount(db, "o3@example.com", "seller", "O3");
+    const [t] = generateFlood(61, 1, NOW, { domain: "finance", pattern: "user_correction" });
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    expect(r.campaignFills).toBe(1); // one winner, not three buyers
+    const v = getCampaign(db, buyer, high.id)!;
+    expect(v.filled).toBe(filledBefore + 1);
+    const fill = v.fills.find((f) => f.listingId === r.listingId)!;
+    // Second price: the runner-up's $35, unless the list price is higher.
+    expect(fill.priceCents).toBe(Math.max(3500, r.priceCents));
+    expect(listNotifications(db, other.id)[0]!.body).toContain("an auction among 3 campaigns");
+    // The losers hear what it went for.
+    expect(listNotifications(db, lab2.id).some((n) => n.kind === "outbid")).toBe(true);
+    expect(listNotifications(db, lab3.id).some((n) => n.kind === "outbid")).toBe(true);
+    expect(ledgerBalanced()).toBe(true);
+  });
+
+  it("clears at the list price with a single bidder", async () => {
+    createCampaign(db, deps, buyer, {
+      describe: "education",
+      license: "research",
+      maxPriceCents: 5000,
+      quantity: 5,
+      days: 7,
+    });
+    const other = await ensureAccount(db, "o4@example.com", "seller", "O4");
+    const [t] = generateFlood(71, 1, NOW, { domain: "education", pattern: "clean" });
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: other.id, trace: t!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    const fill = db
+      .select()
+      .from(schema.campaignFills)
+      .all()
+      .find((f) => f.listingId === r.listingId)!;
+    expect(fill.priceCents).toBeLessThan(5000);
+    expect(fill.priceCents).toBeGreaterThan(0);
+  });
+
   it("never pays above the max price", () => {
     const { filled } = createCampaign(db, deps, buyer, {
       describe: "medical",

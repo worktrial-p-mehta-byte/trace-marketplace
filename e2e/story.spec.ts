@@ -110,9 +110,11 @@ test.describe.serial("the demo story", () => {
     await expect(page.getByRole("heading", { name: "Most wanted right now" })).toBeVisible();
     await page.getByRole("link", { name: /Notifications, \d+ unread/ }).click();
     await expect(page.getByRole("list", { name: "Notifications" })).toContainText(
-      "through the campaign “Clinical evaluations with corrections”",
+      "an auction among 2 campaigns (the campaign “Clinical evaluations with corrections”)",
     );
     await page.goto("/me/traces");
     await expect(page.getByLabel("Earnings")).toContainText("1 licence sold");
+    // Competition paid: the winner paid the runner-up's $15 bid, not the list price.
+    await expect(page.getByLabel("Earnings")).toContainText("$10.50");
   });
 });
