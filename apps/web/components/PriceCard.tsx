@@ -20,6 +20,7 @@ export function PriceCard({
   buyer = "none",
   held = [],
   defaultLicense = "research",
+  openSource = false,
 }: {
   quotes: Record<License, PriceQuote>;
   listingId?: string;
@@ -29,6 +30,8 @@ export function PriceCard({
   held?: License[];
   /** The licence to show first (the buyer's stated use). */
   defaultLicense?: License;
+  /** Shared as open source, so it can be exported as a task. */
+  openSource?: boolean;
 }) {
   const [license, setLicense] = useState<License>(defaultLicense);
   const q = quotes[license];
@@ -71,9 +74,27 @@ export function PriceCard({
           <p className="font-semibold text-moss">
             You hold {license === "eval" ? "an" : "a"} {chosen.label.toLowerCase()} licence
           </p>
-          <a href={`/api/listings/${listingId}/download`} className="mt-1 inline-block text-cobalt">
-            Download the trace
-          </a>
+          <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <a href={`/api/listings/${listingId}/download`} className="text-cobalt">
+              Download the trace
+            </a>
+            {openSource && license !== "research" && (
+              <a href={`/api/listings/${listingId}/task`} className="text-cobalt">
+                Download as a task (JSON)
+              </a>
+            )}
+          </p>
+          {openSource && license !== "research" && (
+            <p className="mt-1 text-xs text-ink-2">
+              The task holds the prompt, files touched, commands, the check command and the expected
+              outcome, to replay the session against an agent.
+            </p>
+          )}
+          {openSource && license === "research" && (
+            <p className="mt-1 text-xs text-ink-2">
+              Exporting it as a replayable task needs an evaluation or training licence.
+            </p>
+          )}
         </div>
       ) : buyer === "buyer" && listingId ? (
         <div className="mt-4 grid grid-cols-2 gap-2">

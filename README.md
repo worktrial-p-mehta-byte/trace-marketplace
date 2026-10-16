@@ -83,6 +83,10 @@ Prefer Docker? `docker compose up --build` runs the same thing (see
   evaluation or training licence, with "why this price".
 - Buy with demo credits (the only simulated step): cart, a price held for
   15 minutes, a balanced ledger, licences, receipts and downloads.
+- With an evaluation or training licence, download an open-source session
+  **as a task** (JSON): the
+  prompt, files touched, commands, the check command and the expected
+  outcome, to replay it against another agent as an eval.
 - Start a **campaign**: a standing bid with escrow that buys every matching
   trace at its list price, now and as sellers share new ones.
 

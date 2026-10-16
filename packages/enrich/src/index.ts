@@ -68,3 +68,4 @@ export {
   type NoteKind,
   type TraceExplanation,
 } from "./explain";
+export { exportTask, TaskExportError, TASK_FORMAT, type TaskSpec } from "./task";
