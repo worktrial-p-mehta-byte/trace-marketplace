@@ -1,13 +1,16 @@
-import { existsSync, rmSync } from "node:fs";
 import { loadServerConfig } from "@tm/config/server";
+import { resetLocalData } from "./reset-data";
 
 // Deletes the local SQLite database (and its WAL files) and the stored
-// traces that belong to it. Run `pnpm db:reset` to delete and re-create it.
-const config = loadServerConfig();
-const { path } = config.database;
-for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-  const file = path + suffix;
-  if (existsSync(file)) rmSync(file);
+// traces that belong to it. Other files in BLOB_DIR are left alone, so a
+// shared or mistaken BLOB_DIR can't lose anything else.
+// Run `pnpm db:reset` to delete and re-create it.
+async function main() {
+  const config = loadServerConfig();
+  const { path } = config.database;
+  const { blobsRemoved } = await resetLocalData(path, config.storage.blobPath);
+  console.log(
+    `Removed ${path} and its ${blobsRemoved} stored trace file${blobsRemoved === 1 ? "" : "s"} in ${config.storage.blobPath}`,
+  );
 }
-rmSync(config.storage.blobPath, { recursive: true, force: true });
-console.log(`Removed ${path} and ${config.storage.blobPath}`);
+main();
