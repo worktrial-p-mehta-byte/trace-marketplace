@@ -18,6 +18,7 @@ import {
   createSession,
   createUser,
   deleteSession,
+  DuplicateShareError,
   estimatePrice,
   getUserBySession,
   listSellerTraces,
@@ -257,6 +258,34 @@ describe("shareTrace when downstream work fails", () => {
       .where(eq(schema.listings.id, r.listingId))
       .get()!;
     expect(listing.currentPriceCents).toBeGreaterThan(0);
+  });
+});
+
+describe("duplicate shares of signals-only traces", () => {
+  it("accepts two different sessions that only differ in their text", async () => {
+    // The same story in another language: same steps and timing, other words.
+    const a = scrubTrace(raw).trace;
+    const b: Trace = {
+      ...a,
+      id: `${a.id}_other`,
+      events: a.events.map((e) =>
+        e.type === "user_message" || e.type === "assistant_message"
+          ? { ...e, text: `${e.text} (in Verilog)` }
+          : e,
+      ),
+    };
+    // Stripped of text, the two are indistinguishable by their events alone.
+    expect(JSON.stringify(toSignalsOnly(a).events)).toBe(JSON.stringify(toSignalsOnly(b).events));
+
+    await shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 });
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(b), tier: 1 }),
+    ).resolves.toMatchObject({ listingId: expect.any(String) });
+
+    // Re-uploading the same session is still refused.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 }),
+    ).rejects.toThrow(DuplicateShareError);
   });
 });
 

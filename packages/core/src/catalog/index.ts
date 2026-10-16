@@ -22,6 +22,20 @@ export class DuplicateShareError extends ShareError {
   }
 }
 
+/**
+ * Identity of a stored trace's content, for duplicate shares and for rarity
+ * (copies don't create scarcity). It covers the trace id, which the adapter
+ * derives from the harness session id, as well as the events: signals-only
+ * traces have their text stripped, so two different sessions with the same
+ * shape (same steps, tools and timing) have identical events, and hashing
+ * events alone refused the second as "already shared".
+ */
+export function contentHashOf(trace: Pick<Trace, "id" | "events">): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ id: trace.id, events: trace.events }))
+    .digest("hex");
+}
+
 export interface CatalogDeps {
   config: MarketplaceConfig;
   bus: EventBus;
@@ -150,7 +164,7 @@ export async function shareTrace(
     );
   }
 
-  const contentHash = createHash("sha256").update(JSON.stringify(stored.events)).digest("hex");
+  const contentHash = contentHashOf(stored);
   /** Same seller, same content, consent not revoked. */
   const findDuplicate = (q: Db) =>
     q
