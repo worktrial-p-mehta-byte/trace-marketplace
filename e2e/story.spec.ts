@@ -55,6 +55,10 @@ test.describe.serial("the demo story", () => {
     await expect(page.getByText(/Authenticity:\s*Flagged/)).toBeVisible();
     await expect(page.getByText("1 tool result has no call").first()).toBeVisible();
 
+    // Open source is the default: confirm the right to share them all at once.
+    await page
+      .getByRole("button", { name: "They are all open-source work or my own projects" })
+      .click();
     await page.getByRole("button", { name: "Share 4 sessions" }).click();
     await expect(page.getByRole("heading", { name: "4 sessions shared" })).toBeVisible();
     await expect(page.getByText(/Bought by 1 campaign already/)).toBeVisible();
@@ -129,12 +133,14 @@ test.describe.serial("the demo story", () => {
     await page.goto("/trends");
     await expect(page.getByRole("heading", { name: "Most wanted right now" })).toBeVisible();
     await page.getByRole("link", { name: /Notifications, \d+ unread/ }).click();
-    await expect(page.getByRole("list", { name: "Notifications" })).toContainText(
+    const notes = page.getByRole("list", { name: "Notifications" });
+    await expect(notes).toContainText(
       "an auction among 2 campaigns (the campaign “Clinical evaluations with corrections”)",
     );
+    // Competition paid: the winner paid the runner-up's $30 bid (70% to the seller).
+    await expect(notes).toContainText("You earned $21.00");
     await page.goto("/me/traces");
-    await expect(page.getByLabel("Earnings")).toContainText("1 licence sold");
-    // Competition paid: the winner paid the runner-up's $15 bid, not the list price.
-    await expect(page.getByLabel("Earnings")).toContainText("$10.50");
+    // The campaign's licence, and the lab's own purchase if it picked this session.
+    await expect(page.getByLabel("Earnings")).toContainText(/[12] licences? sold/);
   });
 });

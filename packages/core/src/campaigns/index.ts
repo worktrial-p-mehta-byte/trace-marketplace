@@ -471,7 +471,7 @@ export function auctionListing(
           : `Outbid on a trace for “${lost.c.title}”`,
         body: tie
           ? `Another campaign bid the same, $${(lost.c.maxPriceCents / 100).toFixed(2)}, and started earlier, so it won the tie and paid $${(price / 100).toFixed(2)}. Raise your maximum to win the next one.`
-          : `Another campaign bid more. It paid $${(price / 100).toFixed(2)}; your bid was $${(lost.c.maxPriceCents / 100).toFixed(2)}. Raise your maximum to win the next one.`,
+          : `Another campaign bid more than your $${(lost.c.maxPriceCents / 100).toFixed(2)} maximum and won it at $${(price / 100).toFixed(2)}. Raise your maximum to win the next one.`,
         href: `/traces/${listingId}`,
         now,
       });
