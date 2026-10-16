@@ -152,7 +152,7 @@ PNPM_VERSION="$(node -p 'require("./package.json").packageManager.split("@")[1]'
 if ! command -v pnpm >/dev/null || [ "$(pnpm --version 2>/dev/null)" != "$PNPM_VERSION" ]; then
   PNPM_DIR="$TOOLS/pnpm-$PNPM_VERSION"
   if [ ! -x "$PNPM_DIR/node_modules/.bin/pnpm" ]; then
-    note "Getting pnpm $PNPM_VERSION…"
+    note "Getting pnpm ${PNPM_VERSION}…"
     quietly npm install --silent --no-audit --no-fund --prefix "$PNPM_DIR" "pnpm@$PNPM_VERSION"
   fi
   # On PATH, because the project's own scripts call pnpm too.
