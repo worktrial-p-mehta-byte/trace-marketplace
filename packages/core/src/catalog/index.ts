@@ -261,7 +261,23 @@ export async function shareTrace(
   } else {
     const e = enrichTrace(stored, { now });
     traits = mergeSignalsTraits(e.traits, input.clientTraits ?? {}, finalCheck(stored));
-    labels = (input.clientLabels ?? e.labels).filter((l) => l.source === "heuristic");
+    // The domain label follows the domain the traits settled on (the
+    // browser's claim, cleaned up), so facets, search and the seller's share
+    // all see the same domain.
+    const claimed = (input.clientLabels ?? e.labels).filter((l) => l.source === "heuristic");
+    const claimedDomain = claimed.find((l) => l.kind === "domain");
+    labels = [
+      ...claimed.filter((l) => l.kind !== "domain"),
+      claimedDomain?.code === traits.domain
+        ? claimedDomain
+        : {
+            kind: "domain",
+            code: traits.domain,
+            confidence: traits.domainConfidence,
+            source: "heuristic",
+            evidence: [],
+          },
+    ];
     // The structure is all the server has: check the browser's labels and
     // traits against it.
     traits.authenticity = checkAuthenticity(stored, {
@@ -535,8 +551,12 @@ export function estimatePrice(
   tier: Tier,
   opts: {
     sellerId?: string;
-    /** Other sessions of the same shape in the same upload batch (near-duplicates to be). */
-    pendingSameShape?: number;
+    /**
+     * The other sessions the seller is sharing in the same upload: they join
+     * the cohorts they share with this one, and same-shape ones become its
+     * near-duplicates.
+     */
+    pendingSiblings?: TraceTraits[];
   } = {},
 ): PriceQuote {
   const market = buildMarket(db, deps);
@@ -561,7 +581,7 @@ export function estimatePrice(
       v2: market.contextFor(traits, {
         sellerId: opts.sellerId,
         tier,
-        pendingSameShape: opts.pendingSameShape,
+        pendingSiblings: opts.pendingSiblings,
       }),
     },
   });

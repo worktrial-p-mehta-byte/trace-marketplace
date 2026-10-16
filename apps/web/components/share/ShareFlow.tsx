@@ -151,7 +151,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
   // Fetch price estimates (traits only, never content) when tiers or traits change.
   const estimateKey = items
     .filter((i) => i.eligible)
-    .map((i) => `${i.key}=${pricingStamp(i)}`)
+    .map((i) => `${i.key}=${pricingStamp(i)}${i.selected && i.state !== "shared" ? "" : ":off"}`)
     .join("|");
   useEffect(() => {
     if (!estimateKey) return;
@@ -165,6 +165,8 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
           key: i.key,
           tier: i.tier,
           traits: i.enrich.traits,
+          // Already-shared sessions are listed, not pending siblings.
+          selected: i.selected && i.state !== "shared",
           stamp: pricingStamp(i),
         }));
       let quotes: (Quote & { key: string })[];
@@ -173,7 +175,7 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            items: sent.map(({ key, tier, traits }) => ({ key, tier, traits })),
+            items: sent.map(({ key, tier, traits, selected }) => ({ key, tier, traits, selected })),
           }),
           signal: controller.signal,
         });

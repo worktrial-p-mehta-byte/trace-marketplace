@@ -23,6 +23,7 @@ import {
   listOrders,
   placeOrder,
   quoteCart,
+  quotePayable,
   removeFromCart,
   repriceAll,
   revokeTrace,
@@ -168,15 +169,54 @@ describe("cart, quote and order", () => {
       .where(eq(schema.listings.id, listings[6]!))
       .get()!.traceId;
     await revokeTrace(db, deps, seller.id, traceId);
+    // Checkout shows what paying will charge now, not the original total.
+    const payable = quotePayable(db, buyer, getQuote(db, buyer, q.id)!);
+    expect(payable.skipped).toEqual([listings[6]]);
+    expect(payable.totalCents).toBe(q.lines[0]!.priceCents);
+    expect(payable.totalCents).toBeLessThan(q.totalCents);
     const r = placeOrder(db, deps, buyer, q.id);
     expect(r.skipped).toEqual([listings[6]]);
     expect(r.lines).toBe(1);
+    expect(r.totalCents).toBe(payable.totalCents);
 
     const poor = await ensureAccount(db, "poor@example.com", "buyer", "Poor");
     const q2 = quoteCart(db, deps, poor, "training", [listings[7]!]);
     expect(() => placeOrder(db, deps, poor, q2.id)).toThrow(/Not enough credits/);
     expect(listOrders(db, poor.buyerOrgId!)).toEqual([]);
     expect(ledgerSums().every((s) => s === 0)).toBe(true);
+  });
+
+  it("sells a listing only under the licences its seller offers", () => {
+    const only = (id: string, allowed: string[]) =>
+      db
+        .update(schema.listings)
+        .set({ allowedLicenses: allowed })
+        .where(eq(schema.listings.id, id))
+        .run();
+    only(listings[2]!, ["research"]);
+    const q = quoteCart(db, deps, buyer, "training", [listings[2]!, listings[3]!]);
+    expect(q.lines.find((l) => l.listingId === listings[2])!.excluded).toBe("license_not_offered");
+    // Offered when quoted, withdrawn from that licence before paying: skipped.
+    const q2 = quoteCart(db, deps, buyer, "research", [listings[4]!]);
+    only(listings[4]!, ["eval"]);
+    expect(() => placeOrder(db, deps, buyer, q2.id)).toThrow(/can still be bought/);
+  });
+
+  it("reports a paid order as paid even if the follow-up work fails", () => {
+    const q = quoteCart(db, deps, buyer, "research", [listings[8]!]);
+    const flaky = {
+      ...deps,
+      bus: {
+        ...deps.bus,
+        emit: () => {
+          throw new Error("bus down");
+        },
+      },
+    };
+    const r = placeOrder(db, flaky, buyer, q.id);
+    expect(r.lines).toBe(1);
+    expect(licensesHeld(db, buyer.buyerOrgId!, listings[8]!)).toContain("research");
+    expect(ledgerSums().every((sum) => sum === 0)).toBe(true);
   });
 
   it("keeps quotes, receipts and downloads to the buying team", async () => {

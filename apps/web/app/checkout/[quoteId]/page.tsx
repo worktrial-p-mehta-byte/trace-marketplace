@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { creditBalance, ensureWelcomeCredits, getQuote, hasCurrentTerms } from "@tm/core";
+import {
+  creditBalance,
+  ensureWelcomeCredits,
+  getQuote,
+  hasCurrentTerms,
+  quotePayable,
+} from "@tm/core";
 import { payAction, topUpAction } from "@/app/cart/actions";
 import { money } from "@/lib/labels";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
@@ -30,7 +36,9 @@ export default async function CheckoutPage({
   if (q.orderId) redirect(`/orders/${q.orderId}`);
   ensureWelcomeCredits(getDb(), getConfig(), user.buyerOrgId);
   const balance = creditBalance(getDb(), user.buyerOrgId);
-  const lines = q.lines.filter((l) => !l.excluded);
+  // What paying charges now: lines withdrawn since the quote are skipped.
+  const payable = quotePayable(getDb(), user, q);
+  const lines = q.lines.filter((l) => !l.excluded && !payable.skipped.includes(l.listingId));
   const minutes = Math.max(0, Math.round((q.expiresAt.getTime() - Date.now()) / 60_000));
 
   return (
@@ -57,6 +65,12 @@ export default async function CheckoutPage({
           {p.error}
         </p>
       )}
+      {payable.skipped.length > 0 && (
+        <p className="mt-4 rounded-md border border-rule bg-surface px-4 py-3 text-sm text-ink-2">
+          {payable.skipped.length === 1 ? "One trace is" : `${payable.skipped.length} traces are`}{" "}
+          no longer available to you and won&apos;t be charged.
+        </p>
+      )}
       <table className="mt-6 w-full text-sm">
         <tbody>
           {lines.map((l) => (
@@ -67,7 +81,7 @@ export default async function CheckoutPage({
           ))}
           <tr className="border-t-2 border-ink">
             <td className="py-2 pr-4 font-semibold">Total</td>
-            <td className="py-2 text-right text-lg font-bold">{money(q.totalCents)}</td>
+            <td className="py-2 text-right text-lg font-bold">{money(payable.totalCents)}</td>
           </tr>
         </tbody>
       </table>
@@ -80,7 +94,11 @@ export default async function CheckoutPage({
           <Link href="/cart" className="btn">
             Get current prices
           </Link>
-        ) : balance < q.totalCents ? (
+        ) : payable.lineCount === 0 ? (
+          <Link href="/cart" className="btn">
+            Back to the cart
+          </Link>
+        ) : balance < payable.totalCents ? (
           <form action={topUpAction}>
             <input type="hidden" name="back" value={`/checkout/${q.id}`} />
             <button className="btn">Add demo credits</button>
@@ -88,7 +106,7 @@ export default async function CheckoutPage({
         ) : (
           <form action={payAction}>
             <input type="hidden" name="quoteId" value={q.id} />
-            <button className="btn">Pay {money(q.totalCents)} with credits</button>
+            <button className="btn">Pay {money(payable.totalCents)} with credits</button>
           </form>
         )}
       </div>

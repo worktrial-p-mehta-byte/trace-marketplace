@@ -179,6 +179,24 @@ describe("floodSupply by domain", () => {
     );
   });
 
+  it("only adds sessions the labeler reads as the requested domain", async () => {
+    // Seed 9 generates a couple of science sessions that read as coding.
+    const before = (
+      await browseCatalog(db, { config: deps.config, search: deps.search! }, { domain: "science" })
+    ).total;
+    const r = await floodSupply(db, deps, {
+      domain: "science",
+      pattern: "clean",
+      count: 20,
+      seed: 9,
+    });
+    expect(r.added).toBe(20);
+    const after = (
+      await browseCatalog(db, { config: deps.config, search: deps.search! }, { domain: "science" })
+    ).total;
+    expect(after - before).toBe(20);
+  });
+
   it("refuses a flood with no domain or language, or an impossible pair", async () => {
     await expect(floodSupply(db, deps, { pattern: "clean", count: 1 })).rejects.toThrow(FloodError);
     await expect(

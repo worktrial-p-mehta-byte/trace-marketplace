@@ -7,6 +7,7 @@ import {
   Accounts,
   balanceOf,
   campaignCriteria,
+  clearCampaign,
   CampaignError,
   cancelCampaign,
   createCampaign,
@@ -102,6 +103,32 @@ describe("campaigns", () => {
     expect(ledgerBalanced()).toBe(true);
     // Sellers hear about the sale.
     expect(listNotifications(db, seller.id)[0]!.body).toContain("through the campaign");
+  });
+
+  it("keeps its counters right when a later purchase fails, so it never overbuys", () => {
+    // The second fill of any campaign fails part-way.
+    db.$client.exec(`CREATE TRIGGER fail_second_fill BEFORE INSERT ON campaign_fills
+      WHEN (SELECT count(*) FROM campaign_fills WHERE campaign_id = NEW.campaign_id) >= 1
+      BEGIN SELECT RAISE(ABORT, 'disk full'); END`);
+    expect(() =>
+      createCampaign(db, deps, buyer, {
+        describe: "medical corrections",
+        license: "research",
+        maxPriceCents: 5000,
+        quantity: 2,
+        days: 14,
+      }),
+    ).toThrow(/disk full/);
+    const row = db.select().from(schema.campaigns).get()!;
+    // The first purchase committed, and so did its count.
+    expect(row.filled).toBe(1);
+    db.$client.exec("DROP TRIGGER fail_second_fill");
+    clearCampaign(db, deps, row.id);
+    const v = getCampaign(db, buyer, row.id)!;
+    expect(v.fills).toHaveLength(2);
+    expect(v.filled).toBe(2);
+    expect(v.spentCents).toBe(v.fills.reduce((sum, f) => sum + f.priceCents, 0));
+    expect(ledgerBalanced()).toBe(true);
   });
 
   it("buys new matching supply as it arrives, and stops at the quantity", async () => {

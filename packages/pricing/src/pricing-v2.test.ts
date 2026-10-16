@@ -112,6 +112,13 @@ describe("V2 factors", () => {
     const all = (x: typeof tiny) => ({ domain: x, failure: x, stack: x, model: x });
     expect(rarityFactorV2(all(tiny), v2).value).toBe(v2.rarity.max);
     expect(rarityFactorV2(all(huge), v2).value).toBe(v2.rarity.min);
+    // All the weight on the stack level and a thin failure cohort: neutral, never NaN.
+    const stackOnly = {
+      ...v2,
+      rarity: { ...v2.rarity, weights: { domain: 0, failure: 0, stack: 1 } },
+    };
+    const r = rarityFactorV2({ ...base, failure: cohort(3, 15) }, stackOnly).value;
+    expect(Number.isFinite(r)).toBe(true);
   });
 
   it("keeps the model's effect on rarity within ± the configured spread", () => {

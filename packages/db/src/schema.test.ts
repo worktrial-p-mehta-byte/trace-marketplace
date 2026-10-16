@@ -81,6 +81,41 @@ describe("database migrations", () => {
     }
   });
 
+  it("move a team's onboarding answers to their own kind, and nothing else", () => {
+    // A database from before 0005, with answers and a look-alike saved search.
+    const old = mkdtempSync(join(tmpdir(), "tm-migrations-"));
+    try {
+      cpSync(MIGRATIONS_DIR, old, { recursive: true });
+      const journalPath = join(old, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalPath, "utf8")) as {
+        entries: { tag: string }[];
+      };
+      journal.entries = journal.entries.filter((e) => e.tag < "0005");
+      writeFileSync(journalPath, JSON.stringify(journal));
+      const db = openDb(":memory:");
+      migrate(db, { migrationsFolder: old });
+      db.$client.exec(`
+        INSERT INTO buyer_orgs (id, name) VALUES ('org1', 'Lab');
+        INSERT INTO collections (id, buyer_org_id, name, kind, query) VALUES
+          ('c1', 'org1', 'Preferences', 'query', '{"domains":["medical"],"failures":[]}'),
+          ('c2', 'org1', 'Preferences', 'query', '{"language":"Preferences"}'),
+          ('c3', 'org1', 'Legal', 'query', '{"domain":"legal"}');`);
+      runMigrations(db);
+      const kinds = db.$client.prepare("select id, kind from collections order by id").all() as {
+        id: string;
+        kind: string;
+      }[];
+      expect(kinds).toEqual([
+        { id: "c1", kind: "preferences" },
+        { id: "c2", kind: "query" },
+        { id: "c3", kind: "query" },
+      ]);
+      db.$client.close();
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+    }
+  });
+
   it("finds the migrations folder from the package, TM_ROOT or the repo layout", () => {
     expect(findMigrationsDir()).toBeDefined();
     expect(findMigrationsDir("/nonexistent")).toBe(MIGRATIONS_DIR);

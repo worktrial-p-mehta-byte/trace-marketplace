@@ -10,7 +10,9 @@ import {
   getBuyerPreferences,
   listSavedSearches,
   PreferencesError,
+  quoteListing,
   recommendFor,
+  saveSearch,
   repriceAll,
   setBuyerPreferences,
   shareTrace,
@@ -115,6 +117,45 @@ describe("buyer preferences", () => {
     expect(picks.length).toBeGreaterThan(0);
     expect(picks.length).toBeLessThan(all.length);
     for (const i of picks) expect(i.priceCents).toBeLessThanOrEqual(budgetCents);
+  });
+
+  it("prices picks under the team's licence, and budgets against that price", async () => {
+    const open = { domains: ["medical"], license: "training" as const };
+    const all = await recommendFor(db, deps, setBuyerPreferences(db, deps, buyer, open), 20);
+    for (const i of all)
+      expect(i.priceCents).toBe(quoteListing(db, i.listingId, "training", deps)!.priceCents);
+    // A budget the research price fits but the training price doesn't.
+    const cheapest = Math.min(...all.map((i) => i.priceCents));
+    const picks = await recommendFor(
+      db,
+      deps,
+      setBuyerPreferences(db, deps, buyer, { ...open, maxPriceCents: cheapest - 1 }),
+      20,
+    );
+    expect(picks).toEqual([]);
+  });
+
+  it("never picks the team's own members' listings", async () => {
+    const both = await ensureAccount(db, "both@example.com", "both", "Both");
+    const [own] = generateFlood(31, 1, NOW, { domain: "legal", pattern: "user_correction" });
+    const r = await shareTrace(
+      db,
+      deps,
+      { sellerId: both.id, trace: own!, tier: 0 },
+      { allowSynthetic: true },
+    );
+    const p = setBuyerPreferences(db, deps, both, { domains: ["legal"] });
+    const forTeam = await recommendFor(db, deps, p, 50, both.buyerOrgId!);
+    expect(forTeam.map((i) => i.listingId)).not.toContain(r.listingId);
+    const forAnyone = await recommendFor(db, deps, p, 50);
+    expect(forAnyone.map((i) => i.listingId)).toContain(r.listingId);
+  });
+
+  it("keeps the answers apart from a saved search that happens to be called Preferences", () => {
+    const p = setBuyerPreferences(db, deps, buyer, { domains: ["medical"] });
+    saveSearch(db, deps, buyer, { name: "Preferences", query: { domain: "legal" } });
+    expect(getBuyerPreferences(db, buyer.buyerOrgId!)).toEqual(p);
+    expect(listSavedSearches(db, buyer.buyerOrgId!).map((x) => x.name)).toEqual(["Preferences"]);
   });
 
   it("suggests a campaign the campaign form understands", () => {

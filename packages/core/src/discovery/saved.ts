@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { isEmptyCriteria } from "@tm/pricing";
@@ -50,7 +50,9 @@ const KEYS: (keyof SavedQuery)[] = [
 function clean(q: SavedQuery): SavedQuery {
   const out: Record<string, unknown> = {};
   for (const k of KEYS) {
-    const v = q[k];
+    const raw = q[k];
+    // Whitespace is not a filter: "   " is as empty as "".
+    const v = typeof raw === "string" ? raw.trim() : raw;
     if (v === undefined || v === "") continue;
     if (k === "tier") out.tier = v === 1 || v === "1" ? 1 : 0;
     else out[k] = String(v).slice(0, 200);
@@ -102,14 +104,7 @@ export function listSavedSearches(db: Db, buyerOrgId: string): SavedSearch[] {
   return db
     .select()
     .from(schema.collections)
-    .where(
-      and(
-        eq(schema.collections.buyerOrgId, buyerOrgId),
-        eq(schema.collections.kind, "query"),
-        // The team's onboarding answers are stored alongside; they aren't a search.
-        ne(schema.collections.name, "Preferences"),
-      ),
-    )
+    .where(and(eq(schema.collections.buyerOrgId, buyerOrgId), eq(schema.collections.kind, "query")))
     .orderBy(desc(schema.collections.createdAt))
     .all()
     .map((r) => ({

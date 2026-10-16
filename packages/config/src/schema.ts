@@ -182,6 +182,14 @@ export const MarketplaceConfig = z
     if (Math.abs(w.domain + w.failure + w.stack - 1) > 1e-6) {
       ctx.addIssue({ code: "custom", message: "pricing.v2.rarity.weights must sum to 1" });
     }
+    // The stack level is skipped for thin failure cohorts; its weight then
+    // goes to the two levels above, so they can't both be zero.
+    if (w.domain + w.failure <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "pricing.v2.rarity.weights: domain + failure must be above 0",
+      });
+    }
     for (const [k, r] of [
       ["rarity", v2.rarity],
       ["niche", v2.niche],

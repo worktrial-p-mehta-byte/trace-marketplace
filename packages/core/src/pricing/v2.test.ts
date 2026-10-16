@@ -100,13 +100,38 @@ describe("Pricing V2 in the market", () => {
     };
     const { traits } = enrichTrace(a!);
     const alone = estimatePrice(db, deps, traits, 0, { sellerId });
-    const batch = estimatePrice(db, deps, traits, 0, { sellerId, pendingSameShape: 1 });
+    const batch = estimatePrice(db, deps, traits, 0, { sellerId, pendingSiblings: [traits] });
     expect(batch.priceCents).toBeLessThan(alone.priceCents);
     const r = await shareTrace(db, deps, { sellerId, trace: a!, tier: 0 }, SYNTH);
     await shareTrace(db, deps, { sellerId, trace: twin, tier: 0 }, SYNTH);
     expect(Math.abs(listingOf(r.traceId).currentPriceCents! / batch.priceCents - 1)).toBeLessThan(
       0.05,
     );
+  });
+
+  it("counts batch siblings only in the cohorts they share", () => {
+    const [legal] = generateFlood(78, 1, NOW, { domain: "legal", pattern: "tool_error" });
+    const [rust] = generateFlood(79, 1, NOW, {
+      language: "Rust",
+      framework: "Tokio",
+      pattern: "retry_loop",
+    });
+    const l = enrichTrace(legal!).traits;
+    const r = enrichTrace(rust!).traits;
+    const m = buildMarket(db, deps);
+    const alone = m.contextFor(l, { tier: 0 })!;
+    const withRust = m.contextFor(l, { tier: 0, pendingSiblings: [r] })!;
+    const withLegal = m.contextFor(l, { tier: 0, pendingSiblings: [l] })!;
+    // An unrelated sibling leaves the legal cohorts alone; only total supply grows.
+    expect(withRust.cohorts.domain.count).toBe(alone.cohorts.domain.count);
+    expect(withRust.cohorts.failure.count).toBe(alone.cohorts.failure.count);
+    expect(withRust.niche.domainSupply).toBe(alone.niche.domainSupply);
+    expect(withRust.niche.totalSupply).toBe(alone.niche.totalSupply + 1);
+    expect(withRust.duplicates).toBe(alone.duplicates);
+    // A same-kind sibling joins every cohort and is a near-duplicate.
+    expect(withLegal.cohorts.domain.count).toBe(alone.cohorts.domain.count + 1);
+    expect(withLegal.niche.domainSupply).toBe(alone.niche.domainSupply + 1);
+    expect(withLegal.duplicates).toBe(alone.duplicates + 1);
   });
 
   it("judges the model's scarcity within the domain, not across the market", () => {

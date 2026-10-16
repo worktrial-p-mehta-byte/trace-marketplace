@@ -242,19 +242,26 @@ export function buildMarket(db: Db, deps: PricingDeps) {
   /** V2 market context for a trace; `listed` false prices it as if it were about to be. */
   function contextV2(
     traits: TraceTraits,
-    o: { sellerId?: string; tier: Tier; listed: boolean; pendingSameShape?: number },
+    o: { sellerId?: string; tier: Tier; listed: boolean; pendingSiblings?: TraceTraits[] },
   ): MarketContextV2 {
     const keys = cohortKeys(traits);
-    // An estimate counts the trace itself and its same-shape batch siblings,
-    // which will join the same cohorts once shared.
-    const extra = o.listed ? 0 : 1 + Math.max(0, o.pendingSameShape ?? 0);
+    // An estimate counts the trace itself, plus each other session in the
+    // same upload that will join the same cohort once shared (siblings only
+    // count where they share the cohort, not everywhere).
+    const siblings = o.listed ? [] : (o.pendingSiblings ?? []);
+    const siblingKeys = siblings.map(cohortKeys);
+    const extraAt = (l: Level) =>
+      o.listed ? 0 : 1 + siblingKeys.filter((k) => k[l] === keys[l]).length;
     // The model's scarcity is judged against other models in the same domain.
     const cohort = (l: Level) =>
-      levels[l].cohort(keys[l], extra, l === "model" ? keys.domain : undefined);
+      levels[l].cohort(keys[l], extraAt(l), l === "model" ? keys.domain : undefined);
+    const sameShape = traits.shapeKey
+      ? siblings.filter((t) => t.shapeKey === traits.shapeKey).length
+      : 0;
     const shapeCount =
       (o.sellerId && traits.shapeKey
         ? (shapes.get(`${o.sellerId}|${traits.shapeKey}`)?.size ?? 0)
-        : 0) + Math.max(0, o.pendingSameShape ?? 0);
+        : 0) + sameShape;
     const anchor = bounties
       .filter((b) => matchesCriteria(traits, b.criteria))
       .reduce((m, b) => Math.max(m, b.perTraceCents), 0);
@@ -269,8 +276,8 @@ export function buildMarket(db: Db, deps: PricingDeps) {
       niche: {
         domainDemand: domainDemand.get(d) ?? 0,
         totalDemand,
-        domainSupply: domainSupply(d) + extra,
-        totalSupply: totalSupply() + extra,
+        domainSupply: domainSupply(d) + extraAt("domain"),
+        totalSupply: totalSupply() + (o.listed ? 0 : 1 + siblings.length),
       },
       duplicates: Math.max(0, shapeCount - (o.listed ? 1 : 0)),
       bountyAnchorCents: anchor || undefined,
@@ -296,8 +303,8 @@ export function buildMarket(db: Db, deps: PricingDeps) {
       o: {
         sellerId?: string;
         tier: Tier;
-        /** Other sessions of the same shape being shared in the same batch. */
-        pendingSameShape?: number;
+        /** The other sessions being shared in the same upload. */
+        pendingSiblings?: TraceTraits[];
       },
     ) {
       return v2 ? contextV2(traits, { ...o, listed: false }) : undefined;

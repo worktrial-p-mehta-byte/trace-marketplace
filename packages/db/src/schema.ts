@@ -221,7 +221,8 @@ export const collections = sqliteTable("collections", {
     .notNull()
     .references(() => buyerOrgs.id),
   name: text("name").notNull(),
-  kind: text("kind", { enum: ["static", "query"] }).notNull(),
+  /** static: a list of traces; query: a saved search; preferences: a buyer team's onboarding answers. */
+  kind: text("kind", { enum: ["static", "query", "preferences"] }).notNull(),
   query: text("query", { mode: "json" }),
   createdAt: createdAt(),
 });

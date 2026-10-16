@@ -164,10 +164,36 @@ async function main() {
   // demo session 10 sells it the moment it is listed.
   const checkoutDeps = { config, bus, now };
   ensureWelcomeCredits(db, config, buyer.buyerOrgId!);
+  const pastBuys = db
+    .select({ id: schema.listings.id, tier: schema.listings.tier, traits: schema.traceTraits.data })
+    .from(schema.listings)
+    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.listings.traceId))
+    .all()
+    .filter((r) => r.tier === 0 && (r.traits as { domain?: string }).domain === "data_querying")
+    .slice(0, 3)
+    .map((r) => r.id);
+  // Quoted first (in orders no longer than the configured limit), so the
+  // seed knows exactly what its buying costs at today's prices.
+  const perOrder = Math.max(1, config.checkout.maxOrderLines);
+  const quotes = [];
+  for (let i = 0; i < pastBuys.length; i += perOrder) {
+    quotes.push(quoteCart(db, checkoutDeps, buyer, "research", pastBuys.slice(i, i + perOrder)));
+  }
+  const campaignInput = {
+    title: "Clinical evaluations with corrections",
+    describe: "medical evaluations where the agent was corrected",
+    license: "research" as const,
+    maxPriceCents: 2500,
+    quantity: 6,
+    days: 14,
+  };
   // The seed's own buying is funded here, whatever the welcome credits are
-  // configured to (they can be 0): three purchases and a $150 campaign.
-  const SEED_SPEND = 25_000;
-  const short = SEED_SPEND - creditBalance(db, buyer.buyerOrgId!);
+  // configured to (they can be 0): the quoted purchases plus the campaign's
+  // escrow (its max price times its quantity).
+  const spend =
+    quotes.reduce((sum, q) => sum + q.totalCents, 0) +
+    campaignInput.maxPriceCents * campaignInput.quantity;
+  const short = spend - creditBalance(db, buyer.buyerOrgId!);
   if (short > 0) {
     postTransaction(db, {
       kind: "credit_grant",
@@ -179,32 +205,10 @@ async function main() {
       ],
     });
   }
-  const pastBuys = db
-    .select({ id: schema.listings.id, tier: schema.listings.tier, traits: schema.traceTraits.data })
-    .from(schema.listings)
-    .innerJoin(schema.traceTraits, eq(schema.traceTraits.traceId, schema.listings.traceId))
-    .all()
-    .filter((r) => r.tier === 0 && (r.traits as { domain?: string }).domain === "data_querying")
-    .slice(0, 3)
-    .map((r) => r.id);
-  if (pastBuys.length) {
-    placeOrder(
-      db,
-      checkoutDeps,
-      buyer,
-      quoteCart(db, checkoutDeps, buyer, "research", pastBuys).id,
-    );
-  }
+  for (const q of quotes) placeOrder(db, checkoutDeps, buyer, q.id);
   setInterest(db, demoSeller.id, "medical", true);
   setInterest(db, demoSeller.id, "data_querying", true);
-  const campaign = createCampaign(db, checkoutDeps, buyer, {
-    title: "Clinical evaluations with corrections",
-    describe: "medical evaluations where the agent was corrected",
-    license: "research",
-    maxPriceCents: 2500,
-    quantity: 6,
-    days: 14,
-  });
+  const campaign = createCampaign(db, checkoutDeps, buyer, campaignInput);
 
   bus.poll("pricing", () => {}, 1_000_000); // seed already priced everything
   bus.poll("search", () => {}, 1_000_000);

@@ -1,4 +1,4 @@
-import type { Label, Trace } from "@tm/schema";
+import type { Label, Trace, TraceEvent } from "@tm/schema";
 import { isTestCommand } from "./labels";
 
 /**
@@ -186,24 +186,43 @@ export function checkAuthenticity(
   }
 
   const bySeq = new Map(ev.map((e) => [e.seq, e]));
-  const wantType: Record<string, (string | undefined)[]> = {
-    tool_error: ["tool_result"],
-    retry_loop: ["tool_result"],
-    tool_rejected: ["tool_result"],
-    user_correction: ["user_message"],
-    user_interrupt: ["user_message"],
-    harness_error: ["system"],
-    test_tampering: ["tool_call"],
+  const callTool = new Map(
+    ev.flatMap((e) => (e.type === "tool_call" ? [[e.callId, e.tool] as const] : [])),
+  );
+  // What each failure label's evidence must be: the event type and the flags
+  // that make it that failure (text is not checked: signals-only sessions
+  // have none, so a correction can only be checked as a normal message).
+  const fits: Record<string, (e: TraceEvent) => boolean> = {
+    tool_error: (e) => e.type === "tool_result" && e.isError === true && !e.rejected,
+    retry_loop: (e) => e.type === "tool_result" && e.isError === true && !e.rejected,
+    tool_rejected: (e) => e.type === "tool_result" && e.rejected === true,
+    user_correction: (e) => e.type === "user_message" && !e.interrupted,
+    user_interrupt: (e) => e.type === "user_message" && e.interrupted === true,
+    harness_error: (e) => e.type === "system" && e.kind === "harness_message",
+    test_tampering: (e) => e.type === "tool_call",
+  };
+  const failingTool = (seq: number) => {
+    const e = bySeq.get(seq);
+    return e?.type === "tool_result" ? callTool.get(e.callId) : undefined;
   };
   const badEvidence = (opts.labels ?? [])
     .filter((l) => l.kind === "failure")
-    .filter((l) =>
-      l.evidence.some((seq) => {
+    .filter((l) => {
+      const fit = fits[l.code];
+      const wrongEvent = l.evidence.some((seq) => {
         const e = bySeq.get(seq);
-        const want = wantType[l.code];
-        return !e || (want !== undefined && !want.includes(e.type));
-      }),
-    )
+        return !e || (fit !== undefined && !fit(e));
+      });
+      // A retry loop is the same tool failing at least three times.
+      const notALoop =
+        l.code === "retry_loop" &&
+        (l.evidence.length < 3 ||
+          !l.evidence.every((seq) => {
+            const t = failingTool(seq);
+            return t !== undefined && t === failingTool(l.evidence[0]!);
+          }));
+      return wrongEvent || notALoop;
+    })
     .map((l) => l.code);
   if (opts.labels) {
     checks.push(

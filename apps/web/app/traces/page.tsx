@@ -205,7 +205,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const prefs = user?.buyerOrgId ? getBuyerPreferences(getDb(), user.buyerOrgId) : undefined;
   const picks =
     prefs && !p.q && active.length === 0 && Number(p.page ?? 1) === 1
-      ? await recommendFor(getDb(), { config, search }, prefs, 4)
+      ? await recommendFor(getDb(), { config, search }, prefs, 4, user?.buyerOrgId ?? undefined)
       : [];
   const canSave = Boolean(user?.buyerOrgId) && (Boolean(p.q) || active.length > 0);
   const page = Number(p.page ?? 1);

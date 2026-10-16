@@ -207,12 +207,23 @@ export function clearCampaign(
       .map((r) => r.listingId),
   );
   const members = orgMemberIds(db, c.buyerOrgId);
+  // Only listings the seller offers under the campaign's licence.
+  const allowed = new Map(
+    db
+      .select({ id: schema.listings.id, allowed: schema.listings.allowedLicenses })
+      .from(schema.listings)
+      .where(eq(schema.listings.status, "active"))
+      .all()
+      .map((r) => [r.id, r.allowed]),
+  );
+  const offered = (listingId: string) => allowed.get(listingId)?.includes(c.license) ?? false;
   const candidates = market.active
     .filter((a) => (!only || only.includes(a.listingId)) && !already.has(a.listingId))
     .filter((a) => matchesCriteria(a.traits, criteria))
     // Never the team's own members' work, nor a licence it already holds.
     .filter((a) => !members.has(a.sellerId))
     .filter((a) => !licensesHeld(db, c.buyerOrgId, a.listingId).includes(c.license))
+    .filter((a) => offered(a.listingId))
     .map((a) => ({ a, price: market.quote(a, c.license).priceCents }))
     .filter((x) => x.price <= c.maxPriceCents)
     .sort((x, y) => x.price - y.price);
@@ -278,6 +289,13 @@ export function clearCampaign(
         .values({ collectionId: c.collectionId, listingId: a.listingId, addedAt: now })
         .onConflictDoNothing()
         .run();
+      // The counters commit with the purchase, so a failure on a later
+      // candidate can never leave the campaign under-counted (and able to
+      // buy past its quantity on the next run).
+      tx.update(schema.campaigns)
+        .set({ filled: count + 1, spentCents: c.budgetCents - (escrow - price) })
+        .where(eq(schema.campaigns.id, c.id))
+        .run();
     });
     escrow -= price;
     count++;
@@ -285,10 +303,6 @@ export function clearCampaign(
     bought.push(a.listingId);
   }
   if (filled) {
-    db.update(schema.campaigns)
-      .set({ filled: count, spentCents: c.budgetCents - escrow })
-      .where(eq(schema.campaigns.id, c.id))
-      .run();
     deps.bus.emit(EventTypes.OrderPaid, { campaignId: c.id, lines: filled });
     const rows = loadSaleRows(db, bought);
     recordPurchases(

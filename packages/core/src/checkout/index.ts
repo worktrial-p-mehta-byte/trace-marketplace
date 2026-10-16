@@ -177,7 +177,7 @@ export interface PricedLine {
   title: string | null;
   priceCents: number;
   /** Why the line is left out of the order, if it is. */
-  excluded?: "not_for_sale" | "already_licensed" | "own_listing";
+  excluded?: "not_for_sale" | "already_licensed" | "own_listing" | "license_not_offered";
 }
 
 /**
@@ -215,20 +215,26 @@ function priceLines(
   if (!listingIds.length) return [];
   const market = buildMarket(db, { config: deps.config, now: deps.now });
   const byId = new Map(market.active.map((a) => [a.listingId, a]));
-  const titles = new Map(
+  const info = new Map(
     db
-      .select({ id: schema.listings.id, title: schema.traces.title })
+      .select({
+        id: schema.listings.id,
+        title: schema.traces.title,
+        allowed: schema.listings.allowedLicenses,
+      })
       .from(schema.listings)
       .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
       .where(inArray(schema.listings.id, listingIds))
       .all()
-      .map((r) => [r.id, r.title]),
+      .map((r) => [r.id, r]),
   );
   const members = orgMemberIds(db, orgId);
   return listingIds.map((listingId) => {
     const row = byId.get(listingId);
-    const title = titles.get(listingId) ?? null;
+    const title = info.get(listingId)?.title ?? null;
     if (!row) return { listingId, title, priceCents: 0, excluded: "not_for_sale" as const };
+    if (!info.get(listingId)!.allowed.includes(license))
+      return { listingId, title, priceCents: 0, excluded: "license_not_offered" as const };
     if (members.has(row.sellerId))
       return { listingId, title, priceCents: 0, excluded: "own_listing" as const };
     if (licensesHeld(db, orgId, listingId).includes(license))
@@ -363,6 +369,8 @@ export interface SaleRow {
   sellerId: string;
   title: string | null;
   traits: TraceTraits;
+  /** The licences the seller offers this listing under. */
+  allowedLicenses: string[];
 }
 
 export function loadSaleRows(db: Db, listingIds: string[]): Map<string, SaleRow> {
@@ -375,6 +383,7 @@ export function loadSaleRows(db: Db, listingIds: string[]): Map<string, SaleRow>
       sellerId: schema.traces.sellerId,
       title: schema.traces.title,
       traits: schema.traceTraits.data,
+      allowedLicenses: schema.listings.allowedLicenses,
     })
     .from(schema.listings)
     .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
@@ -493,6 +502,45 @@ export function recordPurchases(
   runPricingConsumer(db, deps.bus, { config: deps.config, now });
 }
 
+/**
+ * The quoted lines that can still be bought right now (still listed, still
+ * offered under the quote's licence, not the team's own, not already held),
+ * at their quoted prices. Checkout shows this total; payment charges it.
+ */
+function payableLines(db: Db, orgId: string, quote: QuoteView) {
+  const wanted = quote.lines.filter((l) => !l.excluded);
+  const byId = loadSaleRows(
+    db,
+    wanted.map((l) => l.listingId),
+  );
+  const members = orgMemberIds(db, orgId);
+  const lines = wanted.filter((l) => {
+    const row = byId.get(l.listingId);
+    return (
+      row?.status === "active" &&
+      row.allowedLicenses.includes(quote.license) &&
+      !members.has(row.sellerId) &&
+      !licensesHeld(db, orgId, l.listingId).includes(quote.license)
+    );
+  });
+  const skipped = wanted.filter((l) => !lines.includes(l)).map((l) => l.listingId);
+  return { lines, skipped, byId };
+}
+
+/** What paying this quote would charge now, and the lines it would skip. */
+export function quotePayable(
+  db: Db,
+  user: PublicUser,
+  quote: QuoteView,
+): { totalCents: number; lineCount: number; skipped: string[] } {
+  const { lines, skipped } = payableLines(db, buyerOrg(user), quote);
+  return {
+    totalCents: lines.reduce((sum, l) => sum + l.priceCents, 0),
+    lineCount: lines.length,
+    skipped,
+  };
+}
+
 export function placeOrder(
   db: Db,
   deps: CheckoutDeps,
@@ -507,22 +555,9 @@ export function placeOrder(
   if (quote.expired)
     throw new CheckoutError("The quote expired. Review the cart again for current prices.");
 
-  const wanted = quote.lines.filter((l) => !l.excluded);
-  const byId = loadSaleRows(
-    db,
-    wanted.map((l) => l.listingId),
-  );
-  // A listing withdrawn since the quote is skipped, not charged.
-  const members = orgMemberIds(db, orgId);
-  const lines = wanted.filter(
-    (l) =>
-      byId.get(l.listingId)?.status === "active" &&
-      !members.has(byId.get(l.listingId)!.sellerId) &&
-      !licensesHeld(db, orgId, l.listingId).includes(quote.license),
-  );
-  const skipped = wanted.filter((l) => !lines.includes(l)).map((l) => l.listingId);
+  const { lines, skipped, byId } = payableLines(db, orgId, quote);
   if (!lines.length) throw new CheckoutError("None of the quoted traces can still be bought.");
-  const total = lines.reduce((s, l) => s + l.priceCents, 0);
+  const total = lines.reduce((sum, l) => sum + l.priceCents, 0);
   const balance = creditBalance(db, orgId);
   if (balance < total) {
     throw new CheckoutError(
@@ -567,14 +602,21 @@ export function placeOrder(
     }
   });
 
-  deps.bus.emit(EventTypes.OrderPaid, { orderId, lines: lines.length, totalCents: total });
-  recordPurchases(
-    db,
-    deps,
-    orgId,
-    lines.map((l) => byId.get(l.listingId)!.traits),
-    now,
-  );
+  // The order is paid and committed. What follows (the event, purchase
+  // demand, repricing) must not turn a successful payment into an error for
+  // the buyer; if it fails, the next pricing run catches up.
+  try {
+    deps.bus.emit(EventTypes.OrderPaid, { orderId, lines: lines.length, totalCents: total });
+    recordPurchases(
+      db,
+      deps,
+      orgId,
+      lines.map((l) => byId.get(l.listingId)!.traits),
+      now,
+    );
+  } catch (err) {
+    console.error(`[checkout] order ${orderId} is paid; follow-up work failed`, err);
+  }
   return { orderId, totalCents: total, lines: lines.length, skipped };
 }
 
