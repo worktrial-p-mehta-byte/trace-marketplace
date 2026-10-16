@@ -23,7 +23,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up from scratch with a private Node.js
-        run: TM_LOCAL_NODE=1 TM_NO_START=1 bash scripts/try-it.sh
+        run: |
+          set -o pipefail
+          TM_LOCAL_NODE=1 TM_NO_START=1 bash scripts/try-it.sh 2>&1 | tee setup.log || {
+            # The last lines as annotations, readable without the log.
+            tail -n 15 setup.log | sed 's/^/::error::/'
+            exit 1
+          }
 
       - name: Start the site and check it answers
         run: |
