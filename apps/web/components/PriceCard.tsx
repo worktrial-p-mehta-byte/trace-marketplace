@@ -19,6 +19,7 @@ export function PriceCard({
   listingId,
   buyer = "none",
   held = [],
+  defaultLicense = "research",
 }: {
   quotes: Record<License, PriceQuote>;
   listingId?: string;
@@ -26,8 +27,10 @@ export function PriceCard({
   buyer?: "buyer" | "seller" | "none";
   /** Licences the viewer's team already holds on this trace. */
   held?: License[];
+  /** The licence to show first (the buyer's stated use). */
+  defaultLicense?: License;
 }) {
-  const [license, setLicense] = useState<License>("research");
+  const [license, setLicense] = useState<License>(defaultLicense);
   const q = quotes[license];
   const chosen = LICENSES.find((l) => l.key === license)!;
   return (

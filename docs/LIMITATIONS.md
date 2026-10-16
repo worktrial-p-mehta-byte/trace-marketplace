@@ -44,6 +44,13 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Buyer onboarding — phase 2
+
+| Limitation                                                                 | Impact                                           | Lifted by                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------- |
+| Personalisation is a rule-based ranking from stated preferences            | It doesn't learn from what a buyer views or buys | Learning from views and purchases (post-demo) |
+| Preferences are per buyer team, set once on joining (editable at /welcome) | Teams with several needs pick one mix            | Several profiles per team                     |
+
 ## Seller trends — phase 2
 
 | Limitation                                                                               | Impact                                                                             | Lifted by                                 |

@@ -340,6 +340,24 @@ buyer starts a campaign in a domain, its followers get a notification
 also notified of every sale, by checkout or campaign. Notifications are a
 table read by the header bell and `/notifications`.
 
+## Buyer onboarding
+
+After accepting the terms, a new buyer answers four questions on
+`/welcome`: domains, the agent behaviours that matter (failure types), how
+they'll use the data (research, evaluation, training), and whether they
+need content and what they pay per trace. `setBuyerPreferences`
+(`packages/core/src/discovery/preferences.ts`) stores the answers as a
+reserved "Preferences" query collection (no migration; kept out of saved
+searches) and records them as save-strength demand per domain.
+
+`recommendFor` picks listings deterministically: in the chosen domains,
+the wanted behaviours first, then recoveries, verified outcomes, consistent
+sessions and rarity, within budget, at most two of one session shape. The
+answers then personalise the marketplace: a "Picked for you" row tops the
+catalog when browsing, price cards open on the stated licence, and the
+welcome page suggests a campaign prefilled with the buyer's domain,
+behaviour, budget and licence.
+
 ## Accounts, onboarding and sharing (M4)
 
 **Flow:** sign up (email, password, role) → onboarding (data terms, versioned

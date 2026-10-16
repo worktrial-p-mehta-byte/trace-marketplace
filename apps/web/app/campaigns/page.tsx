@@ -77,7 +77,11 @@ export default async function CampaignsPage({
         <div className="mt-3 flex flex-wrap gap-3">
           <label className="block">
             <span className="block text-sm font-semibold">Licence</span>
-            <select name="license" className="field mt-1.5 !w-40" defaultValue="research">
+            <select
+              name="license"
+              className="field mt-1.5 !w-40"
+              defaultValue={p.license && p.license in LICENSE_NAMES ? p.license : "research"}
+            >
               {Object.entries(LICENSE_NAMES).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
@@ -92,7 +96,7 @@ export default async function CampaignsPage({
               type="number"
               min="0.1"
               step="0.01"
-              defaultValue="15"
+              defaultValue={p.maxPrice ?? "15"}
               className="field mt-1.5 !w-32"
             />
           </label>

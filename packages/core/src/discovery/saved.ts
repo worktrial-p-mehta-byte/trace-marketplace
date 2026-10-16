@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { isEmptyCriteria } from "@tm/pricing";
@@ -102,7 +102,14 @@ export function listSavedSearches(db: Db, buyerOrgId: string): SavedSearch[] {
   return db
     .select()
     .from(schema.collections)
-    .where(and(eq(schema.collections.buyerOrgId, buyerOrgId), eq(schema.collections.kind, "query")))
+    .where(
+      and(
+        eq(schema.collections.buyerOrgId, buyerOrgId),
+        eq(schema.collections.kind, "query"),
+        // The team's onboarding answers are stored alongside; they aren't a search.
+        ne(schema.collections.name, "Preferences"),
+      ),
+    )
     .orderBy(desc(schema.collections.createdAt))
     .all()
     .map((r) => ({

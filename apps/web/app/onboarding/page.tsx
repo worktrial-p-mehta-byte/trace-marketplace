@@ -12,7 +12,8 @@ export default async function OnboardingPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/signup");
   const share = Math.round(getConfig().revenue.sellerShare * 100);
-  const next = canSell(user) ? "/share" : "/";
+  // Sellers go to share; buyers answer four questions about what they need.
+  const next = canSell(user) ? "/share" : "/welcome";
   const accepted = user.termsAcceptedVersion === TERMS_VERSION;
 
   return (

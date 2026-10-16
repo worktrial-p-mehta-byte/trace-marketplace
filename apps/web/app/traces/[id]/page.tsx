@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getListingDetail, licensesHeld, listingTitle, recordBuyerInterest } from "@tm/core";
+import {
+  getBuyerPreferences,
+  getListingDetail,
+  licensesHeld,
+  listingTitle,
+  recordBuyerInterest,
+} from "@tm/core";
 import { sellerShareFor } from "@tm/config";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
@@ -341,6 +347,11 @@ export default async function TracePage({
               listingId={d.listingId}
               buyer={user?.buyerOrgId ? "buyer" : user ? "seller" : "none"}
               held={user?.buyerOrgId ? licensesHeld(getDb(), user.buyerOrgId, d.listingId) : []}
+              defaultLicense={
+                user?.buyerOrgId
+                  ? getBuyerPreferences(getDb(), user.buyerOrgId)?.license
+                  : undefined
+              }
             />
           )}
           {d.history.length > 0 && (
