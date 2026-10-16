@@ -125,8 +125,10 @@ it on its own if it falls out of step with the listings.
 
 ## Upgrading
 
-Pull the new version and restart. Migrations run at container start (or run
-`pnpm db:migrate` yourself before `pnpm start`). Migrations only move
+Pull the new version and restart. Migrations run at container start, and `pnpm start`
+and `pnpm dev` apply pending migrations before starting. If the server is
+started another way on an older database, it logs which migrations are
+missing and `/status` shows them; run `pnpm db:migrate`. Migrations only move
 forward; back up `data/` first.
 
 ## Scheduled work

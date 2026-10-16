@@ -127,8 +127,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Command                          | What it does                                                                                |
 | -------------------------------- | ------------------------------------------------------------------------------------------- |
 | `pnpm bootstrap`                 | Install dependencies, apply migrations, build the search index                              |
-| `pnpm dev`                       | Run the website in development mode                                                         |
-| `pnpm build` / `pnpm start`      | Production build / serve it                                                                 |
+| `pnpm dev`                       | Apply any pending migrations, then run the website in development mode                      |
+| `pnpm build` / `pnpm start`      | Production build / apply pending migrations and serve it                                    |
 | `pnpm seed`                      | Fill an empty database with a synthetic market and price history                            |
 | `pnpm demo:reset`                | Delete the database, re-create it and seed it                                               |
 | `pnpm demo:sessions`             | Write ten seller sessions that each show one pricing dimension (see `demo/seller-sessions`) |

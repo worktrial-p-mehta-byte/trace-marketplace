@@ -12,7 +12,7 @@ import {
   type EventBus,
   type PublicUser,
 } from "@tm/core";
-import { openDb, type Db } from "@tm/db";
+import { findMigrationsDir, openDb, pendingMigrations, type Db } from "@tm/db";
 
 // One database handle per server process (survives Next dev hot reloads).
 const g = globalThis as unknown as { __tmDb?: Db; __tmBlobs?: BlobStore };
@@ -24,8 +24,23 @@ export function getConfig() {
 }
 
 export function getDb(): Db {
-  if (!g.__tmDb) g.__tmDb = openDb(getConfig().database.path);
+  if (!g.__tmDb) {
+    g.__tmDb = openDb(getConfig().database.path);
+    const pending = databasePending(g.__tmDb);
+    if (pending.length) {
+      console.error(
+        `[db] ${getConfig().database.path} is missing migrations ${pending.join(", ")}. ` +
+          "Stop the server and run: pnpm db:migrate",
+      );
+    }
+  }
   return g.__tmDb;
+}
+
+/** Migrations this database hasn't applied (empty when the folder can't be found). */
+export function databasePending(db: Db): string[] {
+  const dir = findMigrationsDir();
+  return dir ? pendingMigrations(db, dir) : [];
 }
 
 export function getBus(): EventBus {
