@@ -1,17 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  BEHAVIOURS,
   browseCatalog,
   criteriaOf,
+  describe as describeQuery,
   ensureSearchIndex,
+  intentWords,
+  listSavedSearches,
   recordBuyerInterest,
   type BrowseQuery,
   type FacetValue,
+  type IntentChip,
 } from "@tm/core";
+import { deleteSavedSearchAction, saveSearchAction } from "./actions";
 import {
   AUTHENTICITY_NAMES,
   DOMAIN_NAMES,
   FAILURE_NAMES,
+  OUTCOME_NAMES as OUTCOMES,
   money,
   OUTCOME_NAMES,
   SOURCE_NAMES,
@@ -58,6 +65,9 @@ function toQuery(p: Params): BrowseQuery {
     tier: p.tier === "0" ? 0 : p.tier === "1" ? 1 : undefined,
     source: p.source as BrowseQuery["source"],
     sort: p.sort as BrowseQuery["sort"],
+    // In a search, sessions of the same shape fold into one result unless
+    // asked to show them; browsing lists every listing.
+    group: Boolean(p.q) && p.similar !== "show",
     offset: Math.max(0, Number(p.page ?? 1) - 1) * PAGE,
     limit: PAGE,
   };
@@ -81,17 +91,43 @@ function nameFor(key: string, value: string): string {
   return value;
 }
 
+function chipName(c: IntentChip): string {
+  if (c.key === "behaviour") return BEHAVIOURS[c.value]?.name ?? c.value;
+  if (c.key === "tier") return TIER_NAMES[c.value] ?? c.value;
+  if (c.key === "outcome") return OUTCOMES[c.value] ?? c.value;
+  return nameFor(c.key, c.value);
+}
+
+/**
+ * The search with one recognised phrase taken out: removing a chip. Uses the
+ * parser's own tokenisation, so "open-source" or "medical." are found.
+ */
+function without(p: Params, phrase: string): string {
+  const words = intentWords(p.q ?? "");
+  const drop = intentWords(phrase);
+  for (let i = 0; i + drop.length <= words.length; i++) {
+    if (drop.every((d, k) => words[i + k] === d)) {
+      words.splice(i, drop.length);
+      break;
+    }
+  }
+  return href(p, { q: words.join(" ").trim() || undefined });
+}
+
 function FacetGroup({
   title,
   k,
   values,
   p,
   max = 8,
+  fromText,
 }: {
   title: string;
   k: string;
   values: FacetValue[];
   p: Params;
+  /** The value the search text set for this facet, and the words that set it. */
+  fromText?: { value: string; phrase: string };
   /** How many values to show; the long tail of domains is the point, so it shows whole. */
   max?: number;
 }) {
@@ -102,11 +138,16 @@ function FacetGroup({
       {/* Chips that wrap on phones; a vertical list beside the results on wide screens. */}
       <ul className="mt-2 flex flex-wrap gap-1.5 text-sm lg:block lg:space-y-0.5">
         {values.slice(0, max).map((v) => {
-          const on = p[k] === v.value;
+          const viaText = !p[k] && fromText?.value === v.value;
+          const on = p[k] === v.value || viaText;
           return (
             <li key={v.value}>
               <Link
-                href={href(p, { [k]: on ? undefined : v.value })}
+                href={
+                  viaText
+                    ? without(p, fromText!.phrase)
+                    : href(p, { [k]: on ? undefined : v.value })
+                }
                 className={`flex justify-between gap-2 rounded border px-2 py-1 lg:gap-3 lg:border-transparent ${
                   on
                     ? "border-ink bg-ink font-semibold text-paper"
@@ -150,6 +191,15 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
     { ...q, includeContent: Boolean(user) },
   );
   const active = FILTER_KEYS.filter((k) => p[k]);
+  const textChip = (key: string) => {
+    const c = r.intent?.chips.find(
+      (x) =>
+        x.key === key && !r.intent!.overridden.some((o) => o.key === x.key && o.value === x.value),
+    );
+    return c ? { value: c.value, phrase: c.phrase } : undefined;
+  };
+  const saved = user?.buyerOrgId ? listSavedSearches(getDb(), user.buyerOrgId) : [];
+  const canSave = Boolean(user?.buyerOrgId) && (Boolean(p.q) || active.length > 0);
   const page = Number(p.page ?? 1);
   const pages = Math.max(1, Math.ceil(r.total / PAGE));
   const sort = p.sort ?? (p.q ? "relevance" : "price_desc");
@@ -160,7 +210,8 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Browse traces</h1>
           <p className="mt-2 text-ink-2">
-            Real coding-agent sessions, scrubbed by their sellers and labelled by what went wrong.
+            Real agent sessions from every kind of work, scrubbed by their sellers and labelled by
+            domain and by what went wrong.
           </p>
         </div>
         <form action="/traces" className="flex w-full max-w-md gap-2">
@@ -173,7 +224,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
             name="q"
             defaultValue={p.q}
             className="field"
-            placeholder="Search, e.g. deadlock, timezone, terraform"
+            placeholder="Describe it, e.g. medical evaluations where the agent was corrected"
           />
           <button className="btn">Search</button>
         </form>
@@ -181,14 +232,57 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[14rem_1fr]">
         <aside className="space-y-4 lg:space-y-6" aria-label="Filters">
-          <FacetGroup title="Domain" k="domain" values={r.facets.domain} p={p} max={16} />
-          <FacetGroup title="Authenticity" k="authenticity" values={r.facets.authenticity} p={p} />
-          <FacetGroup title="What went wrong" k="failure" values={r.facets.failure} p={p} />
-          <FacetGroup title="Outcome" k="outcome" values={r.facets.outcome} p={p} />
-          <FacetGroup title="Language" k="language" values={r.facets.language} p={p} />
-          <FacetGroup title="Framework" k="framework" values={r.facets.framework} p={p} />
+          <FacetGroup
+            title="Domain"
+            k="domain"
+            values={r.facets.domain}
+            p={p}
+            max={16}
+            fromText={textChip("domain")}
+          />
+          <FacetGroup
+            title="Authenticity"
+            k="authenticity"
+            values={r.facets.authenticity}
+            p={p}
+            fromText={textChip("authenticity")}
+          />
+          <FacetGroup
+            title="What went wrong"
+            k="failure"
+            values={r.facets.failure}
+            p={p}
+            fromText={textChip("failure")}
+          />
+          <FacetGroup
+            title="Outcome"
+            k="outcome"
+            values={r.facets.outcome}
+            p={p}
+            fromText={textChip("outcome")}
+          />
+          <FacetGroup
+            title="Language"
+            k="language"
+            values={r.facets.language}
+            p={p}
+            fromText={textChip("language")}
+          />
+          <FacetGroup
+            title="Framework"
+            k="framework"
+            values={r.facets.framework}
+            p={p}
+            fromText={textChip("framework")}
+          />
           <FacetGroup title="Model" k="model" values={r.facets.model} p={p} />
-          <FacetGroup title="Shared as" k="tier" values={r.facets.tier} p={p} />
+          <FacetGroup
+            title="Shared as"
+            k="tier"
+            values={r.facets.tier}
+            p={p}
+            fromText={textChip("tier")}
+          />
           <FacetGroup title="Source" k="source" values={r.facets.source} p={p} />
         </aside>
 
@@ -219,6 +313,14 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                 </>
               )}
             </p>
+            {(p.similar === "show" || r.items.some((i) => i.similar)) && (
+              <Link
+                href={href(p, { similar: p.similar === "show" ? undefined : "show" })}
+                className="text-cobalt"
+              >
+                {p.similar === "show" ? "Group similar sessions" : "Show similar sessions"}
+              </Link>
+            )}
             <nav className="flex gap-1" aria-label="Sort">
               {(p.q ? [["relevance", "Best match"] as [string, string], ...SORTS] : SORTS).map(
                 ([key, label]) => (
@@ -234,6 +336,115 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               )}
             </nav>
           </div>
+
+          {r.intent && (r.intent.chips.length > 0 || r.intent.rest) && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-sm" aria-label="Read as">
+              <span className="text-ink-3">Read as</span>
+              {r.intent.chips.map((c) => {
+                const off = r.intent!.overridden.some(
+                  (o) => o.key === c.key && o.value === c.value,
+                );
+                return (
+                  <Link
+                    key={`${c.key}:${c.value}`}
+                    href={without(p, c.phrase)}
+                    className={`rounded-full border px-2.5 py-0.5 ${
+                      off
+                        ? "border-rule text-ink-3 line-through"
+                        : "border-cobalt/40 bg-cobalt/5 text-ink hover:border-brick hover:text-brick"
+                    }`}
+                    title={
+                      off
+                        ? "A filter you chose overrides this"
+                        : `From “${c.phrase}”. Remove it from the search`
+                    }
+                  >
+                    {chipName(c)} <span aria-hidden>×</span>
+                    <span className="sr-only">remove</span>
+                  </Link>
+                );
+              })}
+              {r.intent.rest && (
+                <span
+                  className={`rounded-full border border-dashed border-rule px-2.5 py-0.5 ${r.intent.restIgnored ? "text-ink-3" : "text-ink-2"}`}
+                  title={
+                    r.intent.restIgnored
+                      ? "These words matched nothing, so they only rank results"
+                      : "Matched against titles and labels (and content, signed in)"
+                  }
+                >
+                  words: “{r.intent.rest}”{r.intent.restIgnored && " (no matches)"}
+                </span>
+              )}
+            </div>
+          )}
+
+          {(canSave || saved.length > 0 || p.saved || p.saveError) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              {canSave && (
+                <form action={saveSearchAction}>
+                  {["q", ...FILTER_KEYS].map(
+                    (k) => p[k] && <input key={k} type="hidden" name={k} value={p[k]} />,
+                  )}
+                  <button className="btn-quiet !py-1 text-sm">Save this search</button>
+                </form>
+              )}
+              {p.saved && (
+                <span role="status" className="text-moss">
+                  Saved. Matching prices will feel your demand.
+                </span>
+              )}
+              {p.saveError && (
+                <span role="alert" className="text-brick">
+                  {p.saveError}
+                </span>
+              )}
+              {saved.length > 0 && (
+                <nav aria-label="Saved searches" className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-ink-3">Saved:</span>
+                  {saved.map((sv) => (
+                    <span
+                      key={sv.id}
+                      className="inline-flex items-center rounded border border-rule"
+                    >
+                      <Link
+                        href={href(
+                          {},
+                          {
+                            q: sv.query.text,
+                            domain: sv.query.domain,
+                            authenticity: sv.query.authenticity,
+                            language: sv.query.language,
+                            framework: sv.query.framework,
+                            failure: sv.query.failure,
+                            outcome: sv.query.outcome,
+                            tier: sv.query.tier === undefined ? undefined : String(sv.query.tier),
+                            model: sv.query.model,
+                            source: sv.query.source,
+                          },
+                        )}
+                        className="px-2 py-0.5 text-ink-2 hover:text-ink"
+                      >
+                        {sv.name || describeQuery(sv.query)}
+                      </Link>
+                      <form action={deleteSavedSearchAction}>
+                        {["q", ...FILTER_KEYS].map(
+                          (k) => p[k] && <input key={k} type="hidden" name={k} value={p[k]} />,
+                        )}
+                        <input type="hidden" name="id" value={sv.id} />
+                        <button
+                          className="px-1.5 text-ink-3 hover:text-brick"
+                          aria-label={`Delete saved search ${sv.name}`}
+                        >
+                          ×
+                        </button>
+                      </form>
+                    </span>
+                  ))}
+                </nav>
+              )}
+            </div>
+          )}
 
           {r.items.length === 0 ? (
             <div className="mt-8 rounded-lg border border-rule bg-surface p-8">
@@ -295,6 +506,17 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
                           </span>
                         )}
                       </p>
+                      {i.reasons && i.reasons.length > 0 && (
+                        <p className="mt-1.5 text-xs text-ink-3">
+                          <span className="font-semibold text-ink-2">Why it matched: </span>
+                          {i.reasons.slice(0, 4).join(" · ")}
+                        </p>
+                      )}
+                      {i.similar ? (
+                        <p className="mt-1 text-xs text-ink-3">
+                          +{i.similar} similar session{i.similar > 1 ? "s" : ""} of the same shape
+                        </p>
+                      ) : null}
                     </div>
                     <div className="text-left sm:text-right">
                       <p className="text-lg font-bold">{money(i.priceCents)}</p>

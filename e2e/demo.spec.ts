@@ -124,6 +124,32 @@ test.describe.serial("demo flow", () => {
     await expect(page.getByRole("heading", { name: "What it was about" })).toBeVisible();
   });
 
+  test("a buyer describes what they need, sees how it was read and why results match", async ({
+    page,
+  }) => {
+    await signIn(page, BUYER);
+    await page.goto("/traces");
+    await page.getByLabel("Search traces").fill("data warehouse sessions with retry loops");
+    await page.getByRole("button", { name: "Search" }).click();
+    const readAs = page.getByLabel("Read as");
+    await expect(readAs.getByRole("link", { name: /Data and querying/ })).toBeVisible();
+    await expect(readAs.getByRole("link", { name: /Retry loop/ })).toBeVisible();
+    const first = page.locator("section[aria-label=Results] a[href^='/traces/']").first();
+    await expect(first).toContainText("Why it matched");
+    await expect(first).toContainText("Domain: Data and querying");
+    // Removing a chip takes its words out of the search.
+    await readAs.getByRole("link", { name: /Retry loop/ }).click();
+    await expect(page.getByLabel("Read as").getByRole("link", { name: /Retry loop/ })).toHaveCount(
+      0,
+    );
+    // Saving the search makes it demand and lists it.
+    await page.getByRole("button", { name: "Save this search" }).click();
+    await expect(page.getByRole("status")).toContainText("Saved");
+    await expect(page.getByRole("navigation", { name: "Saved searches" })).toContainText(
+      "warehouse",
+    );
+  });
+
   test("anonymous search never matches trace content", async ({ page }) => {
     await page.goto("/traces?q=pytest");
     await expect(page.locator("section[aria-label=Results] p").first()).toContainText("0 traces");
