@@ -74,7 +74,9 @@ Prefer Docker? `docker compose up --build` runs the same thing (see
 
 **As a buyer** (`/traces`, `/cart`, `/campaigns`)
 
-- Tell us what you need when you join and get traces picked for you.
+- Tell us what you need when you join, and get traces picked for you that
+  learn from what your team views, searches, saves and buys, each with the
+  reason it was picked.
 - Describe what you need in a sentence ("medical evaluations where the agent
   was corrected and recovered"): it becomes filters you can edit, and every
   result says why it matched. Save searches.

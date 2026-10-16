@@ -1,10 +1,20 @@
 import { and, eq } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
-import { DOMAIN_IDS, FAILURE_CODES } from "@tm/enrich";
+import { DOMAIN_IDS, FAILURE_CODES, labelName } from "@tm/enrich";
 import { newId, schema, type Db } from "@tm/db";
 import type { LicenseScope } from "@tm/schema";
 import type { PublicUser } from "../auth";
 import { browseCatalog, type CatalogItem } from "../catalog/browse";
+import {
+  addInterest,
+  emptyProfile,
+  INTEREST_DIMS,
+  interestProfile,
+  interestWeight,
+  type Interest,
+  type InterestDim,
+  type InterestSource,
+} from "./behaviour";
 import { orgMemberIds } from "../checkout";
 import type { EventBus } from "../events";
 import type { SearchIndex } from "../ports";
@@ -102,20 +112,79 @@ export function setBuyerPreferences(
   return prefs;
 }
 
+/** A pick, with why it was picked in words. */
+export type PickedItem = CatalogItem & { pickReason: string };
+
+const SOURCE_ORDER: InterestSource[] = ["purchase", "stated", "save", "view", "search"];
+
+function interestName(dim: InterestDim, v: string): string {
+  if (dim === "domain") return labelName("domain", v);
+  if (dim === "failure") return labelName("failure", v).toLowerCase();
+  return v;
+}
+
+/** Why a pick matches, from the strongest evidence behind its best interest. */
+function reasonFor(dim: InterestDim, value: string, i: Interest): string {
+  const source = SOURCE_ORDER.filter((s) => (i.weight[s] ?? 0) > 0).sort(
+    (a, b) => (i.weight[b] ?? 0) - (i.weight[a] ?? 0),
+  )[0];
+  const name = interestName(dim, value);
+  const n = source ? (i.count[source] ?? 1) : 1;
+  const sessions = dim === "failure" ? `sessions with ${name}` : `${name} sessions`;
+  switch (source) {
+    case "stated":
+      return `You said you need ${dim === "failure" ? `sessions with ${name}` : name}`;
+    case "purchase":
+      return `Like the ${n === 1 ? "" : `${n} `}${dim === "failure" ? `traces with ${name}` : `${name} trace${n === 1 ? "" : "s"}`} your team bought`;
+    case "save":
+      return `Matches your saved search for ${name}`;
+    case "view":
+      return `Because your team viewed ${sessions}`;
+    case "search":
+      return `Because your team searched for ${sessions}`;
+    default:
+      return `Matches ${name}`;
+  }
+}
+
 /**
- * Listings picked for a buyer: in their domains, with the behaviours they
- * asked for ranked first, content where they need it, within their price,
- * consistent sessions and verified recoveries ahead, at most two of one
- * shape. Deterministic; no model.
+ * Listings picked for a buyer team, deterministically, from what it said it
+ * needs (onboarding answers) and what it does (views, searches, saved
+ * searches and purchases, decayed by age; see interestProfile). Either is
+ * enough on its own. Picks are in the team's top domains, ranked by how well
+ * they match its strongest interests and by quality (recovered, verified,
+ * consistent, rare), priced under its licence and within budget, never ones
+ * it already holds or its own members', at most two of one shape. Each
+ * carries the reason it was picked.
  */
 export async function recommendFor(
   db: Db,
   deps: { config: MarketplaceConfig; search: SearchIndex; now?: Date },
-  prefs: BuyerPreferences,
+  prefs: BuyerPreferences | undefined,
   limit = 6,
-  /** The team the picks are for: its own members' listings are left out. */
+  /** The team the picks are for: its behaviour, its held licences and its own listings. */
   buyerOrgId?: string,
-): Promise<CatalogItem[]> {
+): Promise<PickedItem[]> {
+  const cfg = deps.config.discovery.picks;
+  const profile = buyerOrgId ? interestProfile(db, deps, buyerOrgId) : emptyProfile();
+  if (prefs) {
+    addInterest(profile, "stated", { domain: prefs.domains, failure: prefs.failures }, cfg.stated);
+  }
+  const ranked = (dim: InterestDim) =>
+    [...profile.dims[dim]].sort((a, b) => interestWeight(b[1]) - interestWeight(a[1]));
+  const maxOf = (dim: InterestDim) => interestWeight(ranked(dim)[0]?.[1]);
+  // The team's strongest domains by combined weight (stated answers count as
+  // one strong signal, so repeated behaviour elsewhere can outrank them), at
+  // most three or as many as it named. With interests but no domain (only a
+  // language or failure searched), every domain is a candidate.
+  const ranks = ranked("domain").map(([d]) => d);
+  const hasInterest = INTEREST_DIMS.some((dim) => profile.dims[dim].size > 0);
+  if (!ranks.length && !hasInterest) return [];
+  const domains: (string | undefined)[] = ranks.length
+    ? ranks.slice(0, Math.max(3, prefs?.domains.length ?? 0))
+    : [undefined];
+  const license = prefs?.license ?? "research";
+
   const members = buyerOrgId ? orgMemberIds(db, buyerOrgId) : new Set<string>();
   // Prices under the team's own licence (evaluation and training cost more
   // than research), for both the budget and what the picks show.
@@ -128,36 +197,77 @@ export async function recommendFor(
       .from(schema.listings)
       .where(eq(schema.listings.status, "active"))
       .all()
-      .filter((r) => r.allowed.includes(prefs.license))
+      .filter((r) => r.allowed.includes(license))
       .map((r) => r.id),
   );
   const pool: CatalogItem[] = [];
-  for (const domain of prefs.domains) {
+  for (const domain of domains) {
     // The whole domain: ranking happens below, after the budget, so a cheap
     // match is never cut off by a page of expensive ones.
     const r = await browseCatalog(db, deps, {
       domain,
-      tier: prefs.contentNeeded ? 0 : undefined,
+      tier: prefs?.contentNeeded ? 0 : undefined,
       limit: Number.MAX_SAFE_INTEGER,
     });
     for (const i of r.items) {
       const row = rows.get(i.listingId);
       if (!row || members.has(row.sellerId) || !offered.has(i.listingId)) continue;
-      const priceCents = market.quote(row, prefs.license).priceCents;
-      if (prefs.maxPriceCents && priceCents > prefs.maxPriceCents) continue;
+      // Already licensed: nothing to pick.
+      if (profile.held.has(i.listingId)) continue;
+      const priceCents = market.quote(row, license).priceCents;
+      if (prefs?.maxPriceCents && priceCents > prefs.maxPriceCents) continue;
       pool.push({ ...i, priceCents });
     }
   }
-  const want = new Set(prefs.failures);
-  const score = (i: CatalogItem) =>
-    (i.failures.some((f) => want.has(f)) ? 3 : 0) +
+
+  const max = Object.fromEntries(
+    (["domain", "failure", "language", "framework"] as InterestDim[]).map((d) => [d, maxOf(d)]),
+  ) as Record<InterestDim, number>;
+  const valuesOf = (i: CatalogItem): Record<InterestDim, string[]> => ({
+    domain: [i.domain],
+    failure: i.failures,
+    language: i.language ? [i.language] : [],
+    framework: i.framework ? [i.framework] : [],
+  });
+  const quality = (i: CatalogItem) =>
     (i.outcomes.includes("recovered") ? 1 : 0) +
     (i.outcomes.includes("tests_passed") ? 0.5 : 0) +
     (i.authenticity === "consistent" ? 0.5 : i.authenticity === "flagged" ? -3 : 0) +
     Math.min(1, i.rarity / 2);
+  const scored = pool.map((i) => {
+    let s = quality(i);
+    let best: { dim: InterestDim; value: string; points: number } | undefined;
+    const vals = valuesOf(i);
+    for (const dim of ["domain", "failure", "language", "framework"] as InterestDim[]) {
+      if (!max[dim]) continue;
+      for (const v of vals[dim]) {
+        const w = interestWeight(profile.dims[dim].get(v));
+        if (!w) continue;
+        // Each dimension adds at most its match weight, for the team's strongest interest.
+        const points = (cfg.match[dim] * w) / max[dim];
+        if (!best || points > best.points) best = { dim, value: v, points };
+      }
+      const top = Math.max(0, ...vals[dim].map((v) => interestWeight(profile.dims[dim].get(v))));
+      if (top) s += (cfg.match[dim] * top) / max[dim];
+    }
+    // The reason names the most specific strong match: a wanted failure
+    // beats the domain it sits in when it scores close.
+    const failure = vals.failure
+      .map((v) => ({ v, w: interestWeight(profile.dims.failure.get(v)) }))
+      .sort((a, b) => b.w - a.w)[0];
+    const reasonDim =
+      failure && failure.w > 0 && max.failure
+        ? { dim: "failure" as InterestDim, value: failure.v }
+        : best
+          ? { dim: best.dim, value: best.value }
+          : undefined;
+    const pickReason = reasonDim
+      ? reasonFor(reasonDim.dim, reasonDim.value, profile.dims[reasonDim.dim].get(reasonDim.value)!)
+      : `A strong ${labelName("domain", i.domain)} session`;
+    return { i: { ...i, pickReason }, s };
+  });
   const seen = new Map<string, number>();
-  return pool
-    .map((i) => ({ i, s: score(i) }))
+  return scored
     .sort((a, b) => b.s - a.s || b.i.priceCents - a.i.priceCents)
     .filter(({ i }) => {
       if (!i.shapeKey) return true;

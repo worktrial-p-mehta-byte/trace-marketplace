@@ -46,10 +46,10 @@ where the limit lives and what would lift it.
 
 ## Buyer onboarding — phase 2
 
-| Limitation                                                                 | Impact                                           | Lifted by                                     |
-| -------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------- |
-| Personalisation is a rule-based ranking from stated preferences            | It doesn't learn from what a buyer views or buys | Learning from views and purchases (post-demo) |
-| Preferences are per buyer team, set once on joining (editable at /welcome) | Teams with several needs pick one mix            | Several profiles per team                     |
+| Limitation                                                                                                             | Impact                                               | Lifted by                           |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------- |
+| Personalisation is a rule-based ranking from stated answers and behaviour (views, searches, saved searches, purchases) | No collaborative signal ("teams like yours bought…") | Co-purchase similarity across teams |
+| Preferences are per buyer team, set once on joining (editable at /welcome)                                             | Teams with several needs pick one mix                | Several profiles per team           |
 
 ## Seller trends — phase 2
 

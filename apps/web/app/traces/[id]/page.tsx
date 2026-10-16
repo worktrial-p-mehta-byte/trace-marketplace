@@ -73,6 +73,7 @@ export default async function TracePage({
       domain: d.traits.domain && d.traits.domain !== "unknown" ? d.traits.domain : undefined,
       language: d.language ?? undefined,
       failure: d.traits.failureCategory,
+      framework: d.framework ?? undefined,
     })
   ) {
     d = (await load()) ?? d;
