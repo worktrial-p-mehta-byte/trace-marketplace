@@ -5,6 +5,7 @@ import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
 import { PriceChart } from "@/components/PriceChart";
+import { SignalsView } from "@/components/share/SignalsView";
 import { Timeline } from "@/components/share/Timeline";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import {
@@ -166,11 +167,15 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
             {d.trace && (
               <div className="mt-3 rounded-lg border border-rule bg-surface p-4">
                 {/* Render at least through the last evidence event, so every evidence link has a target. */}
-                <Timeline
-                  trace={d.trace}
-                  highlight={evidence}
-                  initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
-                />
+                {d.contentVisible ? (
+                  <Timeline
+                    trace={d.trace}
+                    highlight={evidence}
+                    initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
+                  />
+                ) : (
+                  <SignalsView trace={d.trace} highlight={evidence} counts={false} />
+                )}
               </div>
             )}
           </section>
