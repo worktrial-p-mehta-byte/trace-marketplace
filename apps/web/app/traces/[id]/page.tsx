@@ -5,6 +5,7 @@ import { getListingDetail, listingTitle, recordBuyerInterest } from "@tm/core";
 import { splitSale } from "@tm/pricing";
 import { PriceCard } from "@/components/PriceCard";
 import { PriceChart } from "@/components/PriceChart";
+import { SignalsView } from "@/components/share/SignalsView";
 import { Timeline } from "@/components/share/Timeline";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import {
@@ -163,14 +164,30 @@ export default async function TracePage({ params }: { params: Promise<{ id: stri
                 )}
               </p>
             )}
+            {d.contentVisible && d.tier === 1 && (
+              <p className="mt-2 rounded-md border border-rule bg-surface p-3 text-sm text-ink-2">
+                You shared this session as signals only, so its text and code were never stored.
+                This is what buyers see.
+              </p>
+            )}
             {d.trace && (
               <div className="mt-3 rounded-lg border border-rule bg-surface p-4">
                 {/* Render at least through the last evidence event, so every evidence link has a target. */}
-                <Timeline
-                  trace={d.trace}
-                  highlight={evidence}
-                  initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
-                />
+                {/* Signals-only traces were stripped before storage: even the owner gets the structural view. */}
+                {d.contentVisible && d.tier !== 1 ? (
+                  <Timeline
+                    trace={d.trace}
+                    highlight={evidence}
+                    initial={Math.max(200, ...evidence.map((seq) => seq + 1))}
+                  />
+                ) : (
+                  <SignalsView
+                    trace={d.trace}
+                    labels={d.labels}
+                    highlight={evidence}
+                    counts={false}
+                  />
+                )}
               </div>
             )}
           </section>

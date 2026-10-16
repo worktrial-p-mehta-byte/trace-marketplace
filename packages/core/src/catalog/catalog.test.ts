@@ -18,6 +18,9 @@ import {
   createSession,
   createUser,
   deleteSession,
+  contentHashOf,
+  DuplicateShareError,
+  legacyContentHashOf,
   estimatePrice,
   getUserBySession,
   listSellerTraces,
@@ -226,7 +229,11 @@ describe("shareTrace when downstream work fails", () => {
     const real = createDbEventBus(db);
     const broken = {
       emit: real.emit,
+      ack: real.ack,
       poll: () => {
+        throw new Error("repricer down");
+      },
+      peek: () => {
         throw new Error("repricer down");
       },
     };
@@ -247,6 +254,100 @@ describe("shareTrace when downstream work fails", () => {
 
     // The events were committed with the listing, so the next run prices it.
     runPricingConsumer(db, real, { config: deps.config, now: NOW });
+    const listing = db
+      .select()
+      .from(schema.listings)
+      .where(eq(schema.listings.id, r.listingId))
+      .get()!;
+    expect(listing.currentPriceCents).toBeGreaterThan(0);
+  });
+});
+
+describe("duplicate shares of signals-only traces", () => {
+  it("accepts two different sessions that only differ in their text", async () => {
+    // The same story in another language: same steps and timing, other words.
+    const a = scrubTrace(raw).trace;
+    const b: Trace = {
+      ...a,
+      id: `${a.id}_other`,
+      events: a.events.map((e) =>
+        e.type === "user_message" || e.type === "assistant_message"
+          ? { ...e, text: `${e.text} (in Verilog)` }
+          : e,
+      ),
+    };
+    // Stripped of text, the two are indistinguishable by their events alone.
+    expect(JSON.stringify(toSignalsOnly(a).events)).toBe(JSON.stringify(toSignalsOnly(b).events));
+
+    await shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 });
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(b), tier: 1 }),
+    ).resolves.toMatchObject({ listingId: expect.any(String) });
+
+    // Re-uploading the same session is still refused.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 }),
+    ).rejects.toThrow(DuplicateShareError);
+  });
+
+  it("upgrades signals-only rows stored with the events-only hash before judging duplicates", async () => {
+    // Two different sessions, byte-identical once stripped (as above).
+    const a = { ...scrubTrace(raw).trace, id: "cc_session_a" };
+    const b = {
+      ...a,
+      id: "cc_session_b",
+      events: a.events.map((e) =>
+        e.type === "user_message" ? { ...e, text: e.text.replace("parseDueDate", "b") } : e,
+      ),
+    };
+    const shared = await shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 });
+    // A row written before the format change carries the events-only hash.
+    db.update(schema.traces)
+      .set({ contentHash: legacyContentHashOf(toSignalsOnly(a)) })
+      .where(eq(schema.traces.id, shared.traceId))
+      .run();
+
+    // B is a different session, so it lists, and A's row is upgraded from its own blob.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(b), tier: 1 }),
+    ).resolves.toMatchObject({ listingId: expect.any(String) });
+    const row = db.select().from(schema.traces).where(eq(schema.traces.id, shared.traceId)).get()!;
+    expect(row.contentHash).toBe(contentHashOf(toSignalsOnly(a), 1));
+    // A itself is still a duplicate.
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 }),
+    ).rejects.toThrow(DuplicateShareError);
+  });
+
+  it("ignores a changed trace id when the content itself is re-uploaded as open source", async () => {
+    const trace = scrubTrace(raw).trace;
+    await shareTrace(db, deps, { sellerId, trace, tier: 0 });
+    await expect(
+      shareTrace(db, deps, { sellerId, trace: { ...trace, id: "cc_renamed" }, tier: 0 }),
+    ).rejects.toThrow(DuplicateShareError);
+  });
+});
+
+describe("runPricingConsumer after a failed reprice", () => {
+  it("retries on the next run instead of waiting for the scheduled refresh", async () => {
+    // A recent full reprice exists, so the stale-price fallback would not fire.
+    runPricingConsumer(db, deps.bus, { config: deps.config, now: NOW });
+
+    // Repricing fails transiently while the share commits.
+    db.$client.exec("ALTER TABLE price_snapshots RENAME TO price_snapshots_down");
+    const quiet = console.error;
+    console.error = () => {};
+    const r = await shareTrace(db, deps, {
+      sellerId,
+      trace: scrubTrace(raw).trace,
+      tier: 0,
+    }).finally(() => (console.error = quiet));
+    db.$client.exec("ALTER TABLE price_snapshots_down RENAME TO price_snapshots");
+    expect(r.pricePending).toBe(true);
+
+    // Same logical time, so only the unacknowledged events can trigger this.
+    const result = runPricingConsumer(db, deps.bus, { config: deps.config, now: NOW });
+    expect(result?.changed).toBe(1);
     const listing = db
       .select()
       .from(schema.listings)

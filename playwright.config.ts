@@ -8,6 +8,8 @@ import { defineConfig, devices } from "@playwright/test";
  *   pnpm build && pnpm e2e
  */
 const PORT = 3100;
+/** Where the e2e run writes the seller demo sessions (scripts/demo-sessions.ts). */
+export const E2E_SESSIONS_DIR = "data/e2e-sessions";
 export const E2E_ENV = {
   DATABASE_PATH: "data/e2e.db",
   BLOB_DIR: "data/e2e-blobs",
@@ -30,8 +32,9 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    // A fresh, seeded e2e database, then the production build on it.
-    command: `pnpm demo:reset && pnpm --filter @tm/web exec next start --port ${PORT}`,
+    // A fresh, seeded e2e database and its own copy of the seller demo
+    // sessions (never your demo/ files), then the production build on it.
+    command: `pnpm demo:reset && pnpm demo:sessions --out ${E2E_SESSIONS_DIR} && pnpm --filter @tm/web exec next start --port ${PORT}`,
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: false,
     timeout: 120_000,

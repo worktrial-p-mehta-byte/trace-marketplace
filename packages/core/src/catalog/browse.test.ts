@@ -18,6 +18,8 @@ import {
   getListingDetail,
   rebuildSearchIndex,
   recordBuyerInterest,
+  runSearchConsumer,
+  EventTypes,
   repriceAll,
   toFtsQuery,
   type EventBus,
@@ -183,6 +185,25 @@ beforeEach(async () => {
   });
   repriceAll(db, { config, reason: "test" });
   await rebuildSearchIndex(db, blobs, search);
+});
+
+describe("search consumer", () => {
+  it("never re-indexes a listing withdrawn after its event was queued, and serialises runs", async () => {
+    // Queue a listing.created for rustLoop, then withdraw it before any run handles the event.
+    bus.emit(EventTypes.ListingCreated, { listingId: rustLoop });
+    db.update(schema.listings)
+      .set({ status: "delisted" })
+      .where(eq(schema.listings.id, rustLoop))
+      .run();
+    await search.remove(rustLoop);
+    // Two runs at once: both would peek the same batch without the lock.
+    const [a, b] = await Promise.all([
+      runSearchConsumer(db, bus, blobs, search),
+      runSearchConsumer(db, bus, blobs, search),
+    ]);
+    expect(a + b).toBeGreaterThanOrEqual(1);
+    expect((await search.search({ text: "retry loop" })).ids).not.toContain(rustLoop);
+  });
 });
 
 describe("search index", () => {

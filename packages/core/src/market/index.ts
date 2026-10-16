@@ -5,7 +5,7 @@ import { newId, schema, type Db } from "@tm/db";
 import { matchesCriteria, type DemandCriteria } from "@tm/pricing";
 import { generateFlood, type Pattern } from "@tm/synth";
 import { acceptTerms, createUser, TERMS_VERSION, type PublicUser } from "../auth";
-import { shareTrace, type CatalogDeps } from "../catalog";
+import { DuplicateShareError, shareTrace, type CatalogDeps } from "../catalog";
 import { EventTypes, type EventBus } from "../events";
 import { buildMarket, priceHistory, recordDemandSignal, runPricingConsumer } from "../pricing";
 import { runSearchConsumer } from "../search";
@@ -174,8 +174,10 @@ export async function floodSupply(db: Db, deps: CatalogDeps, input: FloodInput) 
         { allowSynthetic: true, deferMarket: true },
       );
       added++;
-    } catch {
-      // A rare duplicate from the generator is skipped.
+    } catch (err) {
+      // A rare duplicate from the generator is skipped. Anything else (a blob
+      // or database failure) must surface, not pass as a smaller flood.
+      if (!(err instanceof DuplicateShareError)) throw err;
     }
   }
   runPricingConsumer(db, deps.bus, { config: deps.config, now });

@@ -230,12 +230,70 @@ describe("test tampering in other test styles", () => {
           type: "tool_call",
           callId: "c1",
           tool: "Edit",
-          input: { file_path: "test/LedgerSpec.hs", old_string: "balance l `shouldBe` 0", new_string: "" },
+          input: {
+            file_path: "test/LedgerSpec.hs",
+            old_string: "balance l `shouldBe` 0",
+            new_string: "",
+          },
         },
         { seq: 2, type: "tool_result", callId: "c1", output: "updated", isError: false },
       ],
     });
     expect(analyzeTrace(trace).labels.map((l) => l.code)).toContain("test_tampering");
   });
-});
 
+  /** Does an edit to a test file from `before` to `after` count as tampering? */
+  function tampered(before: string, after = "") {
+    const trace = Trace.parse({
+      schemaVersion: TRACE_SCHEMA_VERSION,
+      id: "sh",
+      startedAt: "2026-10-10T09:00:00Z",
+      endedAt: "2026-10-10T09:05:00Z",
+      provenance: {
+        source: "synthetic",
+        harness: { name: "claude-code" },
+        model: { id: "m" },
+        capturedAt: "2026-10-10T09:05:00Z",
+      },
+      events: [
+        {
+          seq: 0,
+          type: "tool_call",
+          callId: "c1",
+          tool: "Edit",
+          input: { file_path: "test/widget.spec.ts", old_string: before, new_string: after },
+        },
+        { seq: 1, type: "tool_result", callId: "c1", output: "updated", isError: false },
+      ],
+    });
+    return analyzeTrace(trace).labels.some((l) => l.code === "test_tampering");
+  }
+
+  it("counts real should-style matchers", () => {
+    for (const before of [
+      "total `shouldNotBe` 0",
+      "xs `shouldContain` [1]",
+      "result shouldEqual 3",
+      "value.should eq(5)",
+      "expect { run }.should_not raise_error",
+      "obj.should_receive(:save)",
+      "it { should eq 5 }",
+      "foo.should.equal(1)",
+      "should.exist(user)",
+      "should.not.exist(err)",
+    ]) {
+      expect(tampered(before), before).toBe(true);
+    }
+  });
+
+  it("ignores helpers, words and test names that merely start with should", () => {
+    for (const before of [
+      "const shouldRender = props.visible;",
+      "// mind the shoulder case",
+      "it('should render the header', () => {",
+      "if (shouldRetry(err)) retry();",
+    ]) {
+      expect(tampered(before), before).toBe(false);
+    }
+  });
+});

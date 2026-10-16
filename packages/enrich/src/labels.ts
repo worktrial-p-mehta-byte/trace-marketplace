@@ -47,9 +47,16 @@ const TEST_NONE =
 
 const TEST_FILE =
   /(?:^|[/\\])(?:tests?|__tests__|spec)[/\\]|[._-](?:test|spec)\.[a-z]+$|_test\.(?:go|py)$|^test_.*\.py$/i;
-// Covers Jest/Vitest, pytest/unittest, Go, Rust, and should-style matchers
-// (Hspec `shouldBe`, RSpec `should_not`, Chai `.should`).
-const ASSERTION = /\b(?:expect|assert\w*|should\w*|t\.Error|t\.Fatal|assert_eq!?)\b/;
+// Should-style matchers, enumerated so helpers (`shouldRender`), plain words
+// (`shoulder`) and test names ("should render") don't count:
+// - Hspec / kotest / ScalaTest camelCase: `shouldBe`, `shouldNotContain`, `shouldThrow`…
+// - RSpec: `x.should eq`, `should_not`, `should_receive`, `it { should eq 1 }`
+// - Chai: `x.should.equal`, `should.exist(x)`, `should.not.exist(x)`
+const SHOULD_MATCHER = String.raw`should(?:Not)?(?:Be|Equal|Satisfy|StartWith|EndWith|Contain|Match|Return|Throw|Have|Exist)\w*|should_(?:not|receive)\w*|(?<=\.)should|(?<=\{\s*)should|should(?=\.(?:exist|not|equal|fail)\b)`;
+// Covers Jest/Vitest, pytest/unittest, Go, Rust, and the should-style matchers above.
+const ASSERTION = new RegExp(
+  String.raw`\b(?:expect|assert\w*|${SHOULD_MATCHER}|t\.Error|t\.Fatal|assert_eq!?)\b`,
+);
 
 export function isCorrection(text: string): boolean {
   return CORRECTION_START.test(text) || CORRECTION_ANYWHERE.test(text);

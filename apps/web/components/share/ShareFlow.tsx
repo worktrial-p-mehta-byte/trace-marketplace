@@ -7,6 +7,7 @@ import { enrichTrace } from "@tm/enrich";
 import { placeholderDensity, scrubTrace, toSignalsOnly } from "@tm/scrub";
 import type { Trace } from "@tm/schema";
 import { redactionLabel } from "../Redacted";
+import { SignalsView } from "./SignalsView";
 import { Timeline } from "./Timeline";
 import { money, type Item, type Quote, type ShareOutcome } from "./types";
 
@@ -581,9 +582,11 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
                   {active.tier === 1 ? "What buyers will see" : "What will be shared"}
                 </h3>
                 <p className="text-sm text-ink-2">
-                  {active.scrub.stats.redactions === 0
-                    ? "Nothing needed removing. Read through it before sharing."
-                    : `${active.scrub.stats.redactions} item${active.scrub.stats.redactions > 1 ? "s" : ""} removed: ${removedSummary(active.scrub.stats.byKind)}.`}
+                  {active.tier === 1
+                    ? "Signals only: no text, code or output leaves this computer. Buyers get the shape of the session below, plus the detected failures. Switch to Open source to share the scrubbed content."
+                    : active.scrub.stats.redactions === 0
+                      ? "Nothing needed removing. Read through it before sharing."
+                      : `${active.scrub.stats.redactions} item${active.scrub.stats.redactions > 1 ? "s" : ""} removed: ${removedSummary(active.scrub.stats.byKind)}.`}
                 </p>
               </div>
               {active.tier === 0 && (
@@ -601,7 +604,11 @@ export function ShareFlow({ sellerShare }: { sellerShare: number }) {
             <div
               className={`mt-4 grid gap-4 ${showOriginal && active.tier === 0 ? "xl:grid-cols-2" : ""}`}
             >
-              <Timeline trace={outgoing(active)} />
+              {active.tier === 1 ? (
+                <SignalsView trace={outgoing(active)} labels={active.enrich.labels} />
+              ) : (
+                <Timeline trace={outgoing(active)} />
+              )}
               {showOriginal && active.tier === 0 && (
                 <div className="rounded-md bg-paper p-3">
                   <p className="mb-2 text-xs font-semibold text-ink-3">Your original</p>

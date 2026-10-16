@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { parseClaudeCodeSession } from "@tm/adapters";
 import { findRepoRoot, loadServerConfig } from "@tm/config/server";
 import { estimatePrice } from "@tm/core";
@@ -12,6 +12,7 @@ import { placeholderDensity, scrubTrace } from "@tm/scrub";
  * show off one dimension of the pricing engine.
  *
  *   pnpm demo:sessions        # writes demo/seller-sessions/*.jsonl and prices them
+ *   pnpm demo:sessions --out data/e2e-sessions   # somewhere else (the e2e run)
  *
  * Files are in Claude Code's native .jsonl format, so they go through the
  * real parser, scrubber and labeler when shared from /share. Timestamps are
@@ -676,7 +677,11 @@ const SESSIONS: { file: string; shows: string; build: () => Session }[] = [
 
 function main() {
   const root = findRepoRoot();
-  const dir = join(root, "demo", "seller-sessions");
+  const outArg = process.argv.indexOf("--out");
+  const dir =
+    outArg > 0 && process.argv[outArg + 1]
+      ? resolve(root, process.argv[outArg + 1]!)
+      : join(root, "demo", "seller-sessions");
   mkdirSync(dir, { recursive: true });
   const written: { file: string; shows: string; path: string }[] = [];
   for (const s of SESSIONS) {
@@ -684,7 +689,7 @@ function main() {
     writeFileSync(path, s.build().toJsonl());
     written.push({ ...s, path });
   }
-  console.log(`Wrote ${written.length} sessions to demo/seller-sessions/.\n`);
+  console.log(`Wrote ${written.length} sessions to ${relative(root, dir)}/.\n`);
 
   const config = loadServerConfig();
   if (!existsSync(config.database.path)) {

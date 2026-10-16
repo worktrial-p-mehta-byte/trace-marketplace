@@ -15,6 +15,80 @@ import { buildMarket, runPricingConsumer } from "../pricing";
 
 export class ShareError extends Error {}
 
+/** The seller already shared this exact session. */
+export class DuplicateShareError extends ShareError {
+  constructor() {
+    super("You have already shared this session.");
+  }
+}
+
+/**
+ * Identity of a stored trace's content, for duplicate shares and for rarity
+ * (copies don't create scarcity). It covers the trace id, which the adapter
+ * derives from the harness session id, as well as the events: signals-only
+ * traces have their text stripped, so two different sessions with the same
+ * shape (same steps, tools and timing) have identical events, and hashing
+ * events alone refused the second as "already shared".
+ */
+/**
+ * Identity of a trace's content for duplicate detection and rarity.
+ *
+ * Open source (tier 0): the events alone. The content is what buyers get
+ * and the server verifies it, so a re-upload under a different trace id is
+ * still the same trace.
+ *
+ * Signals only (tier 1): the stripped events plus the trace id. With the
+ * text gone, two different sessions of the same shape are byte-identical,
+ * so the id (derived from the harness session id) tells them apart. The id
+ * is client-supplied, so a seller could relist one shape under new ids;
+ * such copies are priced as near-duplicates and carry the lowest base price.
+ */
+export function contentHashOf(trace: Pick<Trace, "id" | "events">, tier: Tier): string {
+  const subject = tier === 1 ? { id: trace.id, events: trace.events } : trace.events;
+  return createHash("sha256").update(JSON.stringify(subject)).digest("hex");
+}
+
+/** The events-only hash, which signals-only rows written by older versions still carry. */
+export function legacyContentHashOf(trace: Pick<Trace, "events">): string {
+  return createHash("sha256").update(JSON.stringify(trace.events)).digest("hex");
+}
+
+/**
+ * Rewrite a seller's signals-only rows that still carry the events-only hash
+ * to the current format, each from its own stored trace. Runs before a
+ * duplicate check that could meet such a row, so a different session with
+ * the same shape is never mistaken for it, and the same session still is.
+ */
+async function upgradeLegacyHashes(
+  db: Db,
+  blobs: BlobStore,
+  sellerId: string,
+  legacyHash: string,
+): Promise<void> {
+  const rows = db
+    .select({ id: schema.traces.id, blobKey: schema.traces.blobKey })
+    .from(schema.traces)
+    .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
+    .where(
+      and(
+        eq(schema.traces.sellerId, sellerId),
+        eq(schema.traces.contentHash, legacyHash),
+        eq(schema.consents.tier, 1),
+      ),
+    )
+    .all();
+  for (const row of rows) {
+    const raw = await blobs.get(row.blobKey);
+    if (!raw) continue; // nothing to verify against; leave it as it is
+    const stored = Trace.safeParse(JSON.parse(raw));
+    if (!stored.success) continue;
+    db.update(schema.traces)
+      .set({ contentHash: contentHashOf(stored.data, 1) })
+      .where(eq(schema.traces.id, row.id))
+      .run();
+  }
+}
+
 export interface CatalogDeps {
   config: MarketplaceConfig;
   bus: EventBus;
@@ -143,7 +217,12 @@ export async function shareTrace(
     );
   }
 
-  const contentHash = createHash("sha256").update(JSON.stringify(stored.events)).digest("hex");
+  const contentHash = contentHashOf(stored, tier);
+  // Signals-only rows from before the id joined the hash are upgraded first,
+  // each from its own stored trace, so the check below sees one format.
+  if (tier === 1) {
+    await upgradeLegacyHashes(db, deps.blobs, input.sellerId, legacyContentHashOf(stored));
+  }
   /** Same seller, same content, consent not revoked. */
   const findDuplicate = (q: Db) =>
     q
@@ -159,7 +238,7 @@ export async function shareTrace(
       )
       .get();
   // Fast path: refuse before writing anything.
-  if (findDuplicate(db)) throw new ShareError("You have already shared this session.");
+  if (findDuplicate(db)) throw new DuplicateShareError();
 
   const traceId = newId("trc");
   const assetId = newId("ast");
@@ -174,7 +253,7 @@ export async function shareTrace(
     // (Postgres will also need a partial unique index: see LIMITATIONS.md.)
     db.transaction((tx) => {
       if (findDuplicate(tx as unknown as Db)) {
-        throw new ShareError("You have already shared this session.");
+        throw new DuplicateShareError();
       }
       tx.insert(schema.traces)
         .values({
