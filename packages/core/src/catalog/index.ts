@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { MarketplaceConfig } from "@tm/config";
 import { newId, schema, type Db } from "@tm/db";
 import { comboKeyOf, enrichTrace, type TraceTraits } from "@tm/enrich";
@@ -34,6 +34,15 @@ export function contentHashOf(trace: Pick<Trace, "id" | "events">): string {
   return createHash("sha256")
     .update(JSON.stringify({ id: trace.id, events: trace.events }))
     .digest("hex");
+}
+
+/**
+ * The hash format used before the trace id was included. Rows written by
+ * older versions still carry it, so duplicate detection accepts both and
+ * rewrites a matching row to the current format when it meets one.
+ */
+export function legacyContentHashOf(trace: Pick<Trace, "events">): string {
+  return createHash("sha256").update(JSON.stringify(trace.events)).digest("hex");
 }
 
 export interface CatalogDeps {
@@ -165,20 +174,27 @@ export async function shareTrace(
   }
 
   const contentHash = contentHashOf(stored);
-  /** Same seller, same content, consent not revoked. */
-  const findDuplicate = (q: Db) =>
-    q
-      .select({ id: schema.traces.id })
+  const legacyHash = legacyContentHashOf(stored);
+  /** Same seller, same content (either hash format), consent not revoked. */
+  const findDuplicate = (q: Db) => {
+    const row = q
+      .select({ id: schema.traces.id, hash: schema.traces.contentHash })
       .from(schema.traces)
       .innerJoin(schema.consents, eq(schema.consents.traceId, schema.traces.id))
       .where(
         and(
           eq(schema.traces.sellerId, input.sellerId),
-          eq(schema.traces.contentHash, contentHash),
+          inArray(schema.traces.contentHash, [contentHash, legacyHash]),
           isNull(schema.consents.revokedAt),
         ),
       )
       .get();
+    if (row && row.hash === legacyHash && legacyHash !== contentHash) {
+      // Backfill this row to the current format while we have it in hand.
+      q.update(schema.traces).set({ contentHash }).where(eq(schema.traces.id, row.id)).run();
+    }
+    return row;
+  };
   // Fast path: refuse before writing anything.
   if (findDuplicate(db)) throw new DuplicateShareError();
 

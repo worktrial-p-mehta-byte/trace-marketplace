@@ -29,12 +29,28 @@ type Step =
  * `harness_error` label's evidence). The text is gone in a signals-only
  * trace, so this view can't tell an error from a benign notice by itself.
  */
-function stepsOf(trace: Trace, harnessErrors: Set<number>): Step[] {
+export function stepsOf(trace: Trace, harnessErrors: Set<number>): Step[] {
   const results = new Map<string, Result>();
-  for (const e of trace.events) if (e.type === "tool_result") results.set(e.callId, e);
+  const calls = new Set<string>();
+  for (const e of trace.events) {
+    if (e.type === "tool_result") results.set(e.callId, e);
+    if (e.type === "tool_call") calls.add(e.callId);
+  }
   const steps: Step[] = [];
   for (const e of trace.events) {
     switch (e.type) {
+      case "tool_result":
+        // A result whose call is missing (the adapter skipped a malformed
+        // line, say) still carries evidence, so it gets a step of its own.
+        if (!calls.has(e.callId)) {
+          steps.push({
+            kind: "tool",
+            seq: e.seq,
+            tool: "result",
+            status: e.rejected ? "rejected" : e.isError ? "error" : "ok",
+          });
+        }
+        break;
       case "user_message":
         steps.push({ kind: "you", seq: e.seq, interrupted: Boolean(e.interrupted) });
         break;

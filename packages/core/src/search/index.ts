@@ -60,6 +60,7 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
   const row = db
     .select({
       tier: schema.listings.tier,
+      status: schema.listings.status,
       traceId: schema.traces.id,
       title: schema.traces.title,
       model: schema.traces.model,
@@ -72,7 +73,9 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
     .innerJoin(schema.traces, eq(schema.traces.id, schema.listings.traceId))
     .where(eq(schema.listings.id, listingId))
     .get();
-  if (!row) return null;
+  // A listing withdrawn since its event was queued must not come back into
+  // the index, however late the run that handles that event is.
+  if (!row || row.status !== "active") return null;
   const labels = db
     .select({ code: schema.labels.code })
     .from(schema.labels)
@@ -103,10 +106,30 @@ export async function searchDocument(db: Db, blobs: BlobStore, listingId: string
 }
 
 /**
+ * Runs of the consumer are serialised per process. Two concurrent runs would
+ * peek the same batch, and a slow one could re-index a listing after a
+ * faster one had already handled its withdrawal. A separate worker process
+ * (S3) would take a lease on the batch instead.
+ */
+let searchRun: Promise<unknown> = Promise.resolve();
+
+/**
  * Event consumer that keeps the search index in step with listings:
  * index on listing.created, remove on listing.delisted.
  */
-export async function runSearchConsumer(
+export function runSearchConsumer(
+  db: Db,
+  bus: EventBus,
+  blobs: BlobStore,
+  index: SearchIndex,
+): Promise<number> {
+  const run = searchRun.then(() => runSearchConsumerNow(db, bus, blobs, index));
+  // The chain must never reject, or every later run would be skipped.
+  searchRun = run.catch(() => undefined);
+  return run;
+}
+
+async function runSearchConsumerNow(
   db: Db,
   bus: EventBus,
   blobs: BlobStore,

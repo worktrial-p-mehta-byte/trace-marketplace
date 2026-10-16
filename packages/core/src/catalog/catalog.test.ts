@@ -18,7 +18,9 @@ import {
   createSession,
   createUser,
   deleteSession,
+  contentHashOf,
   DuplicateShareError,
+  legacyContentHashOf,
   estimatePrice,
   getUserBySession,
   listSellerTraces,
@@ -286,6 +288,22 @@ describe("duplicate shares of signals-only traces", () => {
     await expect(
       shareTrace(db, deps, { sellerId, trace: toSignalsOnly(a), tier: 1 }),
     ).rejects.toThrow(DuplicateShareError);
+  });
+
+  it("still refuses a re-upload of a session stored with the old hash format", async () => {
+    const trace = scrubTrace(raw).trace;
+    const r = await shareTrace(db, deps, { sellerId, trace, tier: 0 });
+    // A row written before the format change carries the events-only hash.
+    db.update(schema.traces)
+      .set({ contentHash: legacyContentHashOf(trace) })
+      .where(eq(schema.traces.id, r.traceId))
+      .run();
+    await expect(shareTrace(db, deps, { sellerId, trace, tier: 0 })).rejects.toThrow(
+      DuplicateShareError,
+    );
+    // Meeting it upgraded the row to the current format.
+    const row = db.select().from(schema.traces).where(eq(schema.traces.id, r.traceId)).get()!;
+    expect(row.contentHash).toBe(contentHashOf(trace));
   });
 });
 
