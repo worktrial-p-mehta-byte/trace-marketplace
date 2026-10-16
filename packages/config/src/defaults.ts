@@ -41,7 +41,7 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
       maxDailyChange: 0.2,
       changeWindowHours: 24,
       bountyWeightPerDollar: 0.02,
-      signalWeights: { search: 0.2, view: 0.05, save: 0.5 },
+      signalWeights: { search: 0.2, view: 0.05, save: 0.5, purchase: 1.0 },
     },
     freshness: {
       halfLifeDays: 90,
@@ -103,6 +103,11 @@ export const DEFAULT_CONFIG: MarketplaceConfig = {
     quoteLockMinutes: 15,
     /** Prices depend on time (freshness, demand window): refresh them at least this often. */
     refreshIntervalMinutes: 60,
+  },
+  checkout: {
+    welcomeCreditCents: 50_000,
+    topUpCents: 25_000,
+    maxOrderLines: 100,
   },
   database: {
     path: "data/trace-marketplace.db",

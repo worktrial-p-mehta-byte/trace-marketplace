@@ -30,9 +30,12 @@ export function assertBalanced(lines: LedgerLine[]): void {
   if (total !== 0) throw new UnbalancedTransactionError(`Entries sum to ${total}, expected 0`);
 }
 
-/** Write a balanced transaction atomically. Returns the transaction id. */
+/**
+ * Write a balanced transaction atomically. Returns the transaction id. Pass
+ * an open transaction as `db` to post as part of a larger unit of work.
+ */
 export function postTransaction(
-  db: Db,
+  db: Pick<Db, "transaction">,
   tx: { kind: string; refType?: string; refId?: string; lines: LedgerLine[] },
 ): string {
   assertBalanced(tx.lines);

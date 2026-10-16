@@ -44,6 +44,16 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Checkout — phase 2
+
+| Limitation                                                               | Impact                                       | Lifted by                                                                               |
+| ------------------------------------------------------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Money in is simulated: demo credits, no payment provider                 | Nothing real changes hands                   | Stripe behind the same ledger accounts (`platform:credit_issuer` becomes the processor) |
+| No payouts, refunds or invoices                                          | Seller balances only accumulate              | Payout and refund transactions on the same ledger                                       |
+| One licence per order (the cart is quoted under one scope)               | Mixed-licence orders need two checkouts      | Per-line licences                                                                       |
+| Licences are non-exclusive and perpetual                                 | No exclusivity premium or time-limited terms | Exclusive licences (post-demo, with campaigns)                                          |
+| A purchase is recorded as demand for the trace's domain and failure only | Stack-level demand from sales isn't captured | Richer purchase criteria                                                                |
+
 ## Discovery V2 — phase 2
 
 | Limitation                                                                       | Impact                                                              | Lifted by                                                                |

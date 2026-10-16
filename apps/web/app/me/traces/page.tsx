@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { listSellerTraces } from "@tm/core";
+import { listSellerTraces, sellerEarnings } from "@tm/core";
 import { WithdrawButton } from "@/components/WithdrawButton";
 import { getConfig, getCurrentUser, getDb } from "@/lib/server";
 
@@ -17,6 +17,7 @@ export default async function MyTracesPage() {
   const rows = listSellerTraces(getDb(), user.id, getConfig());
   const active = rows.filter((r) => r.status === "active");
   const perSale = active.reduce((s, r) => s + (r.sellerCents ?? 0), 0);
+  const earned = sellerEarnings(getDb(), user.id);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -34,6 +35,12 @@ export default async function MyTracesPage() {
                   prices.
                 </>
               )}
+            </p>
+          )}
+          {earned.sales > 0 && (
+            <p className="mt-1 text-ink-2" aria-label="Earnings">
+              {earned.sales} licence{earned.sales === 1 ? "" : "s"} sold so far; you have earned{" "}
+              <strong className="text-ink">{money(earned.balanceCents)}</strong>.
             </p>
           )}
         </div>
@@ -84,7 +91,14 @@ export default async function MyTracesPage() {
                   </td>
                   <td className="px-4 py-3">{r.tier === 0 ? "Open source" : "Signals only"}</td>
                   <td className="px-4 py-3 text-right font-semibold">{money(r.priceCents)}</td>
-                  <td className="px-4 py-3 text-right">{money(r.sellerCents)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {money(r.sellerCents)}
+                    {r.listingId && earned.perListing.get(r.listingId) ? (
+                      <span className="block text-xs text-moss">
+                        sold {earned.perListing.get(r.listingId)}×
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3">
                     {r.status === "active" ? (
                       <span className="font-semibold text-moss">On sale</span>

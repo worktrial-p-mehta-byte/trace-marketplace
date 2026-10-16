@@ -49,6 +49,8 @@ export const PricingConfig = z.object({
       search: z.number().min(0),
       view: z.number().min(0),
       save: z.number().min(0),
+      /** A licence bought: the strongest signal there is. */
+      purchase: z.number().min(0),
     }),
   }),
   freshness: z.object({
@@ -156,6 +158,15 @@ export const MarketplaceConfig = z
       sellerShareByDomain: z.record(z.string(), share),
     }),
     pricing: PricingConfig,
+    /** Local-only checkout: demo credits stand in for money in. */
+    checkout: z.object({
+      /** Credits a new buyer team starts with, in cents. */
+      welcomeCreditCents: z.number().int().min(0),
+      /** What "Add demo credits" adds, in cents. */
+      topUpCents: z.number().int().positive(),
+      /** Most listings in one order. */
+      maxOrderLines: z.number().int().positive(),
+    }),
     database: z.object({ path: z.string().min(1) }),
     storage: z.object({ blobPath: z.string().min(1) }),
   })

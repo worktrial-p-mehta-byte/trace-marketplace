@@ -81,21 +81,22 @@ warehouse) is in the design doc. What changes on the way there is in
 
 ## Milestones
 
-| #    | Milestone                                                                                     | Status  |
-| ---- | --------------------------------------------------------------------------------------------- | ------- |
-| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI                                    | Done    |
-| M1   | Canonical schema + Claude Code adapter                                                        | Done    |
-| M2   | Scrubber + labeler + trait extractor                                                          | Done    |
-| M3   | Pricing engine                                                                                | Done    |
-| M4   | Onboarding + sharing                                                                          | Done    |
-| M5   | Catalog + trace viewer                                                                        | Done    |
-| M6   | Market simulator + seed data + failure lab                                                    | Done    |
-| M7   | Docs, deployment (Docker)                                                                     | Done    |
-| M8   | Rehearse, polish, end-to-end test                                                             | Done    |
-| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                                   | Done    |
-| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel            | Done    |
-| P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing            | Done    |
-| P2.4 | Discovery V2: intent parser, behaviour search, ranking with reasons, grouping, saved searches | This PR |
+| #    | Milestone                                                                                                 | Status  |
+| ---- | --------------------------------------------------------------------------------------------------------- | ------- |
+| M0   | Scaffold: monorepo, config, all tables, events, ledger, CI                                                | Done    |
+| M1   | Canonical schema + Claude Code adapter                                                                    | Done    |
+| M2   | Scrubber + labeler + trait extractor                                                                      | Done    |
+| M3   | Pricing engine                                                                                            | Done    |
+| M4   | Onboarding + sharing                                                                                      | Done    |
+| M5   | Catalog + trace viewer                                                                                    | Done    |
+| M6   | Market simulator + seed data + failure lab                                                                | Done    |
+| M7   | Docs, deployment (Docker)                                                                                 | Done    |
+| M8   | Rehearse, polish, end-to-end test                                                                         | Done    |
+| P2.1 | Domains: taxonomy, detector, facet, demand, generator packs                                               | Done    |
+| P2.2 | Pricing V2: domain-first rarity, niche, evidence tiers, bands, shadow, wind tunnel                        | Done    |
+| P2.3 | Authenticity tiers 1–2: well-formed and consistency checks, badge, filter, pricing                        | Done    |
+| P2.4 | Discovery V2: intent parser, behaviour search, ranking with reasons, grouping, saved searches             | Done    |
+| P2.5 | Checkout (local-only): credits, cart, quotes, orders, ledger, licences, entitlements, downloads, receipts | This PR |
 
 ## Session log adapters
 
@@ -265,6 +266,32 @@ An intent search is demand for what it asks (`criteriaOf` resolves the
 chips). Buyers can **save** a search (a `query` collection); saving records
 "save"-strength demand. Embeddings remain a later, local-only option behind
 the `SearchIndex` port.
+
+## Checkout (local-only)
+
+`packages/core/src/checkout`. Only money in is simulated: a buyer team gets
+welcome **demo credits** the first time it is seen, and can add more
+(`credit_grant`: credit issuer −, buyer +). Everything after that is the
+real flow, on tables that existed since M0:
+
+1. **Cart**: a `static` collection named "Cart" per buyer team.
+2. **Quote**: the cart (or one listing, "Buy now") priced under one licence
+   (research, evaluation, training), snapshotted and locked for
+   `pricing.quoteLockMinutes`. Lines the team already holds that licence
+   for, or that are no longer for sale, are left out.
+3. **Order**: one database transaction — the order, a line per trace with
+   the seller share in force (per-domain if configured), a non-exclusive
+   licence and an entitlement per line, and one balanced `sale` posting:
+   buyer −total, each seller +share, platform +fee. Paying twice, an expired
+   quote, too few credits and listings withdrawn since the quote are all
+   handled (withdrawn lines are skipped, not charged).
+4. After the order, each line is **purchase** demand (the strongest signal)
+   and prices are recomputed; bought traces leave the cart.
+5. **Receipts** (`/orders/[id]`), and **downloads**
+   (`/api/listings/[id]/download`, entitlement required): the stored trace
+   (scrubbed, or signals only) wrapped with the licence it is held under.
+
+Sellers see licences sold and their ledger balance on My traces.
 
 ## Accounts, onboarding and sharing (M4)
 
