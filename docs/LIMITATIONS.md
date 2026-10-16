@@ -44,6 +44,14 @@ where the limit lives and what would lift it.
 | The taxonomy is curated and flat (no sub-domains such as "radiology")                            | Niche work inside a domain isn't separately searchable                     | Sub-domain labels in the registry                                      |
 | Pricing does not use the domain yet                                                              | A rare medical session is priced like a coding one with the same traits    | Pricing V2 (next milestone): domain-level rarity and demand            |
 
+## Seller trends — phase 2
+
+| Limitation                                                                               | Impact                                                                             | Lifted by                                 |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------- |
+| Notifications are in-app only                                                            | Sellers who aren't signed in don't hear about campaigns                            | Email or push digests                     |
+| Demand is attributed to the segments of matching listings; a broad signal spreads thinly | A language-only search barely registers in any one segment                         | Segment-level demand from intent searches |
+| Following is per domain, not per segment or stack                                        | A Rust specialist following software engineering hears about every coding campaign | Follow segments and stacks                |
+
 ## Campaigns — phase 2
 
 | Limitation                                                                                                             | Impact                                                               | Lifted by                                          |

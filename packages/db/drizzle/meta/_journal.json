@@ -29,6 +29,13 @@
       "when": 1792133534668,
       "tag": "0003_campaigns_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792134892637,
+      "tag": "0004_seller_interests",
+      "breakpoints": true
     }
   ]
 }

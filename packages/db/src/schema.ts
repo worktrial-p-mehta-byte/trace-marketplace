@@ -420,6 +420,19 @@ export const notifications = sqliteTable(
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );
 
+/** Domains a seller works in and wants to hear about (new campaigns, demand). */
+export const sellerInterests = sqliteTable(
+  "seller_interests",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    domain: text("domain").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.domain] })],
+);
+
 // ---------------------------------------------------------------- bounties
 
 export const bounties = sqliteTable("bounties", {

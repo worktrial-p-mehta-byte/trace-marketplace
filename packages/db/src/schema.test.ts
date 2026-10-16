@@ -28,6 +28,7 @@ const EXPECTED_TABLES = [
   "orders",
   "price_snapshots",
   "quotes",
+  "seller_interests",
   "trace_traits",
   "traces",
   "users",
