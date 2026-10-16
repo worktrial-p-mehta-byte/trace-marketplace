@@ -236,6 +236,22 @@ the niche factor are raised to the power 0.75 when consistent, 0.5 otherwise.
 Tiers 3–4 (replaying a session in a sandbox; exporting it as a verifiable
 task) are post-demo.
 
+### Explaining a session (`explainTrace`)
+
+`explainTrace(trace, { labels, traits })` (browser-safe, `packages/enrich`)
+restates, per event, what the labeler and detectors decided: a description
+of the line (what it counts toward) and notes for failures, outcomes, domain
+evidence (`domainEvidenceByEvent`: the words, tool and file types that
+pointed at the primary domain), scrubbing and authenticity problems. Each
+note names the derivations it feeds (`label:failure:retry_loop`,
+`trait:preferencePairs`, `factor:quality`, `check:tool_pairs`), and
+`sources` maps every derivation back to its events. Failures and outcomes
+come from the labels' evidence, so a signals-only session (no text) is
+explained from its shape and the labels the browser sent. It never decides
+anything itself. `/traces/[id]/explain` shows it: lines with their notes,
+and a panel of domain, labels, price factors, counts and authenticity checks;
+picking one highlights its lines.
+
 ## Discovery V2
 
 Buyers describe what they need in a sentence. `parseIntent`

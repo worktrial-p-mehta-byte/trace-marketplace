@@ -2,7 +2,9 @@ export {
   analyzeTrace,
   heuristicLabeler,
   isCorrection,
+  correctionPhrase,
   isTestCommand,
+  isTestTampering,
   testRunPassed,
   testRunResult,
   type TestRunResult,
@@ -26,11 +28,13 @@ export {
   DOMAIN_IDS,
   DOMAIN_BY_ID,
   detectDomains,
+  domainEvidenceByEvent,
   domainName,
   type DomainDef,
   type DomainId,
   type DomainScore,
   type DomainDetection,
+  type DomainEventEvidence,
 } from "./domains";
 export {
   registerLabel,
@@ -57,3 +61,10 @@ export {
   type AuthenticityLevel,
   type ReportedTraits,
 } from "./authenticity";
+export {
+  explainTrace,
+  type EventExplanation,
+  type EventNote,
+  type NoteKind,
+  type TraceExplanation,
+} from "./explain";

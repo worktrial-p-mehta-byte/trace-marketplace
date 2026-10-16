@@ -1116,3 +1116,73 @@ export function detectDomains(trace: Trace): DomainDetection {
     .sort((a, b) => a - b);
   return { primary: top, confidence, distribution, evidence };
 }
+
+/** What in one event pointed at a domain. */
+export interface DomainEventEvidence {
+  /** Domain terms found in the event's text (each once). */
+  terms: string[];
+  /** The tool, when the domain lists it. */
+  tool?: string;
+  /** File extensions or names the domain lists. */
+  files: string[];
+}
+
+/**
+ * Per event, what pointed at `domain`: the words, tool and file types the
+ * detector counted. For explaining a detection, not for scoring it (the
+ * weights and pooling live in detectDomains).
+ */
+export function domainEvidenceByEvent(
+  trace: Trace,
+  domain: string,
+): Map<number, DomainEventEvidence> {
+  const out = new Map<number, DomainEventEvidence>();
+  const c = compile().domains.find((d) => d.def.id === domain);
+  if (!c) return out;
+  const at = (seq: number) => {
+    let e = out.get(seq);
+    if (!e) out.set(seq, (e = { terms: [], files: [] }));
+    return e;
+  };
+  const words = (seq: number, text: string) => {
+    if (!text) return;
+    matchTerms(text, (term) => {
+      if (compile().domains[term.domain] !== c) return;
+      const name = c.def.terms[term.index]!.replace(/\*$/, "");
+      const e = at(seq);
+      if (!e.terms.includes(name)) e.terms.push(name);
+    });
+  };
+  for (const e of trace.events as TraceEvent[]) {
+    switch (e.type) {
+      case "user_message":
+      case "assistant_message":
+        words(e.seq, e.text);
+        break;
+      case "tool_call": {
+        const parts: string[] = [];
+        strings(e.input, parts);
+        words(e.seq, parts.join("\n"));
+        if (c.tools.has(e.tool.toLowerCase())) at(e.seq).tool = e.tool;
+        for (const p of pathsOf(e.input)) {
+          const ext = p.split(".").pop()?.toLowerCase();
+          const base = p.split("/").pop()?.toLowerCase();
+          const hit =
+            ext && c.extensions.has(ext)
+              ? `.${ext}`
+              : base && c.extensions.has(base)
+                ? base
+                : undefined;
+          if (hit && !at(e.seq).files.includes(hit)) at(e.seq).files.push(hit);
+        }
+        break;
+      }
+      case "tool_result":
+        words(e.seq, e.output.slice(0, OUTPUT_CHARS));
+        break;
+      case "system":
+        break;
+    }
+  }
+  return out;
+}
